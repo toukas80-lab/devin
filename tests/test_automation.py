@@ -167,3 +167,34 @@ def test_find_window_falls_back_to_launched_process() -> None:
 
 def test_escape_keys_protects_send_keys_metacharacters() -> None:
     assert automation._escape_keys("a+b^c") == "a{+}b{^}c"
+
+
+def test_type_focused_uses_keyboard_events(monkeypatch) -> None:
+    calls = []
+
+    class Keyboard:
+        @staticmethod
+        def send_keys(keys, **kwargs):
+            calls.append((keys, kwargs))
+
+    class Window:
+        focused = False
+
+        def set_focus(self):
+            self.focused = True
+
+    window = Window()
+    monkeypatch.setattr(automation, "keyboard", Keyboard())
+
+    automation._type_focused(
+        window,
+        "a+b",
+        {"submit_keys": "{ENTER}"},
+    )
+
+    assert window.focused
+    assert [call[0] for call in calls] == [
+        "^a{BACKSPACE}",
+        "a{+}b",
+        "{ENTER}",
+    ]

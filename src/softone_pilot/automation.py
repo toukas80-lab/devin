@@ -523,14 +523,7 @@ def _set_control(control, value: str, step: dict) -> None:
 
 
 def _type_focused(window, value: str, step: dict) -> None:
-    focused = [
-        control
-        for control in window.descendants()
-        if control.element_info.control_type == "Edit" and control.has_keyboard_focus()
-    ]
-    if focused:
-        _set_control(focused[0], value, step)
-        return
+    window.set_focus()
     keyboard.send_keys("^a{BACKSPACE}")
     keyboard.send_keys(_escape_keys(value), with_spaces=True, vk_packet=True)
     if step.get("submit_keys"):
