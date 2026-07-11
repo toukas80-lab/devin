@@ -119,12 +119,17 @@ scripts\build_windows.cmd
 ```text
 SoftOne-PDF-Pilot.exe
 SoftOne-PDF-Automation.exe
+run_workflow_preview.cmd
+run_softone_fill_no_save.cmd
 config\local.example.json
+config\local.json
 config\softone_workflow.example.json
 ```
 
 Το πρώτο executable είναι το GUI dry-run. Το δεύτερο παρέχει workflow
 preview/εκτέλεση και απαιτεί επιπλέον `--allow-save` για πραγματική αποθήκευση.
+Τα δύο `.cmd` ανοίγουν επιλογέα PDF: το πρώτο κάνει μόνο preview και το δεύτερο
+συμπληρώνει την ήδη ανοικτή φόρμα αλλά σταματά πριν από την αποθήκευση.
 
 ## Ασφάλεια
 

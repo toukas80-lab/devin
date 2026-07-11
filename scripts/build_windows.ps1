@@ -34,9 +34,15 @@ New-Item -ItemType Directory -Force -Path $output | Out-Null
 
 New-Item -ItemType Directory -Force -Path "$output\config" | Out-Null
 Copy-Item "config\local.example.json" "$output\config\local.example.json" -Force
+Copy-Item "config\local.example.json" "$output\config\local.json" -Force
 Copy-Item `
     "config\softone_workflow.example.json" `
     "$output\config\softone_workflow.example.json" `
+    -Force
+Copy-Item "scripts\run_workflow_preview.cmd" "$output\run_workflow_preview.cmd" -Force
+Copy-Item `
+    "scripts\run_softone_fill_no_save.cmd" `
+    "$output\run_softone_fill_no_save.cmd" `
     -Force
 Copy-Item "README.md" "$output\README.md" -Force
 
