@@ -47,6 +47,9 @@ Dry-run φακέλου χωρίς SQL:
 softone-pilot dry-run "C:\Invoices" --no-sql
 ```
 
+Κάθε dry-run γράφει συνοπτικό audit event στο `pilot-data/audit.jsonl`, χωρίς το
+πλήρες κείμενο των PDF. Απενεργοποιείται προσωρινά με `--no-audit`.
+
 Dry-run με read-only SQL:
 
 ```powershell
@@ -79,6 +82,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 
 - Η σύνδεση SQL χρησιμοποιεί Windows authentication και `ApplicationIntent=ReadOnly`.
 - Οι SQL εντολές του pilot είναι σταθερά, parameterized `SELECT`.
+- Τα audit logs δεν περιέχουν κωδικούς ή το πλήρες περιεχόμενο των PDF.
 - Η αυτοματοποίηση απορρίπτει πραγματική αποθήκευση μέχρι να υπάρχει ολοκληρωμένο,
   επιβεβαιωμένο workflow profile.
 - Πριν από πραγματική καταχώριση απαιτείται νέα ρητή έγκριση και δοκιμή ενός παραστατικού.

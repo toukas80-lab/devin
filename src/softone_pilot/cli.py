@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 
+from softone_pilot.audit import write_dry_run_audit
 from softone_pilot.automation import SoftOneAutomationError, inspect_softone_controls
 from softone_pilot.config import default_config, load_config
 from softone_pilot.parsers import parse_pdf
@@ -23,6 +24,8 @@ def build_parser() -> argparse.ArgumentParser:
     dry_run.add_argument("path", help="PDF ή φάκελος PDF")
     dry_run.add_argument("--config")
     dry_run.add_argument("--no-sql", action="store_true")
+    dry_run.add_argument("--audit", default="pilot-data/audit.jsonl")
+    dry_run.add_argument("--no-audit", action="store_true")
     dry_run.add_argument("--json", action="store_true")
 
     inspect = commands.add_parser(
@@ -66,6 +69,8 @@ def _dry_run(args) -> None:
         raise SystemExit(1)
 
     prepared, parse_errors = prepare_batch(pdfs, config, use_sql=not args.no_sql)
+    if not args.no_audit:
+        write_dry_run_audit(args.audit, prepared, parse_errors)
     payload = {
         "items": [item.to_dict() for item in prepared],
         "parse_errors": parse_errors,

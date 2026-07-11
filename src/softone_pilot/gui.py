@@ -5,6 +5,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+from softone_pilot.audit import write_dry_run_audit
 from softone_pilot.config import default_config, load_config
 from softone_pilot.planner import prepare_batch
 
@@ -71,6 +72,7 @@ class PilotWindow(tk.Tk):
                 config,
                 use_sql=bool(self.config_path and config.sql.enabled),
             )
+            write_dry_run_audit("pilot-data/audit.jsonl", prepared, errors)
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             messagebox.showerror("SoftOne PDF Pilot", str(exc))
             return
