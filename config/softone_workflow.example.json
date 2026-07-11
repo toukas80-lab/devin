@@ -12,41 +12,14 @@
         "title_re": "SoftOne|Series 6",
         "class_name_re": "Chrome_WidgetWin_1"
       },
-      "required_context": [],
+      "required_context": [
+        "password"
+      ],
       "steps": [
         {
-          "id": "username",
-          "action": "set",
-          "optional": true,
-          "skip_if_empty": true,
-          "selector": {
-            "control_type": "Edit",
-            "anchor": {
-              "direction": "right",
-              "max_distance": 500,
-              "selector": {
-                "title_re": "Χρήστης|Username"
-              }
-            }
-          },
-          "value": "{username}"
-        },
-        {
           "id": "password",
-          "action": "set",
-          "optional": true,
-          "skip_if_empty": true,
+          "action": "type_focused",
           "secret": true,
-          "selector": {
-            "control_type": "Edit",
-            "anchor": {
-              "direction": "right",
-              "max_distance": 500,
-              "selector": {
-                "title_re": "Κωδικός|Password"
-              }
-            }
-          },
           "value": "{password}",
           "submit_keys": "{ENTER}"
         },

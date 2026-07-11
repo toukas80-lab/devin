@@ -163,3 +163,7 @@ def test_find_window_falls_back_to_launched_process() -> None:
         {"title": "SoftOne"},
         process_id=42,
     )
+
+
+def test_escape_keys_protects_send_keys_metacharacters() -> None:
+    assert automation._escape_keys("a+b^c") == "a{+}b{^}c"

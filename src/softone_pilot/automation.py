@@ -115,6 +115,7 @@ def validate_workflow_profile(
                 "save",
                 "set",
                 "switch_window",
+                "type_focused",
                 "wait_absent",
                 "wait_present",
             }:
@@ -498,6 +499,9 @@ def _run_step(window, step: dict, context: dict[str, str]) -> None:
         _find_control(window, step["selector"], timeout).click_input()
         return
     value = _render(str(step["value"]), context)
+    if action == "type_focused":
+        _type_focused(window, value, step)
+        return
     if action == "set":
         _set_control(_find_control(window, step["selector"], timeout), value, step)
         return
@@ -516,6 +520,35 @@ def _set_control(control, value: str, step: dict) -> None:
         keyboard.send_keys(value, with_spaces=True, vk_packet=True)
     if step.get("submit_keys"):
         keyboard.send_keys(str(step["submit_keys"]), with_spaces=True, vk_packet=True)
+
+
+def _type_focused(window, value: str, step: dict) -> None:
+    focused = [
+        control
+        for control in window.descendants()
+        if control.element_info.control_type == "Edit" and control.has_keyboard_focus()
+    ]
+    if focused:
+        _set_control(focused[0], value, step)
+        return
+    keyboard.send_keys("^a{BACKSPACE}")
+    keyboard.send_keys(_escape_keys(value), with_spaces=True, vk_packet=True)
+    if step.get("submit_keys"):
+        keyboard.send_keys(str(step["submit_keys"]), with_spaces=True, vk_packet=True)
+
+
+def _escape_keys(value: str) -> str:
+    special = {
+        "+": "{+}",
+        "^": "{^}",
+        "%": "{%}",
+        "~": "{~}",
+        "(": "{(}",
+        ")": "{)}",
+        "{": "{{}",
+        "}": "{}}",
+    }
+    return "".join(special.get(character, character) for character in value)
 
 
 def _set_grid_cell(window, step: dict, value: str, timeout: float) -> None:
