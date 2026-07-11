@@ -307,10 +307,12 @@ def execute_profile(
             saved=saved,
         )
     except Exception as exc:
-        try:
-            screenshot = _capture_failure(window, artifacts_dir, profile_name)
-        except Exception:
-            screenshot = None
+        screenshot = None
+        if not secret_step:
+            try:
+                screenshot = _capture_failure(window, artifacts_dir, profile_name)
+            except Exception:
+                screenshot = None
         details = (
             "Αποτυχία εισαγωγής προστατευμένου πεδίου"
             if secret_step

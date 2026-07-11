@@ -220,6 +220,11 @@ def test_secret_step_error_does_not_expose_value(monkeypatch) -> None:
         lambda desktop, selector, **kwargs: Window(),
     )
     monkeypatch.setattr(automation, "keyboard", Keyboard())
+    monkeypatch.setattr(
+        automation,
+        "_capture_failure",
+        lambda *args, **kwargs: pytest.fail("secret step captured screenshot"),
+    )
 
     with pytest.raises(SoftOneAutomationError) as error:
         automation.execute_profile(
@@ -230,3 +235,4 @@ def test_secret_step_error_does_not_expose_value(monkeypatch) -> None:
 
     assert "private-password" not in str(error.value)
     assert "προστατευμένου πεδίου" in str(error.value)
+    assert "Screenshot: None" in str(error.value)
