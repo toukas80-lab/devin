@@ -29,6 +29,7 @@ class WorkflowExecution:
     profile: str
     executed_steps: tuple[str, ...]
     save_skipped: bool
+    saved: bool = False
     screenshot: Path | None = None
 
 
@@ -253,6 +254,7 @@ def execute_profile(
     window = _find_window(desktop, profile.get("window", workflow["window"]))
     executed: list[str] = []
     save_skipped = False
+    saved = False
     step_id = "<start>"
 
     try:
@@ -273,10 +275,13 @@ def execute_profile(
                     continue
                 raise
             executed.append(step_id)
+            if step["action"] == "save":
+                saved = True
         return WorkflowExecution(
             profile=profile_name,
             executed_steps=tuple(executed),
             save_skipped=save_skipped,
+            saved=saved,
         )
     except Exception as exc:
         try:
@@ -370,8 +375,8 @@ def _matching_windows(desktop, selector: dict) -> list:
 
 
 def _find_control(window, selector: dict, timeout: float = 10):
-    deadline = datetime.now().timestamp() + timeout
-    while datetime.now().timestamp() < deadline:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
         controls = [control for control in window.descendants() if _matches(control, selector)]
         if isinstance(selector.get("anchor"), dict):
             controls = _rank_near_anchor(window, controls, selector["anchor"])
@@ -486,8 +491,8 @@ def _set_grid_cell(window, step: dict, value: str, timeout: float) -> None:
 
 
 def _wait_absent(window, selector: dict, timeout: float) -> None:
-    deadline = datetime.now().timestamp() + timeout
-    while datetime.now().timestamp() < deadline:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
         if not any(_matches(control, selector) for control in window.descendants()):
             return
         time.sleep(0.1)

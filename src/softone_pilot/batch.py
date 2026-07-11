@@ -78,7 +78,7 @@ def execute_batch(
                 context,
                 allow_save=allow_save,
             )
-            saved = allow_save and not execution.save_skipped
+            saved = allow_save and execution.saved
             results.append(
                 BatchItemResult(
                     source_path=item.invoice.source_path,

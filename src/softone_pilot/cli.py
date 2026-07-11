@@ -192,6 +192,7 @@ def _workflow(args) -> None:
                     "executed": True,
                     "executed_steps": list(result.executed_steps),
                     "save_skipped": result.save_skipped,
+                    "saved": result.saved,
                 }
             )
     except SoftOneAutomationError as exc:

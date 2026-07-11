@@ -111,6 +111,7 @@ def test_saved_pdf_moves_to_processed(monkeypatch, tmp_path: Path) -> None:
             profile=name,
             executed_steps=("saved",),
             save_skipped=False,
+            saved=True,
         ),
     )
 
@@ -125,3 +126,30 @@ def test_saved_pdf_moves_to_processed(monkeypatch, tmp_path: Path) -> None:
     assert not result.results[0].save_skipped
     assert (tmp_path / "processed" / "invoice.pdf").exists()
     assert not source.exists()
+
+
+def test_allow_save_without_executed_save_keeps_pdf(monkeypatch, tmp_path: Path) -> None:
+    source = tmp_path / "invoice.pdf"
+    source.write_bytes(b"pdf")
+    monkeypatch.setattr(batch, "launch_softone", lambda *args, **kwargs: False)
+    monkeypatch.setattr(batch, "_credential_context", lambda target: {})
+    monkeypatch.setattr(
+        batch,
+        "execute_profile",
+        lambda profile, name, context, **kwargs: WorkflowExecution(
+            profile=name,
+            executed_steps=("filled",),
+            save_skipped=False,
+            saved=False,
+        ),
+    )
+
+    result = batch.execute_batch(
+        [prepared_invoice(source)],
+        app_config(tmp_path),
+        "workflow.json",
+        allow_save=True,
+    )
+
+    assert not result.results[0].saved
+    assert source.exists()
