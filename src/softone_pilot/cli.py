@@ -70,7 +70,10 @@ def _dry_run(args) -> None:
 
     prepared, parse_errors = prepare_batch(pdfs, config, use_sql=not args.no_sql)
     if not args.no_audit:
-        write_dry_run_audit(args.audit, prepared, parse_errors)
+        try:
+            write_dry_run_audit(args.audit, prepared, parse_errors)
+        except OSError as exc:
+            print(f"WARNING: Το audit log δεν γράφτηκε: {exc}", file=sys.stderr)
     payload = {
         "items": [item.to_dict() for item in prepared],
         "parse_errors": parse_errors,
