@@ -517,7 +517,7 @@ def _set_control(control, value: str, step: dict) -> None:
     except Exception:
         control.click_input()
         keyboard.send_keys("^a{BACKSPACE}")
-        keyboard.send_keys(value, with_spaces=True, vk_packet=True)
+        keyboard.send_keys(_escape_keys(value), with_spaces=True, vk_packet=True)
     if step.get("submit_keys"):
         keyboard.send_keys(str(step["submit_keys"]), with_spaces=True, vk_packet=True)
 
@@ -562,7 +562,7 @@ def _set_grid_cell(window, step: dict, value: str, timeout: float) -> None:
     y = min(grid_rect.bottom - 4, column_rect.bottom + row_height // 2 + row_index * row_height)
     grid.click_input(coords=(x - grid_rect.left, y - grid_rect.top))
     keyboard.send_keys("^a{BACKSPACE}")
-    keyboard.send_keys(value, with_spaces=True, vk_packet=True)
+    keyboard.send_keys(_escape_keys(value), with_spaces=True, vk_packet=True)
     if step.get("submit_keys"):
         keyboard.send_keys(str(step["submit_keys"]), with_spaces=True, vk_packet=True)
 
