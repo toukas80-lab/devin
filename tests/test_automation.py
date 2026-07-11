@@ -64,13 +64,12 @@ def test_workflow_profiles_are_complete() -> None:
     assert commit_is_available(WORKFLOW)
 
 
-def test_default_window_matches_open_softone_document_form() -> None:
+def test_default_window_matches_only_softone_titles() -> None:
     workflow = json.loads(WORKFLOW.read_text(encoding="utf-8"))
+    pattern = workflow["window"]["title_re"]
 
-    assert re.search(
-        workflow["window"]["title_re"],
-        "Νέα λειτουργική εφαρμογή βάσης - Google Chrome",
-    )
+    assert re.search(pattern, "SoftOne News Page")
+    assert not re.search(pattern, "Νέα λειτουργική εφαρμογή βάσης - Google Chrome")
 
 
 def test_context_uses_softone_mapping_and_greek_amounts() -> None:

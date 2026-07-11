@@ -17,6 +17,7 @@ New-Item -ItemType Directory -Force -Path $output | Out-Null
     --windowed `
     --name "SoftOne-PDF-Pilot" `
     --distpath $output `
+    --collect-all PIL `
     --collect-all pypdf `
     --collect-all pywinauto `
     "src\softone_pilot\gui.py"
@@ -28,6 +29,7 @@ New-Item -ItemType Directory -Force -Path $output | Out-Null
     --console `
     --name "SoftOne-PDF-Automation" `
     --distpath $output `
+    --collect-all PIL `
     --collect-all pypdf `
     --collect-all pywinauto `
     "src\softone_pilot\cli.py"

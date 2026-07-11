@@ -9,6 +9,7 @@ description = "Local Windows pilot for importing PDF invoices through the SoftOn
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+  "pillow==11.3.0",
   "pypdf==5.7.0",
   "pyodbc==5.2.0; platform_system == 'Windows'",
   "pywinauto==0.6.9; platform_system == 'Windows'",

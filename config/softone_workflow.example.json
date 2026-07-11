@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "window": {
-    "title_re": "SoftOne|Series 6|Νέα λειτουργική εφαρμογή βάσης",
+    "title_re": "SoftOne|Series 6",
     "class_name_re": "Chrome_WidgetWin_1"
   },
   "profiles": {
@@ -9,7 +9,7 @@
       "operation": "login",
       "description": "Σύνδεση ή αναμονή μέχρι να είναι έτοιμο το SoftOne",
       "window": {
-        "title_re": "SoftOne|Series 6|Νέα λειτουργική εφαρμογή βάσης",
+        "title_re": "SoftOne|Series 6",
         "class_name_re": "Chrome_WidgetWin_1"
       },
       "required_context": [],
@@ -65,7 +65,7 @@
       "operation": "navigate",
       "description": "Μετάβαση στα Ειδικά πιστωτών και άνοιγμα Νέας Εγγραφής",
       "window": {
-        "title_re": "SoftOne|Series 6|Νέα λειτουργική εφαρμογή βάσης",
+        "title_re": "SoftOne|Series 6",
         "class_name_re": "Chrome_WidgetWin_1"
       },
       "required_context": [],
