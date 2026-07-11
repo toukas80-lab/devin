@@ -53,13 +53,14 @@ def execute_batch(
         settings.arguments,
         timeout_seconds=settings.startup_timeout_seconds,
     )
-    startup_context = _credential_context(settings.credential_target)
-    execute_profile(
-        workflow_path,
-        settings.startup_profile,
-        startup_context,
-        process_id=launch.process_id,
-    )
+    if launch.launched:
+        startup_context = _credential_context(settings.credential_target)
+        execute_profile(
+            workflow_path,
+            settings.startup_profile,
+            startup_context,
+            process_id=launch.process_id,
+        )
 
     results: list[BatchItemResult] = []
     stopped_early = False

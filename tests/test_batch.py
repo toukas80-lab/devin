@@ -202,3 +202,33 @@ def test_continue_on_error_handles_invalid_item_context(monkeypatch, tmp_path: P
     assert len(result.results) == 2
     assert result.results[0].error
     assert result.results[1].save_skipped
+
+
+def test_existing_softone_window_skips_login_profile(monkeypatch, tmp_path: Path) -> None:
+    source = tmp_path / "invoice.pdf"
+    source.write_bytes(b"pdf")
+    executed_profiles = []
+
+    monkeypatch.setattr(
+        batch,
+        "launch_softone",
+        lambda *args, **kwargs: SoftOneLaunch(launched=False),
+    )
+
+    def execute(profile, name, context, **kwargs):
+        executed_profiles.append(name)
+        return WorkflowExecution(
+            profile=name,
+            executed_steps=("filled",),
+            save_skipped=name == "creditor_expense.create",
+        )
+
+    monkeypatch.setattr(batch, "execute_profile", execute)
+    result = batch.execute_batch(
+        [prepared_invoice(source)],
+        app_config(tmp_path),
+        "workflow.json",
+    )
+
+    assert result.results[0].save_skipped
+    assert "softone.login" not in executed_profiles
