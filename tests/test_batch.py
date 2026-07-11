@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -165,3 +166,39 @@ def test_allow_save_without_executed_save_keeps_pdf(monkeypatch, tmp_path: Path)
 
     assert not result.results[0].saved
     assert source.exists()
+
+
+def test_continue_on_error_handles_invalid_item_context(monkeypatch, tmp_path: Path) -> None:
+    bad_source = tmp_path / "bad.pdf"
+    good_source = tmp_path / "good.pdf"
+    bad_source.write_bytes(b"bad")
+    good_source.write_bytes(b"good")
+    bad_item = replace(prepared_invoice(bad_source), settings=None)
+    good_item = prepared_invoice(good_source)
+
+    monkeypatch.setattr(
+        batch,
+        "launch_softone",
+        lambda *args, **kwargs: SoftOneLaunch(launched=False),
+    )
+    monkeypatch.setattr(batch, "_credential_context", lambda target: {})
+    monkeypatch.setattr(
+        batch,
+        "execute_profile",
+        lambda profile, name, context, **kwargs: WorkflowExecution(
+            profile=name,
+            executed_steps=("filled",),
+            save_skipped=name == "creditor_expense.create",
+        ),
+    )
+
+    result = batch.execute_batch(
+        [bad_item, good_item],
+        app_config(tmp_path),
+        "workflow.json",
+        continue_on_error=True,
+    )
+
+    assert len(result.results) == 2
+    assert result.results[0].error
+    assert result.results[1].save_skipped

@@ -198,3 +198,35 @@ def test_type_focused_uses_keyboard_events(monkeypatch) -> None:
         "a{+}b",
         "{ENTER}",
     ]
+
+
+def test_secret_step_error_does_not_expose_value(monkeypatch) -> None:
+    class Window:
+        def set_focus(self):
+            return None
+
+        def capture_as_image(self):
+            raise OSError("no screenshot")
+
+    class Keyboard:
+        @staticmethod
+        def send_keys(keys, **kwargs):
+            raise RuntimeError(f"failed to type {keys}")
+
+    monkeypatch.setattr(automation, "_windows_desktop", lambda: object())
+    monkeypatch.setattr(
+        automation,
+        "_find_window",
+        lambda desktop, selector, **kwargs: Window(),
+    )
+    monkeypatch.setattr(automation, "keyboard", Keyboard())
+
+    with pytest.raises(SoftOneAutomationError) as error:
+        automation.execute_profile(
+            WORKFLOW,
+            "softone.login",
+            {"password": "private-password"},
+        )
+
+    assert "private-password" not in str(error.value)
+    assert "προστατευμένου πεδίου" in str(error.value)

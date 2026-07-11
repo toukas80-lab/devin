@@ -270,12 +270,14 @@ def execute_profile(
     save_skipped = False
     saved = False
     step_id = "<start>"
+    secret_step = False
 
     try:
         for step in profile["steps"]:
             if not _condition_matches(step, context):
                 continue
             step_id = str(step.get("id", step["action"]))
+            secret_step = bool(step.get("secret"))
             if step["action"] == "save" and not allow_save:
                 save_skipped = True
                 break
@@ -309,8 +311,13 @@ def execute_profile(
             screenshot = _capture_failure(window, artifacts_dir, profile_name)
         except Exception:
             screenshot = None
+        details = (
+            "Αποτυχία εισαγωγής προστατευμένου πεδίου"
+            if secret_step
+            else str(exc)
+        )
         raise SoftOneAutomationError(
-            f"Αποτυχία στο βήμα {step_id}: {exc}. Screenshot: {screenshot}"
+            f"Αποτυχία στο βήμα {step_id}: {details}. Screenshot: {screenshot}"
         ) from exc
 
 

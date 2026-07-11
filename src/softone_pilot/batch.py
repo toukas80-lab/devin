@@ -64,9 +64,10 @@ def execute_batch(
     results: list[BatchItemResult] = []
     stopped_early = False
     for item in items:
-        profile = item.settings.workflow_profile if item.settings else ""
-        context = build_invoice_context(item)
+        profile = ""
         try:
+            profile = item.settings.workflow_profile if item.settings else ""
+            context = build_invoice_context(item)
             if settings.navigation_profile:
                 execute_profile(
                     workflow_path,
