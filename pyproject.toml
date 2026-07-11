@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "softone-pdf-pilot"
+version = "0.1.0"
+description = "Local Windows pilot for importing PDF invoices through the SoftOne desktop UI"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pypdf==5.7.0",
+  "pyodbc==5.2.0; platform_system == 'Windows'",
+  "pywinauto==0.6.9; platform_system == 'Windows'",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.4.1",
+  "ruff==0.12.2",
+]
+build = [
+  "pyinstaller==6.14.2",
+]
+
+[project.scripts]
+softone-pilot = "softone_pilot.cli:main"
+softone-pilot-gui = "softone_pilot.gui:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

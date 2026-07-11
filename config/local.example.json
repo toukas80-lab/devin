@@ -1,0 +1,26 @@
+{
+  "sql": {
+    "enabled": true,
+    "server": ".\\SOFTONE",
+    "database": "FOUNTOUKAS",
+    "driver": "ODBC Driver 17 for SQL Server",
+    "trusted_connection": true,
+    "timeout_seconds": 10
+  },
+  "suppliers": {
+    "999082935": {
+      "name": "ENARTIA ΜΟΝΟΠΡΟΣΩΠΗ ΑΝΩΝΥΜΗ ΕΤΑΙΡΕΙΑ",
+      "series_code": "ΤΙΜΔ-E1",
+      "line_code": "18103",
+      "payment_method": "1008",
+      "settlement": false
+    },
+    "802408691": {
+      "name": "ΕΓΝΑΤΙΑ ΟΔΟΣ ΑΝΩΝΥΜΗ ΕΤΑΙΡΕΙΑ",
+      "series_code": "ΤΙΜΔ",
+      "line_code": "10007",
+      "payment_method": "1008",
+      "settlement": true
+    }
+  }
+}

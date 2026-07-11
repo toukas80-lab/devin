@@ -1,0 +1,62 @@
+{
+  "window": {
+    "title_re": ".*SoftOne.*"
+  },
+  "controls": {
+    "new_document": {
+      "title": "",
+      "auto_id": "",
+      "control_type": "Button"
+    },
+    "series": {
+      "title": "",
+      "auto_id": "",
+      "control_type": "Edit"
+    },
+    "supplier": {
+      "title": "",
+      "auto_id": "",
+      "control_type": "Edit"
+    },
+    "document_date": {
+      "title": "",
+      "auto_id": "",
+      "control_type": "Edit"
+    },
+    "document_number": {
+      "title": "",
+      "auto_id": "",
+      "control_type": "Edit"
+    },
+    "description": {
+      "title": "",
+      "auto_id": "",
+      "control_type": "Edit"
+    },
+    "net_amount": {
+      "title": "",
+      "auto_id": "",
+      "control_type": "Edit"
+    },
+    "vat_amount": {
+      "title": "",
+      "auto_id": "",
+      "control_type": "Edit"
+    },
+    "payment_method": {
+      "title": "",
+      "auto_id": "",
+      "control_type": "Edit"
+    },
+    "save": {
+      "title": "",
+      "auto_id": "",
+      "control_type": "Button"
+    },
+    "save_confirmation": {
+      "title": "",
+      "auto_id": "",
+      "control_type": "Text"
+    }
+  }
+}
