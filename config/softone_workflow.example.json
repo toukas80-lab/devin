@@ -5,6 +5,100 @@
     "class_name_re": "Chrome_WidgetWin_1"
   },
   "profiles": {
+    "softone.login": {
+      "operation": "login",
+      "description": "Σύνδεση ή αναμονή μέχρι να είναι έτοιμο το SoftOne",
+      "window": {
+        "title_re": "SoftOne|Series 6|Νέα λειτουργική εφαρμογή βάσης",
+        "class_name_re": "Chrome_WidgetWin_1"
+      },
+      "required_context": [],
+      "steps": [
+        {
+          "id": "username",
+          "action": "set",
+          "optional": true,
+          "skip_if_empty": true,
+          "selector": {
+            "control_type": "Edit",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 500,
+              "selector": {
+                "title_re": "Χρήστης|Username"
+              }
+            }
+          },
+          "value": "{username}"
+        },
+        {
+          "id": "password",
+          "action": "set",
+          "optional": true,
+          "skip_if_empty": true,
+          "secret": true,
+          "selector": {
+            "control_type": "Edit",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 500,
+              "selector": {
+                "title_re": "Κωδικός|Password"
+              }
+            }
+          },
+          "value": "{password}",
+          "submit_keys": "{ENTER}"
+        },
+        {
+          "id": "softone-ready",
+          "action": "wait_present",
+          "selector": {
+            "title_re": "Ειδικά πιστωτών|Αγορές|Πωλήσεις",
+            "control_type": "Text"
+          },
+          "timeout_seconds": 60
+        }
+      ]
+    },
+    "creditor_expense.open_create": {
+      "operation": "navigate",
+      "description": "Μετάβαση στα Ειδικά πιστωτών και άνοιγμα Νέας Εγγραφής",
+      "window": {
+        "title_re": "SoftOne|Series 6|Νέα λειτουργική εφαρμογή βάσης",
+        "class_name_re": "Chrome_WidgetWin_1"
+      },
+      "required_context": [],
+      "steps": [
+        {
+          "id": "creditor-expenses",
+          "action": "click",
+          "optional": true,
+          "selector": {
+            "title_re": "Ειδικά πιστωτών",
+            "control_type": "Text"
+          }
+        },
+        {
+          "id": "new-entry",
+          "action": "click",
+          "optional": true,
+          "selector": {
+            "title_re": "Νέα Εγγραφή|Νέα εγγραφή",
+            "control_type": "Text"
+          }
+        },
+        {
+          "id": "new-form-ready",
+          "action": "wait_present",
+          "selector": {
+            "title_re": "Νέα Εγγραφή",
+            "control_type": "Text"
+          },
+          "timeout_seconds": 30
+        }
+      ]
+    },
     "creditor_expense.create": {
       "operation": "create",
       "description": "Νέα εγγραφή στα Ειδικά πιστωτών",
@@ -58,6 +152,40 @@
           "value": "{document_date}"
         },
         {
+          "id": "document-type",
+          "action": "set",
+          "skip_if_empty": true,
+          "selector": {
+            "control_type": "ComboBox",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 500,
+              "selector": {
+                "title": "Τύπος"
+              }
+            }
+          },
+          "value": "{document_type}",
+          "submit_keys": "{ENTER}"
+        },
+        {
+          "id": "company-branch",
+          "action": "set",
+          "skip_if_empty": true,
+          "selector": {
+            "control_type": "ComboBox",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 700,
+              "selector": {
+                "title_re": "Υποκατάστημα εταιρείας|Υποκ/μα εταιρείας"
+              }
+            }
+          },
+          "value": "{company_branch}",
+          "submit_keys": "{ENTER}"
+        },
+        {
           "id": "supplier",
           "action": "set",
           "selector": {
@@ -71,6 +199,23 @@
             }
           },
           "value": "{supplier_code}",
+          "submit_keys": "{ENTER}"
+        },
+        {
+          "id": "supplier-branch",
+          "action": "set",
+          "skip_if_empty": true,
+          "selector": {
+            "control_type": "ComboBox",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 700,
+              "selector": {
+                "title_re": "Υποκατάστημα προμηθευτή|Υποκ/μα προμηθευτή"
+              }
+            }
+          },
+          "value": "{supplier_branch}",
           "submit_keys": "{ENTER}"
         },
         {
@@ -105,6 +250,40 @@
           "submit_keys": "{ENTER}"
         },
         {
+          "id": "warehouse",
+          "action": "set",
+          "skip_if_empty": true,
+          "selector": {
+            "control_type": "ComboBox",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 700,
+              "selector": {
+                "title_re": "Αποθηκευτικός χώρος|Α\\.Χ\\.|Αποθήκη"
+              }
+            }
+          },
+          "value": "{warehouse}",
+          "submit_keys": "{ENTER}"
+        },
+        {
+          "id": "vat-regime",
+          "action": "set",
+          "skip_if_empty": true,
+          "selector": {
+            "control_type": "ComboBox",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 700,
+              "selector": {
+                "title_re": "Καθεστώς Φ\\.?Π\\.?Α\\.?"
+              }
+            }
+          },
+          "value": "{vat_regime}",
+          "submit_keys": "{ENTER}"
+        },
+        {
           "id": "line-code",
           "action": "grid_set",
           "grid": {
@@ -117,6 +296,19 @@
           },
           "value": "{line_code}",
           "submit_keys": "{ENTER}"
+        },
+        {
+          "id": "quantity",
+          "action": "grid_set",
+          "grid": {
+            "control_type": "DataGrid",
+            "class_name_re": "x-grid"
+          },
+          "column": {
+            "title_re": "Ποσότητα|Ποσ\\.",
+            "control_type": "DataItem"
+          },
+          "value": "{quantity}"
         },
         {
           "id": "description",
@@ -145,11 +337,142 @@
           "value": "{net_value}"
         },
         {
+          "id": "discount",
+          "action": "grid_set",
+          "skip_if_empty": true,
+          "grid": {
+            "control_type": "DataGrid",
+            "class_name_re": "x-grid"
+          },
+          "column": {
+            "title_re": "Έκπτωση|Εκπτ\\.",
+            "control_type": "DataItem"
+          },
+          "value": "{discount}"
+        },
+        {
+          "id": "charges",
+          "action": "set",
+          "skip_if_empty": true,
+          "selector": {
+            "control_type": "Edit",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 600,
+              "selector": {
+                "title_re": "Έξοδα|Επιβαρύνσεις"
+              }
+            }
+          },
+          "value": "{charges}"
+        },
+        {
+          "id": "withholding",
+          "action": "set",
+          "skip_if_empty": true,
+          "selector": {
+            "control_type": "Edit",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 600,
+              "selector": {
+                "title_re": "Παρακράτηση|Παρακρατήσεις"
+              }
+            }
+          },
+          "value": "{withholding}"
+        },
+        {
+          "id": "comments",
+          "action": "set",
+          "skip_if_empty": true,
+          "selector": {
+            "control_type": "Edit",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 900,
+              "selector": {
+                "title_re": "Παρατηρήσεις|Σχόλια"
+              }
+            }
+          },
+          "value": "{comments}"
+        },
+        {
+          "id": "no-validation-error",
+          "action": "assert_absent",
+          "selector": {
+            "title_re": "Δεν έχετε συμπληρώσει|Ημερομηνία εκτός|Invalid value|Range Error|rollback|List index out of bounds",
+            "control_type": "Text"
+          },
+          "timeout_seconds": 1
+        },
+        {
           "id": "save",
           "action": "save",
           "selector": {
             "title": "Καταχώρηση",
             "control_type": "Button"
+          }
+        },
+        {
+          "id": "settlement-confirm",
+          "action": "click",
+          "optional": true,
+          "when": {
+            "settlement_enabled": "true"
+          },
+          "timeout_seconds": 3,
+          "selector": {
+            "title_re": "Ναι|Καταχώρηση",
+            "control_type": "Button",
+            "anchor": {
+              "direction": "below",
+              "max_distance": 500,
+              "selector": {
+                "title_re": "Εξόφληση|εξοφλητικό"
+              }
+            }
+          }
+        },
+        {
+          "id": "print-accept",
+          "action": "click",
+          "optional": true,
+          "when": {
+            "print_policy": "accept"
+          },
+          "timeout_seconds": 3,
+          "selector": {
+            "title_re": "Ναι|Εκτύπωση",
+            "control_type": "Button",
+            "anchor": {
+              "direction": "below",
+              "max_distance": 500,
+              "selector": {
+                "title_re": "Εκτύπωση"
+              }
+            }
+          }
+        },
+        {
+          "id": "print-decline",
+          "action": "click",
+          "optional": true,
+          "when": {
+            "print_policy": "decline"
+          },
+          "timeout_seconds": 3,
+          "selector": {
+            "title_re": "Όχι|Ακύρωση",
+            "control_type": "Button",
+            "anchor": {
+              "direction": "below",
+              "max_distance": 500,
+              "selector": {
+                "title_re": "Εκτύπωση"
+              }
+            }
           }
         },
         {

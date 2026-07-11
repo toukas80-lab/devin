@@ -7,20 +7,56 @@
     "trusted_connection": true,
     "timeout_seconds": 10
   },
+  "automation": {
+    "enabled": true,
+    "executable_path": "C:\\Program Files (x86)\\SoftOne\\SoftOne.exe",
+    "arguments": [],
+    "inbox_path": "C:\\SoftOne-PDF\\inbox",
+    "processed_path": "C:\\SoftOne-PDF\\processed",
+    "failed_path": "C:\\SoftOne-PDF\\failed",
+    "startup_timeout_seconds": 60,
+    "credential_target": "SoftOne PDF Pilot",
+    "startup_profile": "softone.login",
+    "navigation_profile": "creditor_expense.open_create"
+  },
   "suppliers": {
     "999082935": {
       "name": "ENARTIA ΜΟΝΟΠΡΟΣΩΠΗ ΑΝΩΝΥΜΗ ΕΤΑΙΡΕΙΑ",
       "series_code": "ΤΙΜΔ-E1",
       "line_code": "18103",
       "payment_method": "1008",
-      "settlement": false
+      "settlement": false,
+      "workflow_profile": "creditor_expense.create",
+      "company_branch": "",
+      "supplier_branch": "",
+      "warehouse": "",
+      "document_type": "",
+      "vat_regime": "",
+      "quantity": "1",
+      "discount": "",
+      "charges": "",
+      "withholding": "",
+      "comments": "",
+      "print_policy": "none"
     },
     "802408691": {
       "name": "ΕΓΝΑΤΙΑ ΟΔΟΣ ΑΝΩΝΥΜΗ ΕΤΑΙΡΕΙΑ",
       "series_code": "ΤΙΜΔ",
       "line_code": "10007",
       "payment_method": "1008",
-      "settlement": true
+      "settlement": true,
+      "workflow_profile": "creditor_expense.create",
+      "company_branch": "",
+      "supplier_branch": "",
+      "warehouse": "",
+      "document_type": "",
+      "vat_regime": "",
+      "quantity": "1",
+      "discount": "",
+      "charges": "",
+      "withholding": "",
+      "comments": "",
+      "print_policy": "none"
     }
   }
 }

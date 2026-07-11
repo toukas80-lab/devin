@@ -36,10 +36,29 @@ class SupplierSettings:
     line_code: str
     payment_method: str
     settlement: bool
+    workflow_profile: str = "creditor_expense.create"
+    company_branch: str = ""
+    supplier_branch: str = ""
+    warehouse: str = ""
+    document_type: str = ""
+    vat_regime: str = ""
+    quantity: str = "1"
+    discount: str = ""
+    charges: str = ""
+    withholding: str = ""
+    comments: str = ""
+    print_policy: str = "none"
 
     @property
     def is_complete(self) -> bool:
-        return all((self.series_code, self.line_code, self.payment_method))
+        return all(
+            (
+                self.series_code,
+                self.line_code,
+                self.payment_method,
+                self.workflow_profile,
+            )
+        )
 
 
 @dataclass(frozen=True)

@@ -19,8 +19,9 @@ PDF -> έλεγχος στοιχείων -> read-only SQL lookup -> dry-run
 ## Τρέχουσα κατάσταση
 
 Ο πυρήνας parsing, validation, read-only SQL lookup, duplicate check, batch preview και
-control-tree inspection είναι διαθέσιμος. Η πραγματική συμπλήρωση της φόρμας SoftOne
-θα ενεργοποιηθεί αφού καταγραφούν τα ακριβή controls της χειροκίνητης ροής.
+control-tree inspection είναι διαθέσιμος. Η πλήρης ροή υποστηρίζει αυτόματη εκκίνηση,
+σύνδεση από Windows Credential Manager, πλοήγηση, επεξεργασία φακέλου PDF και
+παραμετρικά πεδία/ενέργειες ανά Σειρά και Τύπο.
 
 ## Εγκατάσταση για ανάπτυξη
 
@@ -102,6 +103,47 @@ softone-pilot workflow invoice.pdf `
 αποθήκευση. Η αποθήκευση απαιτεί επιπλέον `--allow-save` και χρησιμοποιείται
 μόνο μετά από ρητή έγκριση.
 
+## Πλήρης αυτόματη ροή
+
+Στο `config\local.json` συμπληρώστε:
+
+- `automation.executable_path`: το τοπικό `SoftOne.exe`,
+- `automation.inbox_path`: φάκελος εισερχόμενων PDF,
+- `automation.processed_path`: φάκελος επιτυχών PDF,
+- τους κωδικούς Σειράς/γραμμής και τα προαιρετικά πεδία κάθε προμηθευτή.
+
+Αποθηκεύστε μία φορά τα στοιχεία σύνδεσης, με κρυφή εισαγωγή κωδικού:
+
+```text
+store_softone_credentials.cmd
+```
+
+Preview όλου του φακέλου, χωρίς άνοιγμα SoftOne:
+
+```powershell
+SoftOne-PDF-Automation.exe batch `
+  --config config\local.json `
+  --workflow config\softone_workflow.example.json
+```
+
+Αυτόματη εκκίνηση/login/πλοήγηση και συμπλήρωση του πρώτου PDF χωρίς αποθήκευση:
+
+```text
+run_softone_batch_no_save.cmd
+```
+
+Η παραγωγική εκτέλεση όλων των PDF απαιτεί και `--allow-save`. Μετά από επιτυχή
+καταχώριση, το PDF μετακινείται στον `processed_path`. Σε σφάλμα η ροή σταματά,
+το PDF παραμένει στο inbox και αποθηκεύεται screenshot. Το αποτέλεσμα γράφεται
+στο `pilot-data\batch-audit.jsonl` χωρίς περιεχόμενο PDF ή κωδικούς.
+
+Τα workflow profiles υποστηρίζουν προαιρετικά:
+
+- υποκατάστημα εταιρείας/προμηθευτή, αποθήκη και καθεστώς ΦΠΑ,
+- ποσότητα, έκπτωση, έξοδα, παρακράτηση και παρατηρήσεις,
+- επιβεβαίωση εξόφλησης και πολιτική εκτύπωσης,
+- διαφορετικό profile ανά προμηθευτή/Σειρά/Τύπο.
+
 ## Windows build
 
 ```powershell
@@ -121,6 +163,8 @@ SoftOne-PDF-Pilot.exe
 SoftOne-PDF-Automation.exe
 run_workflow_preview.cmd
 run_softone_fill_no_save.cmd
+run_softone_batch_no_save.cmd
+store_softone_credentials.cmd
 config\local.example.json
 config\local.json
 config\softone_workflow.example.json
@@ -128,14 +172,15 @@ config\softone_workflow.example.json
 
 Το πρώτο executable είναι το GUI dry-run. Το δεύτερο παρέχει workflow
 preview/εκτέλεση και απαιτεί επιπλέον `--allow-save` για πραγματική αποθήκευση.
-Τα δύο `.cmd` ανοίγουν επιλογέα PDF: το πρώτο κάνει μόνο preview και το δεύτερο
-συμπληρώνει την ήδη ανοικτή φόρμα αλλά σταματά πριν από την αποθήκευση.
+Τα launchers υποστηρίζουν preview, μεμονωμένο PDF, πλήρη ροή φακέλου χωρίς
+αποθήκευση και ασφαλή αρχική αποθήκευση των στοιχείων σύνδεσης.
 
 ## Ασφάλεια
 
 - Η σύνδεση SQL χρησιμοποιεί Windows authentication και `ApplicationIntent=ReadOnly`.
 - Οι SQL εντολές του pilot είναι σταθερά, parameterized `SELECT`.
 - Τα audit logs δεν περιέχουν κωδικούς ή το πλήρες περιεχόμενο των PDF.
+- Τα στοιχεία SoftOne αποθηκεύονται μόνο στο Windows Credential Manager.
 - Η αυτοματοποίηση απορρίπτει πραγματική αποθήκευση μέχρι να υπάρχει ολοκληρωμένο,
   επιβεβαιωμένο workflow profile.
 - Πριν από πραγματική καταχώριση απαιτείται νέα ρητή έγκριση και δοκιμή ενός παραστατικού.

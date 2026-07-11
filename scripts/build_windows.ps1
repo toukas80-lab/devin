@@ -44,6 +44,14 @@ Copy-Item `
     "scripts\run_softone_fill_no_save.cmd" `
     "$output\run_softone_fill_no_save.cmd" `
     -Force
+Copy-Item `
+    "scripts\run_softone_batch_no_save.cmd" `
+    "$output\run_softone_batch_no_save.cmd" `
+    -Force
+Copy-Item `
+    "scripts\store_softone_credentials.cmd" `
+    "$output\store_softone_credentials.cmd" `
+    -Force
 Copy-Item "README.md" "$output\README.md" -Force
 
 $archive = "dist\SoftOne-PDF-Pilot-Windows.zip"

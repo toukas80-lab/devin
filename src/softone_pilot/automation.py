@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import platform
 import re
+import subprocess
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -74,8 +76,21 @@ def validate_workflow_profile(
         if not isinstance(profile, dict):
             errors.append(f"profiles.{name}")
             continue
-        if profile.get("operation") not in {"create", "edit"}:
+        if profile.get("operation") not in {
+            "cancel",
+            "create",
+            "edit",
+            "login",
+            "navigate",
+            "transform",
+        }:
             errors.append(f"profiles.{name}.operation")
+        profile_window = profile.get("window")
+        if profile_window is not None and (
+            not isinstance(profile_window, dict)
+            or not _selector_has_identity(profile_window)
+        ):
+            errors.append(f"profiles.{name}.window")
         steps = profile.get("steps")
         if not isinstance(steps, list) or not steps:
             errors.append(f"profiles.{name}.steps")
@@ -87,18 +102,30 @@ def validate_workflow_profile(
             action = step.get("action")
             if action not in {
                 "assert",
+                "assert_absent",
                 "click",
                 "grid_set",
+                "press_keys",
                 "save",
                 "set",
                 "wait_absent",
                 "wait_present",
             }:
                 errors.append(f"profiles.{name}.steps.{index}.action")
-            if action in {"assert", "click", "save", "set", "wait_absent", "wait_present"}:
+            if action in {
+                "assert",
+                "assert_absent",
+                "click",
+                "save",
+                "set",
+                "wait_absent",
+                "wait_present",
+            }:
                 selector = step.get("selector")
                 if not isinstance(selector, dict) or not _selector_has_identity(selector):
                     errors.append(f"profiles.{name}.steps.{index}.selector")
+            if action == "press_keys" and not step.get("keys"):
+                errors.append(f"profiles.{name}.steps.{index}.keys")
             if action == "grid_set":
                 for key in ("grid", "column"):
                     selector = step.get(key)
@@ -116,9 +143,14 @@ def commit_is_available(
     workflow = _load_workflow(workflow_path)
     profiles = workflow["profiles"]
     selected = [profiles[profile_name]] if profile_name else profiles.values()
+    transactional = [
+        profile
+        for profile in selected
+        if profile.get("operation") not in {"login", "navigate"}
+    ]
     return all(
         any(step.get("action") == "save" for step in profile["steps"])
-        for profile in selected
+        for profile in transactional
     )
 
 
@@ -138,6 +170,20 @@ def build_invoice_context(item: PreparedInvoice) -> dict[str, str]:
         "series_code": settings.series_code,
         "line_code": settings.line_code,
         "payment_method": settings.payment_method,
+        "workflow_profile": settings.workflow_profile,
+        "company_branch": settings.company_branch,
+        "supplier_branch": settings.supplier_branch,
+        "warehouse": settings.warehouse,
+        "document_type": settings.document_type,
+        "vat_regime": settings.vat_regime,
+        "quantity": settings.quantity,
+        "unit_price": _format_amount(invoice.net_value),
+        "discount": settings.discount,
+        "charges": settings.charges,
+        "withholding": settings.withholding,
+        "comments": settings.comments,
+        "settlement_enabled": str(settings.settlement).lower(),
+        "print_policy": settings.print_policy,
         "document_date": invoice.document_date.strftime("%d/%m/%Y"),
         "document_number": invoice.document_number,
         "description": invoice.description,
@@ -156,9 +202,14 @@ def preview_workflow(
     context = build_invoice_context(item)
     preview: list[dict[str, str]] = []
     for step in profile["steps"]:
+        if not _condition_matches(step, context):
+            continue
         rendered = {"id": str(step.get("id", "")), "action": str(step["action"])}
         if "value" in step:
-            rendered["value"] = _render(str(step["value"]), context)
+            value = _render(str(step["value"]), context)
+            if step.get("skip_if_empty") and not value:
+                continue
+            rendered["value"] = "<secret>" if step.get("secret") else value
         preview.append(rendered)
     return preview
 
@@ -171,6 +222,24 @@ def execute_workflow(
     allow_save: bool = False,
     artifacts_dir: str | Path = "pilot-data/failures",
 ) -> WorkflowExecution:
+    context = build_invoice_context(item)
+    return execute_profile(
+        workflow_path,
+        profile_name,
+        context,
+        allow_save=allow_save,
+        artifacts_dir=artifacts_dir,
+    )
+
+
+def execute_profile(
+    workflow_path: str | Path,
+    profile_name: str,
+    context: dict[str, str],
+    *,
+    allow_save: bool = False,
+    artifacts_dir: str | Path = "pilot-data/failures",
+) -> WorkflowExecution:
     desktop = _windows_desktop()
     workflow = _load_workflow(workflow_path)
     errors = validate_workflow_profile(workflow_path, profile_name)
@@ -178,12 +247,11 @@ def execute_workflow(
         raise SoftOneAutomationError(f"Μη ολοκληρωμένο workflow: {', '.join(errors)}")
 
     profile = _profile(workflow_path, profile_name)
-    context = build_invoice_context(item)
     missing = _missing_context(profile, context)
     if missing:
         raise SoftOneAutomationError(f"Λείπουν workflow values: {', '.join(missing)}")
 
-    window = _find_window(desktop, workflow["window"])
+    window = _find_window(desktop, profile.get("window", workflow["window"]))
     window.wait("exists enabled visible ready", timeout=15)
     executed: list[str] = []
     save_skipped = False
@@ -191,11 +259,21 @@ def execute_workflow(
 
     try:
         for step in profile["steps"]:
+            if not _condition_matches(step, context):
+                continue
             step_id = str(step.get("id", step["action"]))
             if step["action"] == "save" and not allow_save:
                 save_skipped = True
                 break
-            _run_step(window, step, context)
+            if step.get("skip_if_empty") and "value" in step:
+                if not _render(str(step["value"]), context):
+                    continue
+            try:
+                _run_step(window, step, context)
+            except SoftOneAutomationError:
+                if step.get("optional"):
+                    continue
+                raise
             executed.append(step_id)
         return WorkflowExecution(
             profile=profile_name,
@@ -210,6 +288,43 @@ def execute_workflow(
         raise SoftOneAutomationError(
             f"Αποτυχία στο βήμα {step_id}: {exc}. Screenshot: {screenshot}"
         ) from exc
+
+
+def launch_softone(
+    workflow_path: str | Path,
+    profile_name: str,
+    executable_path: str | Path,
+    arguments: tuple[str, ...] = (),
+    *,
+    timeout_seconds: int = 60,
+) -> bool:
+    desktop = _windows_desktop()
+    workflow = _load_workflow(workflow_path)
+    profile = _profile(workflow_path, profile_name)
+    selector = profile.get("window", workflow["window"])
+    if _matching_windows(desktop, selector):
+        return False
+
+    executable = Path(executable_path)
+    if not executable.is_file():
+        raise SoftOneAutomationError(f"Δεν βρέθηκε το SoftOne: {executable}")
+    if executable.suffix.lower() in {".lnk", ".url"}:
+        subprocess.Popen(
+            ["cmd.exe", "/c", "start", "", str(executable)],
+            cwd=executable.parent,
+        )
+    else:
+        subprocess.Popen(
+            [str(executable), *arguments],
+            cwd=executable.parent,
+        )
+
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if _matching_windows(desktop, selector):
+            return True
+        time.sleep(1)
+    raise SoftOneAutomationError("Το SoftOne δεν έγινε έτοιμο στον διαθέσιμο χρόνο")
 
 
 def _windows_desktop():
@@ -245,11 +360,15 @@ def _selector_has_identity(selector: dict) -> bool:
 
 
 def _find_window(desktop, selector: dict):
-    matches = [window for window in desktop.windows() if _matches(window, selector)]
+    matches = _matching_windows(desktop, selector)
     if not matches:
         raise SoftOneAutomationError("Δεν βρέθηκε το ενεργό παράθυρο SoftOne")
     matches.sort(key=_area, reverse=True)
     return matches[0]
+
+
+def _matching_windows(desktop, selector: dict) -> list:
+    return [window for window in desktop.windows() if _matches(window, selector)]
 
 
 def _find_control(window, selector: dict, timeout: float = 10):
@@ -318,8 +437,15 @@ def _run_step(window, step: dict, context: dict[str, str]) -> None:
     if action in {"assert", "wait_present"}:
         _find_control(window, step["selector"], timeout)
         return
-    if action == "wait_absent":
+    if action in {"assert_absent", "wait_absent"}:
         _wait_absent(window, step["selector"], timeout)
+        return
+    if action == "press_keys":
+        keyboard.send_keys(
+            str(step["keys"]),
+            with_spaces=True,
+            vk_packet=True,
+        )
         return
     if action in {"click", "save"}:
         _find_control(window, step["selector"], timeout).click_input()
@@ -373,6 +499,15 @@ def _wait_absent(window, selector: dict, timeout: float) -> None:
 def _missing_context(profile: dict, context: dict[str, str]) -> list[str]:
     required = profile.get("required_context", [])
     return [str(key) for key in required if not context.get(str(key))]
+
+
+def _condition_matches(step: dict, context: dict[str, str]) -> bool:
+    condition = step.get("when")
+    if condition is None:
+        return True
+    if not isinstance(condition, dict):
+        raise SoftOneAutomationError("Το when πρέπει να είναι JSON object")
+    return all(context.get(str(key)) == str(value) for key, value in condition.items())
 
 
 def _render(template: str, context: dict[str, str]) -> str:
