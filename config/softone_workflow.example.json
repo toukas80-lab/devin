@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "window": {
-    "title_re": "SoftOne|Series 6",
+    "title_re": "SoftOne|Series 6|Νέα λειτουργική εφαρμογή βάσης",
     "class_name_re": "Chrome_WidgetWin_1"
   },
   "profiles": {

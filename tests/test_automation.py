@@ -1,3 +1,5 @@
+import json
+import re
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -60,6 +62,15 @@ def prepared_invoice(*, errors: tuple[str, ...] = ()) -> PreparedInvoice:
 def test_workflow_profiles_are_complete() -> None:
     assert validate_workflow_profile(WORKFLOW) == []
     assert commit_is_available(WORKFLOW)
+
+
+def test_default_window_matches_open_softone_document_form() -> None:
+    workflow = json.loads(WORKFLOW.read_text(encoding="utf-8"))
+
+    assert re.search(
+        workflow["window"]["title_re"],
+        "Νέα λειτουργική εφαρμογή βάσης - Google Chrome",
+    )
 
 
 def test_context_uses_softone_mapping_and_greek_amounts() -> None:
