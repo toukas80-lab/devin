@@ -36,7 +36,6 @@ def inspect_softone_controls(workflow_path: str | Path, output_path: str | Path)
     desktop = _windows_desktop()
     workflow = _load_workflow(workflow_path)
     window = _find_window(desktop, workflow["window"])
-    window.wait("exists enabled visible ready", timeout=15)
 
     target = Path(output_path)
     with target.open("w", encoding="utf-8") as handle:
@@ -252,7 +251,6 @@ def execute_profile(
         raise SoftOneAutomationError(f"Λείπουν workflow values: {', '.join(missing)}")
 
     window = _find_window(desktop, profile.get("window", workflow["window"]))
-    window.wait("exists enabled visible ready", timeout=15)
     executed: list[str] = []
     save_skipped = False
     step_id = "<start>"
@@ -381,7 +379,7 @@ def _find_control(window, selector: dict, timeout: float = 10):
             index = int(selector.get("found_index", 0))
             if index < len(controls):
                 return controls[index]
-        window.wait("exists visible", timeout=1)
+        time.sleep(0.1)
     raise SoftOneAutomationError(f"Δεν βρέθηκε control: {_selector_label(selector)}")
 
 
@@ -492,7 +490,7 @@ def _wait_absent(window, selector: dict, timeout: float) -> None:
     while datetime.now().timestamp() < deadline:
         if not any(_matches(control, selector) for control in window.descendants()):
             return
-        window.wait("exists visible", timeout=1)
+        time.sleep(0.1)
     raise SoftOneAutomationError(f"Το control παρέμεινε ορατό: {_selector_label(selector)}")
 
 

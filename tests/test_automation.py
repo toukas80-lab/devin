@@ -84,8 +84,7 @@ def test_blocked_invoice_cannot_build_automation_context() -> None:
 
 def test_screenshot_failure_does_not_mask_workflow_error(monkeypatch) -> None:
     class Window:
-        def wait(self, state, timeout):
-            return None
+        pass
 
     monkeypatch.setattr(automation, "_windows_desktop", lambda: object())
     monkeypatch.setattr(automation, "_find_window", lambda desktop, selector: Window())
@@ -104,4 +103,17 @@ def test_screenshot_failure_does_not_mask_workflow_error(monkeypatch) -> None:
             WORKFLOW,
             "creditor_expense.create",
             prepared_invoice(),
+        )
+
+
+def test_missing_control_on_uia_wrapper_has_clean_error() -> None:
+    class Window:
+        def descendants(self):
+            return []
+
+    with pytest.raises(SoftOneAutomationError, match="Δεν βρέθηκε control"):
+        automation._find_control(
+            Window(),
+            {"title": "missing"},
+            timeout=0.01,
         )
