@@ -232,3 +232,39 @@ def test_existing_softone_window_skips_login_profile(monkeypatch, tmp_path: Path
 
     assert result.results[0].save_skipped
     assert "softone.login" not in executed_profiles
+
+
+def test_move_failure_records_saved_item_once(monkeypatch, tmp_path: Path) -> None:
+    source = tmp_path / "invoice.pdf"
+    source.write_bytes(b"pdf")
+    processed = tmp_path / "processed"
+    processed.mkdir()
+    (processed / source.name).write_bytes(b"existing")
+
+    monkeypatch.setattr(
+        batch,
+        "launch_softone",
+        lambda *args, **kwargs: SoftOneLaunch(launched=False),
+    )
+    monkeypatch.setattr(
+        batch,
+        "execute_profile",
+        lambda profile, name, context, **kwargs: WorkflowExecution(
+            profile=name,
+            executed_steps=("saved",),
+            save_skipped=False,
+            saved=True,
+        ),
+    )
+
+    result = batch.execute_batch(
+        [prepared_invoice(source)],
+        app_config(tmp_path),
+        "workflow.json",
+        allow_save=True,
+    )
+
+    assert len(result.results) == 1
+    assert result.results[0].saved
+    assert result.results[0].error
+    assert source.exists()

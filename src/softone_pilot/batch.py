@@ -82,6 +82,15 @@ def execute_batch(
                 allow_save=allow_save,
             )
             saved = allow_save and execution.saved
+            move_error = ""
+            if saved:
+                try:
+                    _move_processed(
+                        item.invoice.source_path,
+                        Path(settings.processed_path),
+                    )
+                except SoftOneAutomationError as exc:
+                    move_error = str(exc)
             results.append(
                 BatchItemResult(
                     source_path=item.invoice.source_path,
@@ -89,16 +98,16 @@ def execute_batch(
                     executed_steps=execution.executed_steps,
                     saved=saved,
                     save_skipped=execution.save_skipped,
+                    error=move_error,
                 )
             )
-            if saved:
-                _move_processed(
-                    item.invoice.source_path,
-                    Path(settings.processed_path),
-                )
-            else:
+            if not saved:
                 stopped_early = True
                 break
+            if move_error:
+                stopped_early = True
+                if not continue_on_error:
+                    break
         except SoftOneAutomationError as exc:
             results.append(
                 BatchItemResult(
