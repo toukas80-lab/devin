@@ -139,6 +139,8 @@ def _workflow(args) -> None:
             print(f"ERROR: {error}", file=sys.stderr)
         if not prepared:
             print("ERROR: Δεν προετοιμάστηκε παραστατικό", file=sys.stderr)
+        elif len(prepared) > 1:
+            print(f"ERROR: Αναμένεται ένα PDF, βρέθηκαν {len(prepared)}", file=sys.stderr)
         raise SystemExit(1)
 
     item = prepared[0]

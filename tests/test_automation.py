@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+import softone_pilot.automation as automation
 from softone_pilot.automation import (
     SoftOneAutomationError,
     build_invoice_context,
@@ -79,3 +80,28 @@ def test_preview_renders_create_workflow_without_ui_actions() -> None:
 def test_blocked_invoice_cannot_build_automation_context() -> None:
     with pytest.raises(SoftOneAutomationError, match="BLOCKED"):
         build_invoice_context(prepared_invoice(errors=("duplicate",)))
+
+
+def test_screenshot_failure_does_not_mask_workflow_error(monkeypatch) -> None:
+    class Window:
+        def wait(self, state, timeout):
+            return None
+
+    monkeypatch.setattr(automation, "_windows_desktop", lambda: object())
+    monkeypatch.setattr(automation, "_find_window", lambda desktop, selector: Window())
+
+    def fail_step(window, step, context):
+        raise ValueError("original failure")
+
+    def fail_screenshot(window, artifacts_dir, profile_name):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(automation, "_run_step", fail_step)
+    monkeypatch.setattr(automation, "_capture_failure", fail_screenshot)
+
+    with pytest.raises(SoftOneAutomationError, match="original failure.*Screenshot: None"):
+        automation.execute_workflow(
+            WORKFLOW,
+            "creditor_expense.create",
+            prepared_invoice(),
+        )

@@ -203,7 +203,10 @@ def execute_workflow(
             save_skipped=save_skipped,
         )
     except Exception as exc:
-        screenshot = _capture_failure(window, artifacts_dir, profile_name)
+        try:
+            screenshot = _capture_failure(window, artifacts_dir, profile_name)
+        except Exception:
+            screenshot = None
         raise SoftOneAutomationError(
             f"Αποτυχία στο βήμα {step_id}: {exc}. Screenshot: {screenshot}"
         ) from exc
