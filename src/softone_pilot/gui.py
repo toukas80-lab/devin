@@ -72,10 +72,15 @@ class PilotWindow(tk.Tk):
                 config,
                 use_sql=bool(self.config_path and config.sql.enabled),
             )
-            write_dry_run_audit("pilot-data/audit.jsonl", prepared, errors)
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             messagebox.showerror("SoftOne PDF Pilot", str(exc))
             return
+
+        audit_warning = ""
+        try:
+            write_dry_run_audit("pilot-data/audit.jsonl", prepared, errors)
+        except OSError as exc:
+            audit_warning = f"Το audit log δεν γράφτηκε: {exc}"
 
         for row in self.table.get_children():
             self.table.delete(row)
@@ -103,6 +108,8 @@ class PilotWindow(tk.Tk):
                 ]
             )
         detail_lines.extend(errors)
+        if audit_warning:
+            detail_lines.append(audit_warning)
         self.details.delete("1.0", tk.END)
         self.details.insert("1.0", "\n".join(detail_lines) or "Dry-run ολοκληρώθηκε χωρίς σφάλματα")
         self.status.config(text="Dry-run ολοκληρώθηκε — δεν έγινε καταχώριση")
