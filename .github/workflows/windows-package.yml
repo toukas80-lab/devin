@@ -1,0 +1,33 @@
+name: Windows package
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/windows-package.yml"
+      - "config/**"
+      - "pyproject.toml"
+      - "scripts/build_windows.*"
+      - "src/**"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build Windows package
+        shell: powershell
+        run: .\scripts\build_windows.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SoftOne-PDF-Pilot-Windows
+          path: dist/SoftOne-PDF-Pilot-Windows.zip
+          if-no-files-found: error
