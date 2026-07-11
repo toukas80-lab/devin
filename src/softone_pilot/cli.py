@@ -228,24 +228,28 @@ def _batch(args) -> None:
         raise SystemExit(1)
 
     if not args.execute:
-        payload = {
-            "source": str(source),
-            "startup_profile": config.automation.startup_profile,
-            "navigation_profile": config.automation.navigation_profile,
-            "items": [
-                {
-                    "pdf": str(item.invoice.source_path),
-                    "profile": item.settings.workflow_profile if item.settings else "",
-                    "steps": preview_workflow(
-                        args.workflow,
-                        item.settings.workflow_profile if item.settings else "",
-                        item,
-                    ),
-                }
-                for item in prepared
-            ],
-            "executed": False,
-        }
+        try:
+            payload = {
+                "source": str(source),
+                "startup_profile": config.automation.startup_profile,
+                "navigation_profile": config.automation.navigation_profile,
+                "items": [
+                    {
+                        "pdf": str(item.invoice.source_path),
+                        "profile": item.settings.workflow_profile if item.settings else "",
+                        "steps": preview_workflow(
+                            args.workflow,
+                            item.settings.workflow_profile if item.settings else "",
+                            item,
+                        ),
+                    }
+                    for item in prepared
+                ],
+                "executed": False,
+            }
+        except SoftOneAutomationError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return
 
