@@ -70,6 +70,38 @@ softone-pilot inspect-softone --workflow config\softone_workflow.example.json
 
 Η παραπάνω εντολή δεν κάνει click και δεν αλλάζει δεδομένα.
 
+Χωρίς εγκατάσταση Python, άνοιξε τη φόρμα-στόχο στο SoftOne και εκτέλεσε:
+
+```text
+scripts\run_softone_inspector.cmd
+```
+
+Δημιουργεί μόνο το `softone_controls.txt` στην Επιφάνεια Εργασίας. Δεν διαβάζει
+κωδικούς και δεν κάνει καμία καταχώριση.
+
+## Παραμετρικά workflows SoftOne
+
+Το `config/softone_workflow.example.json` περιέχει ανεξάρτητα profiles για:
+
+- `creditor_expense.create`: νέα εγγραφή στα Ειδικά πιστωτών.
+- `creditor_expense.edit`: αλλαγή ήδη ανοικτού παραστατικού.
+
+Τα πεδία εντοπίζονται από UI Automation labels και σχετικές θέσεις, όχι από
+σταθερές συντεταγμένες. Νέοι τύποι παραστατικών προστίθενται ως νέο profile
+χωρίς αλλαγή στον PDF parser.
+
+Preview της ροής χωρίς άνοιγμα ή αλλαγή του SoftOne:
+
+```powershell
+softone-pilot workflow invoice.pdf `
+  --config config\local.json `
+  --profile creditor_expense.create
+```
+
+Το `--execute` συμπληρώνει την ήδη ανοικτή σωστή φόρμα, αλλά σταματά πριν την
+αποθήκευση. Η αποθήκευση απαιτεί επιπλέον `--allow-save` και χρησιμοποιείται
+μόνο μετά από ρητή έγκριση.
+
 ## Windows build
 
 ```powershell

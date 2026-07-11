@@ -5,7 +5,12 @@ import json
 import sys
 
 from softone_pilot.audit import write_dry_run_audit
-from softone_pilot.automation import SoftOneAutomationError, inspect_softone_controls
+from softone_pilot.automation import (
+    SoftOneAutomationError,
+    execute_workflow,
+    inspect_softone_controls,
+    preview_workflow,
+)
 from softone_pilot.config import default_config, load_config
 from softone_pilot.parsers import parse_pdf
 from softone_pilot.parsers.base import PdfParseError
@@ -34,6 +39,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     inspect.add_argument("--workflow", required=True)
     inspect.add_argument("--output", default="softone_controls.txt")
+
+    workflow = commands.add_parser(
+        "workflow",
+        help="Preview ή εκτέλεση παραμετρικής ροής SoftOne",
+    )
+    workflow.add_argument("pdf")
+    workflow.add_argument("--config")
+    workflow.add_argument("--workflow", default="config/softone_workflow.example.json")
+    workflow.add_argument("--profile", default="creditor_expense.create")
+    workflow.add_argument("--no-sql", action="store_true")
+    workflow.add_argument("--execute", action="store_true")
+    workflow.add_argument("--allow-save", action="store_true")
     return parser
 
 
@@ -45,6 +62,8 @@ def main() -> None:
         _dry_run(args)
     elif args.command == "inspect-softone":
         _inspect(args)
+    elif args.command == "workflow":
+        _workflow(args)
 
 
 def _parse(args) -> None:
@@ -102,6 +121,54 @@ def _inspect(args) -> None:
         print(f"ERROR: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
     print(output.resolve())
+
+
+def _workflow(args) -> None:
+    if args.allow_save and not args.execute:
+        print("ERROR: Το --allow-save απαιτεί --execute", file=sys.stderr)
+        raise SystemExit(2)
+
+    config = load_config(args.config) if args.config else default_config()
+    prepared, parse_errors = prepare_batch(
+        collect_pdfs(args.pdf),
+        config,
+        use_sql=not args.no_sql,
+    )
+    if parse_errors or len(prepared) != 1:
+        for error in parse_errors:
+            print(f"ERROR: {error}", file=sys.stderr)
+        if not prepared:
+            print("ERROR: Δεν προετοιμάστηκε παραστατικό", file=sys.stderr)
+        raise SystemExit(1)
+
+    item = prepared[0]
+    if not item.ready:
+        for error in item.errors:
+            print(f"ERROR: {error}", file=sys.stderr)
+        raise SystemExit(1)
+
+    try:
+        preview = preview_workflow(args.workflow, args.profile, item)
+        payload = {"profile": args.profile, "steps": preview, "executed": False}
+        if args.execute:
+            result = execute_workflow(
+                args.workflow,
+                args.profile,
+                item,
+                allow_save=args.allow_save,
+            )
+            payload.update(
+                {
+                    "executed": True,
+                    "executed_steps": list(result.executed_steps),
+                    "save_skipped": result.save_skipped,
+                }
+            )
+    except SoftOneAutomationError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

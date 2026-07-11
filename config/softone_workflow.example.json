@@ -1,62 +1,240 @@
 {
+  "schema_version": 1,
   "window": {
-    "title_re": ".*SoftOne.*"
+    "title_re": "SoftOne|Series 6",
+    "class_name_re": "Chrome_WidgetWin_1"
   },
-  "controls": {
-    "new_document": {
-      "title": "",
-      "auto_id": "",
-      "control_type": "Button"
+  "profiles": {
+    "creditor_expense.create": {
+      "operation": "create",
+      "description": "Νέα εγγραφή στα Ειδικά πιστωτών",
+      "required_context": [
+        "series_code",
+        "document_date",
+        "document_number",
+        "supplier_code",
+        "line_code",
+        "net_value",
+        "payment_method"
+      ],
+      "steps": [
+        {
+          "id": "new-form-visible",
+          "action": "assert",
+          "selector": {
+            "title_re": "Νέα Εγγραφή",
+            "control_type": "Text"
+          }
+        },
+        {
+          "id": "series",
+          "action": "set",
+          "selector": {
+            "control_type": "ComboBox",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 500,
+              "selector": {
+                "title": "Σειρά"
+              }
+            }
+          },
+          "value": "{series_code}",
+          "submit_keys": "{ENTER}"
+        },
+        {
+          "id": "date",
+          "action": "set",
+          "selector": {
+            "control_type": "Edit",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 500,
+              "selector": {
+                "title_re": "Ημερ/νία|Ημερομηνία"
+              }
+            }
+          },
+          "value": "{document_date}"
+        },
+        {
+          "id": "supplier",
+          "action": "set",
+          "selector": {
+            "control_type": "ComboBox",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 900,
+              "selector": {
+                "title_re": "Πιστωτής|Προμηθευτής"
+              }
+            }
+          },
+          "value": "{supplier_code}",
+          "submit_keys": "{ENTER}"
+        },
+        {
+          "id": "document-number",
+          "action": "set",
+          "selector": {
+            "control_type": "Edit",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 600,
+              "selector": {
+                "title_re": "Παραστατικό|Αρ\\. παραστατικού"
+              }
+            }
+          },
+          "value": "{document_number}"
+        },
+        {
+          "id": "payment",
+          "action": "set",
+          "selector": {
+            "control_type": "ComboBox",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 700,
+              "selector": {
+                "title": "Πληρωμή"
+              }
+            }
+          },
+          "value": "{payment_method}",
+          "submit_keys": "{ENTER}"
+        },
+        {
+          "id": "line-code",
+          "action": "grid_set",
+          "grid": {
+            "control_type": "DataGrid",
+            "class_name_re": "x-grid"
+          },
+          "column": {
+            "title": "Κωδικός",
+            "control_type": "DataItem"
+          },
+          "value": "{line_code}",
+          "submit_keys": "{ENTER}"
+        },
+        {
+          "id": "description",
+          "action": "grid_set",
+          "grid": {
+            "control_type": "DataGrid",
+            "class_name_re": "x-grid"
+          },
+          "column": {
+            "title": "Περιγραφή",
+            "control_type": "DataItem"
+          },
+          "value": "{description}"
+        },
+        {
+          "id": "net-value",
+          "action": "grid_set",
+          "grid": {
+            "control_type": "DataGrid",
+            "class_name_re": "x-grid"
+          },
+          "column": {
+            "title": "Αξία",
+            "control_type": "DataItem"
+          },
+          "value": "{net_value}"
+        },
+        {
+          "id": "save",
+          "action": "save",
+          "selector": {
+            "title": "Καταχώρηση",
+            "control_type": "Button"
+          }
+        },
+        {
+          "id": "saved",
+          "action": "wait_absent",
+          "selector": {
+            "title_re": "Νέα Εγγραφή",
+            "control_type": "Text"
+          },
+          "timeout_seconds": 20
+        }
+      ]
     },
-    "series": {
-      "title": "",
-      "auto_id": "",
-      "control_type": "Edit"
-    },
-    "supplier": {
-      "title": "",
-      "auto_id": "",
-      "control_type": "Edit"
-    },
-    "document_date": {
-      "title": "",
-      "auto_id": "",
-      "control_type": "Edit"
-    },
-    "document_number": {
-      "title": "",
-      "auto_id": "",
-      "control_type": "Edit"
-    },
-    "description": {
-      "title": "",
-      "auto_id": "",
-      "control_type": "Edit"
-    },
-    "net_amount": {
-      "title": "",
-      "auto_id": "",
-      "control_type": "Edit"
-    },
-    "vat_amount": {
-      "title": "",
-      "auto_id": "",
-      "control_type": "Edit"
-    },
-    "payment_method": {
-      "title": "",
-      "auto_id": "",
-      "control_type": "Edit"
-    },
-    "save": {
-      "title": "",
-      "auto_id": "",
-      "control_type": "Button"
-    },
-    "save_confirmation": {
-      "title": "",
-      "auto_id": "",
-      "control_type": "Text"
+    "creditor_expense.edit": {
+      "operation": "edit",
+      "description": "Αλλαγή ήδη ανοικτού παραστατικού πιστωτή",
+      "required_context": [
+        "document_date",
+        "document_number",
+        "payment_method"
+      ],
+      "steps": [
+        {
+          "id": "existing-document-visible",
+          "action": "assert",
+          "selector": {
+            "title_re": ".+ - \\d{1,2}/\\d{1,2}/\\d{4}",
+            "control_type": "Text"
+          }
+        },
+        {
+          "id": "date",
+          "action": "set",
+          "selector": {
+            "control_type": "Edit",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 500,
+              "selector": {
+                "title_re": "Ημερ/νία|Ημερομηνία"
+              }
+            }
+          },
+          "value": "{document_date}"
+        },
+        {
+          "id": "document-number",
+          "action": "set",
+          "selector": {
+            "control_type": "Edit",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 600,
+              "selector": {
+                "title_re": "Παραστατικό|Αρ\\. παραστατικού"
+              }
+            }
+          },
+          "value": "{document_number}"
+        },
+        {
+          "id": "payment",
+          "action": "set",
+          "selector": {
+            "control_type": "ComboBox",
+            "anchor": {
+              "direction": "right",
+              "max_distance": 700,
+              "selector": {
+                "title": "Πληρωμή"
+              }
+            }
+          },
+          "value": "{payment_method}",
+          "submit_keys": "{ENTER}"
+        },
+        {
+          "id": "save",
+          "action": "save",
+          "selector": {
+            "title": "Καταχώρηση",
+            "control_type": "Button"
+          }
+        }
+      ]
     }
   }
 }
