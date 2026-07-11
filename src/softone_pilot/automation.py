@@ -33,6 +33,12 @@ class WorkflowExecution:
     screenshot: Path | None = None
 
 
+@dataclass(frozen=True)
+class SoftOneLaunch:
+    launched: bool
+    process_id: int | None = None
+
+
 def inspect_softone_controls(workflow_path: str | Path, output_path: str | Path) -> Path:
     desktop = _windows_desktop()
     workflow = _load_workflow(workflow_path)
@@ -108,6 +114,7 @@ def validate_workflow_profile(
                 "press_keys",
                 "save",
                 "set",
+                "switch_window",
                 "wait_absent",
                 "wait_present",
             }:
@@ -118,6 +125,7 @@ def validate_workflow_profile(
                 "click",
                 "save",
                 "set",
+                "switch_window",
                 "wait_absent",
                 "wait_present",
             }:
@@ -239,6 +247,7 @@ def execute_profile(
     *,
     allow_save: bool = False,
     artifacts_dir: str | Path = "pilot-data/failures",
+    process_id: int | None = None,
 ) -> WorkflowExecution:
     desktop = _windows_desktop()
     workflow = _load_workflow(workflow_path)
@@ -251,7 +260,11 @@ def execute_profile(
     if missing:
         raise SoftOneAutomationError(f"Λείπουν workflow values: {', '.join(missing)}")
 
-    window = _find_window(desktop, profile.get("window", workflow["window"]))
+    window = _find_window(
+        desktop,
+        profile.get("window", workflow["window"]),
+        process_id=process_id,
+    )
     executed: list[str] = []
     save_skipped = False
     saved = False
@@ -269,7 +282,14 @@ def execute_profile(
                 if not _render(str(step["value"]), context):
                     continue
             try:
-                _run_step(window, step, context)
+                if step["action"] == "switch_window":
+                    window = _wait_window(
+                        desktop,
+                        step["selector"],
+                        float(step.get("timeout_seconds", 10)),
+                    )
+                else:
+                    _run_step(window, step, context)
             except SoftOneAutomationError:
                 if step.get("optional"):
                     continue
@@ -300,32 +320,35 @@ def launch_softone(
     arguments: tuple[str, ...] = (),
     *,
     timeout_seconds: int = 60,
-) -> bool:
+) -> SoftOneLaunch:
     desktop = _windows_desktop()
     workflow = _load_workflow(workflow_path)
     profile = _profile(workflow_path, profile_name)
     selector = profile.get("window", workflow["window"])
     if _matching_windows(desktop, selector):
-        return False
+        return SoftOneLaunch(launched=False)
 
     executable = Path(executable_path)
     if not executable.is_file():
         raise SoftOneAutomationError(f"Δεν βρέθηκε το SoftOne: {executable}")
     if executable.suffix.lower() in {".lnk", ".url"}:
-        subprocess.Popen(
+        process = subprocess.Popen(
             ["cmd.exe", "/c", "start", "", str(executable)],
             cwd=executable.parent,
         )
     else:
-        subprocess.Popen(
+        process = subprocess.Popen(
             [str(executable), *arguments],
             cwd=executable.parent,
         )
 
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
-        if _matching_windows(desktop, selector):
-            return True
+        if _matching_windows(desktop, selector) or _matching_process_windows(
+            desktop,
+            process.pid,
+        ):
+            return SoftOneLaunch(launched=True, process_id=process.pid)
         time.sleep(1)
     raise SoftOneAutomationError("Το SoftOne δεν έγινε έτοιμο στον διαθέσιμο χρόνο")
 
@@ -362,8 +385,10 @@ def _selector_has_identity(selector: dict) -> bool:
     ) or isinstance(selector.get("anchor"), dict)
 
 
-def _find_window(desktop, selector: dict):
+def _find_window(desktop, selector: dict, *, process_id: int | None = None):
     matches = _matching_windows(desktop, selector)
+    if not matches and process_id is not None:
+        matches = _matching_process_windows(desktop, process_id)
     if not matches:
         raise SoftOneAutomationError("Δεν βρέθηκε το ενεργό παράθυρο SoftOne")
     matches.sort(key=_area, reverse=True)
@@ -372,6 +397,25 @@ def _find_window(desktop, selector: dict):
 
 def _matching_windows(desktop, selector: dict) -> list:
     return [window for window in desktop.windows() if _matches(window, selector)]
+
+
+def _matching_process_windows(desktop, process_id: int) -> list:
+    return [
+        window
+        for window in desktop.windows()
+        if window.element_info.process_id == process_id
+    ]
+
+
+def _wait_window(desktop, selector: dict, timeout: float):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        matches = _matching_windows(desktop, selector)
+        if matches:
+            matches.sort(key=_area, reverse=True)
+            return matches[0]
+        time.sleep(0.1)
+    raise SoftOneAutomationError(f"Δεν βρέθηκε παράθυρο: {_selector_label(selector)}")
 
 
 def _find_control(window, selector: dict, timeout: float = 10):

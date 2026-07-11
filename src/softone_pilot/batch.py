@@ -46,7 +46,7 @@ def execute_batch(
     if not items:
         raise SoftOneAutomationError("Δεν υπάρχουν έτοιμα PDF για εκτέλεση")
 
-    launched = launch_softone(
+    launch = launch_softone(
         workflow_path,
         settings.startup_profile,
         settings.executable_path,
@@ -58,6 +58,7 @@ def execute_batch(
         workflow_path,
         settings.startup_profile,
         startup_context,
+        process_id=launch.process_id,
     )
 
     results: list[BatchItemResult] = []
@@ -112,7 +113,7 @@ def execute_batch(
                 break
 
     return BatchExecution(
-        launched=launched,
+        launched=launch.launched,
         results=tuple(results),
         stopped_early=stopped_early,
     )

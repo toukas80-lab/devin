@@ -3,7 +3,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import softone_pilot.batch as batch
-from softone_pilot.automation import WorkflowExecution
+from softone_pilot.automation import SoftOneLaunch, WorkflowExecution
 from softone_pilot.config import AppConfig, AutomationSettings, SqlSettings
 from softone_pilot.models import (
     InvoiceData,
@@ -76,7 +76,11 @@ def app_config(tmp_path: Path) -> AppConfig:
 def test_no_save_batch_stops_after_first_pdf(monkeypatch, tmp_path: Path) -> None:
     source = tmp_path / "invoice.pdf"
     source.write_bytes(b"pdf")
-    monkeypatch.setattr(batch, "launch_softone", lambda *args, **kwargs: True)
+    monkeypatch.setattr(
+        batch,
+        "launch_softone",
+        lambda *args, **kwargs: SoftOneLaunch(launched=True, process_id=42),
+    )
     monkeypatch.setattr(batch, "_credential_context", lambda target: {})
 
     def execute(profile, name, context, **kwargs):
@@ -102,7 +106,11 @@ def test_no_save_batch_stops_after_first_pdf(monkeypatch, tmp_path: Path) -> Non
 def test_saved_pdf_moves_to_processed(monkeypatch, tmp_path: Path) -> None:
     source = tmp_path / "invoice.pdf"
     source.write_bytes(b"pdf")
-    monkeypatch.setattr(batch, "launch_softone", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        batch,
+        "launch_softone",
+        lambda *args, **kwargs: SoftOneLaunch(launched=False),
+    )
     monkeypatch.setattr(batch, "_credential_context", lambda target: {})
     monkeypatch.setattr(
         batch,
@@ -131,7 +139,11 @@ def test_saved_pdf_moves_to_processed(monkeypatch, tmp_path: Path) -> None:
 def test_allow_save_without_executed_save_keeps_pdf(monkeypatch, tmp_path: Path) -> None:
     source = tmp_path / "invoice.pdf"
     source.write_bytes(b"pdf")
-    monkeypatch.setattr(batch, "launch_softone", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        batch,
+        "launch_softone",
+        lambda *args, **kwargs: SoftOneLaunch(launched=False),
+    )
     monkeypatch.setattr(batch, "_credential_context", lambda target: {})
     monkeypatch.setattr(
         batch,

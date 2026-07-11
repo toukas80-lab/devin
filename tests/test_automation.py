@@ -97,7 +97,11 @@ def test_screenshot_failure_does_not_mask_workflow_error(monkeypatch) -> None:
         pass
 
     monkeypatch.setattr(automation, "_windows_desktop", lambda: object())
-    monkeypatch.setattr(automation, "_find_window", lambda desktop, selector: Window())
+    monkeypatch.setattr(
+        automation,
+        "_find_window",
+        lambda desktop, selector, **kwargs: Window(),
+    )
 
     def fail_step(window, step, context):
         raise ValueError("original failure")
@@ -127,3 +131,35 @@ def test_missing_control_on_uia_wrapper_has_clean_error() -> None:
             {"title": "missing"},
             timeout=0.01,
         )
+
+
+def test_find_window_falls_back_to_launched_process() -> None:
+    class ElementInfo:
+        automation_id = ""
+        class_name = ""
+        control_type = "Window"
+        name = "Login"
+        process_id = 42
+
+    class Window:
+        element_info = ElementInfo()
+
+        def rectangle(self):
+            class Rectangle:
+                def width(self):
+                    return 100
+
+                def height(self):
+                    return 100
+
+            return Rectangle()
+
+    class Desktop:
+        def windows(self):
+            return [Window()]
+
+    assert automation._find_window(
+        Desktop(),
+        {"title": "SoftOne"},
+        process_id=42,
+    )

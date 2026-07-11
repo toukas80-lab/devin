@@ -52,10 +52,10 @@
         },
         {
           "id": "softone-ready",
-          "action": "wait_present",
+          "action": "switch_window",
           "selector": {
-            "title_re": "Ειδικά πιστωτών|Αγορές|Πωλήσεις",
-            "control_type": "Text"
+            "title_re": "SoftOne|Series 6",
+            "class_name_re": "Chrome_WidgetWin_1"
           },
           "timeout_seconds": 60
         }
