@@ -108,7 +108,23 @@ softone-pilot workflow invoice.pdf `
 powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 ```
 
-Το executable δημιουργείται στον φάκελο `dist`.
+ή με διπλό κλικ:
+
+```text
+scripts\build_windows.cmd
+```
+
+Παράγει το `dist\SoftOne-PDF-Pilot-Windows.zip` με:
+
+```text
+SoftOne-PDF-Pilot.exe
+SoftOne-PDF-Automation.exe
+config\local.example.json
+config\softone_workflow.example.json
+```
+
+Το πρώτο executable είναι το GUI dry-run. Το δεύτερο παρέχει workflow
+preview/εκτέλεση και απαιτεί επιπλέον `--allow-save` για πραγματική αποθήκευση.
 
 ## Ασφάλεια
 
