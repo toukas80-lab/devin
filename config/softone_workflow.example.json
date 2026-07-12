@@ -2,8 +2,7 @@
   "schema_version": 1,
   "window": {
     "descendant": {
-      "title_re": "SoftOne",
-      "auto_id": "RootWebArea"
+      "title_re": "myCustomer|Εκκρεμείς Παραγγελίες"
     }
   },
   "profiles": {
@@ -18,8 +17,7 @@
           },
           {
             "descendant": {
-              "title_re": "SoftOne",
-              "auto_id": "RootWebArea"
+              "title_re": "myCustomer|Εκκρεμείς Παραγγελίες"
             }
           }
         ]
@@ -40,8 +38,7 @@
           "action": "switch_window",
           "selector": {
             "descendant": {
-              "title_re": "SoftOne",
-              "auto_id": "RootWebArea"
+              "title_re": "myCustomer|Εκκρεμείς Παραγγελίες"
             }
           },
           "timeout_seconds": 60
@@ -53,8 +50,7 @@
       "description": "Μετάβαση στα Ειδικά πιστωτών και άνοιγμα Νέας Εγγραφής",
       "window": {
         "descendant": {
-          "title_re": "SoftOne",
-          "auto_id": "RootWebArea"
+          "title_re": "myCustomer|Εκκρεμείς Παραγγελίες"
         }
       },
       "required_context": [],

@@ -74,12 +74,14 @@ def execute_batch(
                     workflow_path,
                     settings.navigation_profile,
                     context,
+                    process_id=launch.process_id,
                 )
             execution = execute_profile(
                 workflow_path,
                 profile,
                 context,
                 allow_save=allow_save,
+                process_id=launch.process_id,
             )
             saved = allow_save and execution.saved
             move_error = ""

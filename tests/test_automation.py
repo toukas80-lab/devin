@@ -74,9 +74,9 @@ def test_default_window_matches_only_softone_web_area() -> None:
         name = ""
 
     class ControlInfo:
-        automation_id = "RootWebArea"
+        automation_id = ""
         class_name = ""
-        control_type = "Document"
+        control_type = "Button"
 
         def __init__(self, name):
             self.name = name
@@ -94,7 +94,7 @@ def test_default_window_matches_only_softone_web_area() -> None:
         def descendants(self):
             return [Control(self.document_title)]
 
-    assert automation._window_matches(Window("SoftOne News Page"), selector)
+    assert automation._window_matches(Window("myCustomer ΕΝΕΡΓΟ"), selector)
     assert not automation._window_matches(
         Window("Νέα λειτουργική εφαρμογή βάσης"),
         selector,
