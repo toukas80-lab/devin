@@ -1,5 +1,4 @@
 import json
-import re
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -64,12 +63,42 @@ def test_workflow_profiles_are_complete() -> None:
     assert commit_is_available(WORKFLOW)
 
 
-def test_default_window_matches_only_softone_titles() -> None:
+def test_default_window_matches_only_softone_web_area() -> None:
     workflow = json.loads(WORKFLOW.read_text(encoding="utf-8"))
-    pattern = workflow["window"]["title_re"]
+    selector = workflow["window"]
 
-    assert re.search(pattern, "SoftOne News Page")
-    assert not re.search(pattern, "Νέα λειτουργική εφαρμογή βάσης - Google Chrome")
+    class ElementInfo:
+        automation_id = ""
+        class_name = "Chrome_WidgetWin_1"
+        control_type = "Window"
+        name = ""
+
+    class ControlInfo:
+        automation_id = "RootWebArea"
+        class_name = ""
+        control_type = "Document"
+
+        def __init__(self, name):
+            self.name = name
+
+    class Control:
+        def __init__(self, name):
+            self.element_info = ControlInfo(name)
+
+    class Window:
+        element_info = ElementInfo()
+
+        def __init__(self, document_title):
+            self.document_title = document_title
+
+        def descendants(self):
+            return [Control(self.document_title)]
+
+    assert automation._window_matches(Window("SoftOne News Page"), selector)
+    assert not automation._window_matches(
+        Window("Νέα λειτουργική εφαρμογή βάσης"),
+        selector,
+    )
 
 
 def test_context_uses_softone_mapping_and_greek_amounts() -> None:

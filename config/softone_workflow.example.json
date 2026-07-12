@@ -1,16 +1,28 @@
 {
   "schema_version": 1,
   "window": {
-    "title_re": "SoftOne|Series 6",
-    "class_name_re": "Chrome_WidgetWin_1"
+    "descendant": {
+      "title_re": "SoftOne",
+      "auto_id": "RootWebArea"
+    }
   },
   "profiles": {
     "softone.login": {
       "operation": "login",
       "description": "Σύνδεση ή αναμονή μέχρι να είναι έτοιμο το SoftOne",
       "window": {
-        "title_re": "SoftOne|Series 6",
-        "class_name_re": "Chrome_WidgetWin_1"
+        "any_of": [
+          {
+            "title_re": "SoftOne|Series 6",
+            "class_name_re": "Chrome_WidgetWin_1"
+          },
+          {
+            "descendant": {
+              "title_re": "SoftOne",
+              "auto_id": "RootWebArea"
+            }
+          }
+        ]
       },
       "required_context": [
         "password"
@@ -27,8 +39,10 @@
           "id": "softone-ready",
           "action": "switch_window",
           "selector": {
-            "title_re": "SoftOne|Series 6",
-            "class_name_re": "Chrome_WidgetWin_1"
+            "descendant": {
+              "title_re": "SoftOne",
+              "auto_id": "RootWebArea"
+            }
           },
           "timeout_seconds": 60
         }
@@ -38,8 +52,10 @@
       "operation": "navigate",
       "description": "Μετάβαση στα Ειδικά πιστωτών και άνοιγμα Νέας Εγγραφής",
       "window": {
-        "title_re": "SoftOne|Series 6",
-        "class_name_re": "Chrome_WidgetWin_1"
+        "descendant": {
+          "title_re": "SoftOne",
+          "auto_id": "RootWebArea"
+        }
       },
       "required_context": [],
       "steps": [

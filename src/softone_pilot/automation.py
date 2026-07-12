@@ -389,10 +389,20 @@ def _profile(workflow_path: str | Path, profile_name: str) -> dict:
 
 
 def _selector_has_identity(selector: dict) -> bool:
-    return any(
+    direct_identity = any(
         selector.get(key)
         for key in ("auto_id", "auto_id_re", "class_name", "class_name_re", "title", "title_re")
     ) or isinstance(selector.get("anchor"), dict)
+    descendant = selector.get("descendant")
+    descendant_identity = isinstance(descendant, dict) and _selector_has_identity(
+        descendant
+    )
+    alternatives = selector.get("any_of")
+    alternative_identity = isinstance(alternatives, list) and any(
+        isinstance(alternative, dict) and _selector_has_identity(alternative)
+        for alternative in alternatives
+    )
+    return direct_identity or descendant_identity or alternative_identity
 
 
 def _find_window(desktop, selector: dict, *, process_id: int | None = None):
@@ -406,7 +416,27 @@ def _find_window(desktop, selector: dict, *, process_id: int | None = None):
 
 
 def _matching_windows(desktop, selector: dict) -> list:
-    return [window for window in desktop.windows() if _matches(window, selector)]
+    return [
+        window for window in desktop.windows() if _window_matches(window, selector)
+    ]
+
+
+def _window_matches(window, selector: dict) -> bool:
+    alternatives = selector.get("any_of")
+    if isinstance(alternatives, list):
+        return any(
+            isinstance(alternative, dict) and _window_matches(window, alternative)
+            for alternative in alternatives
+        )
+    if not _matches(window, selector):
+        return False
+    descendant = selector.get("descendant")
+    if not isinstance(descendant, dict):
+        return True
+    try:
+        return any(_matches(control, descendant) for control in window.descendants())
+    except Exception:
+        return False
 
 
 def _matching_process_windows(desktop, process_id: int) -> list:
@@ -614,6 +644,10 @@ def _capture_failure(window, artifacts_dir: str | Path, profile_name: str) -> Pa
 
 
 def _selector_label(selector: dict) -> str:
+    if isinstance(selector.get("descendant"), dict):
+        return f"descendant({_selector_label(selector['descendant'])})"
+    if isinstance(selector.get("any_of"), list):
+        return "any_of"
     for key in ("title", "title_re", "auto_id", "auto_id_re", "class_name"):
         if selector.get(key):
             return f"{key}={selector[key]}"
