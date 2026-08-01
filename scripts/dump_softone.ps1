@@ -57,7 +57,7 @@ Add-Type -TypeDefinition $src -Language CSharp
 $out = "$env:USERPROFILE\Desktop\softone_dump.txt"
 "=== SOFT1 PROCESSES ===" | Out-File -FilePath $out -Encoding utf8
 
-$procs = Get-Process | Where-Object { $_.MainWindowTitle -match 'Soft1' -or $_.ProcessName -match 'Soft1|xVision|S1' }
+$procs = Get-Process | Where-Object { $_.ProcessName -match '^(xplorer|Soft1|xVision)$' }
 foreach ($p in $procs) {
     "PROC | name=$($p.ProcessName) | pid=$($p.Id) | title=$($p.MainWindowTitle)" | Out-File -FilePath $out -Append -Encoding utf8
 }
