@@ -31,6 +31,10 @@ class Shipment:
     def is_export(self) -> bool:
         return OWNER in self.sender.upper()
 
+    @property
+    def vat(self) -> float:
+        return round(self.amount * self.vat_rate / 100, 2)
+
 
 @dataclass
 class Invoice:
@@ -46,7 +50,9 @@ class Invoice:
 
     @property
     def vat(self) -> float:
-        return round(sum(s.amount * s.vat_rate / 100 for s in self.shipments), 2)
+        # summing the rounded line amounts keeps the lines, the VAT analysis and
+        # the document totals consistent to the cent
+        return round(sum(s.vat for s in self.shipments), 2)
 
 
 def _number(text: str) -> float:

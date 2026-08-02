@@ -38,3 +38,9 @@ def test_direction_follows_the_sender():
     invoice = fedex.parse_text(SAMPLE)
     assert invoice.shipments[0].is_export
     assert not invoice.shipments[1].is_export
+
+
+def test_invoice_vat_is_the_sum_of_the_line_amounts():
+    shipments = [fedex.Shipment(str(i), 10.05, 24.0, "X") for i in range(3)]
+    invoice = fedex.Invoice("1", None, None, 37.39, shipments)
+    assert invoice.vat == round(sum(s.vat for s in shipments), 2)

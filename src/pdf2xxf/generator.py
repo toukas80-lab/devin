@@ -28,6 +28,9 @@ ITEM_EXPORT_TAXED = "10016"
 ITEM_EXPORT_EXEMPT = "10017"
 ITEM_IMPORT = "10002"
 
+# record values are length-prefixed with a single byte
+MAX_VALUE_BYTES = 255
+
 
 def item_code(shipment: Shipment) -> str:
     if not shipment.is_export:
@@ -53,7 +56,7 @@ def _fill_header(doc: codec.Document, invoice: Invoice, reset_series: bool) -> N
     values.put(p, 0, "FISCPRD", invoice.date.year)
     values.put(p, 0, "TAXSERIESNUM", invoice.number)
     values.put(p, 0, "FINCODE", f"{SERIES_PREFIX}-{invoice.number}")
-    values.put(p, 0, "COMMENTS", _comments(invoice))
+    _put_comments(p, _comments(invoice))
     if reset_series:
         values.put(p, 0, "SERIESNUM", 0)
 
@@ -68,14 +71,21 @@ def _fill_header(doc: codec.Document, invoice: Invoice, reset_series: bool) -> N
 
     domestic = [s for s in invoice.shipments if not s.is_export]
     values.put(p, 0, "GSISNET", round(sum(s.amount for s in domestic), 2))
-    values.put(
-        p, 0, "GSISVAT", round(sum(s.amount * s.vat_rate / 100 for s in domestic), 2)
-    )
+    values.put(p, 0, "GSISVAT", round(sum(s.vat for s in domestic), 2))
     values.put(p, 0, "GSISPACKAGES", len(invoice.shipments) - len(domestic))
 
 
 def _comments(invoice: Invoice) -> str:
     return " / ".join(s.number for s in invoice.shipments)
+
+
+def _put_comments(packet: codec.Packet, text: str) -> None:
+    """Store a comment, trimmed to what the field and the record format allow."""
+    field = packet.fields[packet.index("COMMENTS")]
+    limit = min(field.size, MAX_VALUE_BYTES)
+    while len(text.encode(values.ENCODING)) > limit:
+        text = text[:-1]
+    values.put(packet, 0, "COMMENTS", text)
 
 
 def _fill_lines(doc: codec.Document, invoice: Invoice) -> None:
@@ -90,15 +100,14 @@ def _fill_lines(doc: codec.Document, invoice: Invoice) -> None:
         record = copy.deepcopy(templates[code])
         record.row = number
         p.records = [record]
-        vat = round(shipment.amount * shipment.vat_rate / 100, 2)
         values.put(p, 0, "LINENUM", number)
         values.put(p, 0, "MTRLINES", number)
-        values.put(p, 0, "COMMENTS", comments)
+        _put_comments(p, comments)
         for name in ("LINEVAL", "LLINEVAL", "NETLINEVAL", "LNETLINEVAL",
                      "TRNLINEVAL", "LTRNLINEVAL"):
             values.put(p, 0, name, shipment.amount)
         for name in ("VATAMNT", "LVATAMNT"):
-            values.put(p, 0, name, vat)
+            values.put(p, 0, name, shipment.vat)
         values.put(p, 0, "VAT", VAT_CODE_STANDARD if shipment.vat_rate else VAT_CODE_ZERO)
         records.append(record)
     p.records = records
@@ -119,12 +128,13 @@ def _fill_vat_analysis(doc: codec.Document, invoice: Invoice) -> None:
         record.row = number
         p.records = [record]
         net = round(sum(s.amount for s in shipments), 2)
+        vat = round(sum(s.vat for s in shipments), 2)
         values.put(p, 0, "LINENUM", number)
         values.put(p, 0, "VAT", vat_code)
         values.put(p, 0, "SUBVAL", net)
         values.put(p, 0, "LSUBVAL", net)
-        values.put(p, 0, "VATVAL", round(net * rate / 100, 2))
-        values.put(p, 0, "LVATVAL", round(net * rate / 100, 2))
+        values.put(p, 0, "VATVAL", vat)
+        values.put(p, 0, "LVATVAL", vat)
         records.append(record)
     p.records = records
 
