@@ -26,6 +26,7 @@ build = [
 [project.scripts]
 softone-pilot = "softone_pilot.cli:main"
 softone-pilot-gui = "softone_pilot.gui:main"
+pdf2xxf = "pdf2xxf.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
