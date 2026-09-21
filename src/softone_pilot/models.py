@@ -14,6 +14,7 @@ class InvoiceLine:
     unit_price: Decimal
     discount_pct: Decimal
     value: Decimal
+    vat_pct: Decimal
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,8 @@ class SupplierSettings:
 
     @property
     def is_complete(self) -> bool:
+        if self.kind == "purchase":
+            return all((self.series_code, self.payment_method)) and bool(self.item_map)
         return all((self.series_code, self.line_code, self.payment_method))
 
 

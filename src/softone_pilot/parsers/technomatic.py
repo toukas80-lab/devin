@@ -41,19 +41,19 @@ class TechnomaticParser(SupplierParser):
         if not number_match or not date_text or not net_text or not vat_text or not total_text:
             raise PdfParseError("Λείπουν αριθμός, ημερομηνία ή σύνολα TECHNOMATIC")
 
-        lines = self._parse_lines(text)
-        if not lines:
-            raise PdfParseError("Δεν βρέθηκαν γραμμές ειδών TECHNOMATIC")
-
         net = parse_amount(net_text)
         vat = parse_amount(vat_text)
         total = parse_amount(total_text)
         self.validate_total(net, vat, total)
+        vat_pct = self.uniform_vat_pct(net, vat)
+
+        lines = self._parse_lines(text, vat_pct)
+        if not lines:
+            raise PdfParseError("Δεν βρέθηκαν γραμμές ειδών TECHNOMATIC")
         lines_sum = sum((line.value for line in lines), Decimal("0"))
         if abs(lines_sum - net) > Decimal("0.02"):
             raise PdfParseError(f"Άθροισμα γραμμών {lines_sum:.2f} != καθαρή αξία {net:.2f}")
 
-        vat_pct = (vat / net * 100).quantize(Decimal("1")) if net else Decimal("24")
         series, number = number_match.groups()
         return InvoiceData(
             source_path=source_path,
@@ -70,7 +70,7 @@ class TechnomaticParser(SupplierParser):
             lines=tuple(lines),
         )
 
-    def _parse_lines(self, text: str) -> list[InvoiceLine]:
+    def _parse_lines(self, text: str, vat_pct: Decimal) -> list[InvoiceLine]:
         lines: list[InvoiceLine] = []
         in_table = False
         for raw in text.splitlines():
@@ -92,6 +92,7 @@ class TechnomaticParser(SupplierParser):
                     unit_price=parse_amount(match["price"]),
                     discount_pct=Decimal(match["disc"].replace(",", ".")),
                     value=parse_amount(match["value"]),
+                    vat_pct=vat_pct,
                 )
             )
         return lines

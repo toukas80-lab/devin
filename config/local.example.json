@@ -29,7 +29,7 @@
     "800745478": {
       "name": "TECHNOMATIC GROUP IKE",
       "kind": "purchase",
-      "trdr_code": "0273",
+      "trdr_code": "0237",
       "series_code": "ΤΔΑ",
       "line_code": "",
       "payment_method": "1008",
@@ -37,6 +37,24 @@
       "item_map": {
         "130-CST220": "03762"
       }
+    },
+    "095283423": {
+      "name": "FEDEX EXPRESS GREECE ΜΟΝΟΠΡΟΣΩΠΗ ΕΠΕ",
+      "kind": "expense",
+      "trdr_code": "0211",
+      "series_code": "ΤΙΜΔ",
+      "line_code": "",
+      "payment_method": "1000",
+      "settlement": false
+    },
+    "094453479": {
+      "name": "ΚΑΡΑΣΟΥΛΗΣ Α.Ε",
+      "kind": "expense",
+      "trdr_code": "0021",
+      "series_code": "ΤΙΜΔ",
+      "line_code": "",
+      "payment_method": "1000",
+      "settlement": false
     }
   }
 }

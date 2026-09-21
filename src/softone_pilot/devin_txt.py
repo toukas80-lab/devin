@@ -42,7 +42,6 @@ def clean(text: str) -> str:
 def build_rows(invoice: InvoiceData, settings: SupplierSettings) -> tuple[str, list[str]]:
     date_text = invoice.document_date.strftime("%d/%m/%Y")
     number = docnum(invoice)
-    vat = fmt(invoice.vat_pct)
 
     if settings.kind == "purchase":
         if not invoice.lines:
@@ -62,26 +61,30 @@ def build_rows(invoice: InvoiceData, settings: SupplierSettings) -> tuple[str, l
                         item,
                         fmt(line.quantity),
                         fmt(line.unit_price),
-                        vat,
+                        fmt(line.vat_pct),
                         fmt(line.discount_pct),
                     )
                 )
             )
         return "purchase", rows
 
+    head = (date_text, settings.series_code, settings.trdr_code, number, settings.line_code)
+    if invoice.lines:
+        rows = [
+            ";".join(
+                (
+                    *head,
+                    fmt(line.value),
+                    fmt(line.vat_pct),
+                    clean(f"{line.description} ({invoice.document_number})"),
+                )
+            )
+            for line in invoice.lines
+        ]
+        return "expense", rows
+
     comment = clean(f"{invoice.description} ({invoice.document_number})")
-    row = ";".join(
-        (
-            date_text,
-            settings.series_code,
-            settings.trdr_code,
-            number,
-            settings.line_code,
-            fmt(invoice.net_value),
-            vat,
-            comment,
-        )
-    )
+    row = ";".join((*head, fmt(invoice.net_value), fmt(invoice.vat_pct), comment))
     return "expense", [row]
 
 
@@ -126,9 +129,10 @@ def write_txt(result: TxtResult, out_dir: str | Path) -> list[Path]:
         (EXPENSE_FILE, result.expense_rows),
         (PURCHASE_FILE, result.purchase_rows),
     ):
-        if not rows:
-            continue
         path = target / filename
+        if not rows:
+            path.unlink(missing_ok=True)
+            continue
         path.write_text("\r\n".join(rows) + "\r\n", encoding="utf-8")
         written.append(path)
     return written

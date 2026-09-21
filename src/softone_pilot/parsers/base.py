@@ -11,6 +11,8 @@ from pypdf import PdfReader
 
 from softone_pilot.models import InvoiceData
 
+VAT_RATES = (Decimal("24"), Decimal("13"), Decimal("6"), Decimal("0"))
+
 
 class PdfParseError(ValueError):
     pass
@@ -80,9 +82,16 @@ class SupplierParser(ABC):
 
     def validate_total(self, net: Decimal, vat: Decimal, total: Decimal) -> None:
         if abs(net + vat - total) > Decimal("0.02"):
-            raise PdfParseError(
-                f"Ασυμφωνία ποσών: {net:.2f} + {vat:.2f} != {total:.2f}"
-            )
+            raise PdfParseError(f"Ασυμφωνία ποσών: {net:.2f} + {vat:.2f} != {total:.2f}")
+
+    def uniform_vat_pct(self, net: Decimal, vat: Decimal) -> Decimal:
+        """Return the single Greek VAT rate implied by net/vat, or fail (mixed rates)."""
+        for pct in VAT_RATES:
+            if abs(net * pct / 100 - vat) <= Decimal("0.02"):
+                return pct
+        raise PdfParseError(
+            f"Ο ΦΠΑ {vat:.2f} επί {net:.2f} δεν αντιστοιχεί σε ενιαίο συντελεστή (μεικτός ΦΠΑ;)"
+        )
 
     def reject_proforma(self, text: str) -> None:
         if re.search(r"pro[\s-]?forma|προ[\s-]?τιμολόγιο", text, re.IGNORECASE):

@@ -22,11 +22,15 @@ class EnartiaParser(SupplierParser):
         self.reject_proforma(text)
         if self.vat not in text:
             raise PdfParseError(f"Δεν βρέθηκε το ΑΦΜ ENARTIA {self.vat}")
+        if re.search(r"\bΠΤΠΥ-|Πιστωτικό", text):
+            raise PdfParseError(
+                "Πιστωτικό ENARTIA (ΠΤΠΥ) — δεν υποστηρίζεται, καταχώριση χειροκίνητα"
+            )
 
         document_number = first_match(
             text,
             (
-                r"\b((?:ΤΠΥ|ΑΠΥ|ΠΤΠΥ)-[A-ZΑ-Ω0-9]+-\d+)\b",
+                r"\b((?:ΤΠΥ|ΑΠΥ)-[A-ZΑ-Ω0-9]+-\d+)\b",
                 r"(?:Αριθμός|Invoice\s*(?:No|Number))\s*:?\s*([A-ZΑ-Ω0-9][\w/-]+)",
             ),
         )

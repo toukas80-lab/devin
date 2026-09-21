@@ -6,9 +6,17 @@ from softone_pilot.models import InvoiceData
 from softone_pilot.parsers.base import PdfParseError, SupplierParser, extract_pdf_text
 from softone_pilot.parsers.egnatia import EgnatiaOdosParser
 from softone_pilot.parsers.enartia import EnartiaParser
+from softone_pilot.parsers.fedex import FedexParser
+from softone_pilot.parsers.karasoulis import KarasoulisParser
 from softone_pilot.parsers.technomatic import TechnomaticParser
 
-PARSERS: tuple[SupplierParser, ...] = (EnartiaParser(), EgnatiaOdosParser(), TechnomaticParser())
+PARSERS: tuple[SupplierParser, ...] = (
+    EnartiaParser(),
+    EgnatiaOdosParser(),
+    TechnomaticParser(),
+    FedexParser(),
+    KarasoulisParser(),
+)
 
 
 def parse_pdf(path: str | Path) -> InvoiceData:
