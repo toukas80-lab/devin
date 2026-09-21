@@ -10,17 +10,33 @@
   "suppliers": {
     "999082935": {
       "name": "ENARTIA ΜΟΝΟΠΡΟΣΩΠΗ ΑΝΩΝΥΜΗ ΕΤΑΙΡΕΙΑ",
-      "series_code": "ΤΙΜΔ-E1",
-      "line_code": "18103",
-      "payment_method": "1008",
+      "kind": "expense",
+      "trdr_code": "0077",
+      "series_code": "ΤΙΜΔ",
+      "line_code": "81013",
+      "payment_method": "1000",
       "settlement": false
     },
     "802408691": {
       "name": "ΕΓΝΑΤΙΑ ΟΔΟΣ ΑΝΩΝΥΜΗ ΕΤΑΙΡΕΙΑ",
+      "kind": "expense",
+      "trdr_code": "0091",
       "series_code": "ΤΙΜΔ",
       "line_code": "10007",
       "payment_method": "1008",
       "settlement": true
+    },
+    "800745478": {
+      "name": "TECHNOMATIC GROUP IKE",
+      "kind": "purchase",
+      "trdr_code": "0273",
+      "series_code": "ΤΔΑ",
+      "line_code": "",
+      "payment_method": "1008",
+      "settlement": false,
+      "item_map": {
+        "130-CST220": "03762"
+      }
     }
   }
 }

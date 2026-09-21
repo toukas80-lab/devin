@@ -44,6 +44,9 @@ def load_config(path: str | Path) -> AppConfig:
             line_code=str(item.get("line_code", "")),
             payment_method=str(item.get("payment_method", "")),
             settlement=bool(item.get("settlement", False)),
+            kind=str(item.get("kind", "expense")),
+            trdr_code=str(item.get("trdr_code", "")),
+            item_map={str(k): str(v) for k, v in item.get("item_map", {}).items()},
         )
         for vat, item in raw.get("suppliers", {}).items()
     }

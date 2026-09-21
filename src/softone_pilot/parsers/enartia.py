@@ -8,6 +8,7 @@ from softone_pilot.parsers.base import (
     PdfParseError,
     SupplierParser,
     first_match,
+    greek_upper,
     parse_amount,
     parse_date,
 )
@@ -25,7 +26,7 @@ class EnartiaParser(SupplierParser):
         document_number = first_match(
             text,
             (
-                r"\b(ΤΠΥ-[A-ZΑ-Ω0-9]+-\d+)\b",
+                r"\b((?:ΤΠΥ|ΑΠΥ|ΠΤΠΥ)-[A-ZΑ-Ω0-9]+-\d+)\b",
                 r"(?:Αριθμός|Invoice\s*(?:No|Number))\s*:?\s*([A-ZΑ-Ω0-9][\w/-]+)",
             ),
         )
@@ -80,16 +81,16 @@ class EnartiaParser(SupplierParser):
         total = parse_amount(total_text)
         self.validate_total(net, vat, total)
 
-        description_match = re.search(
-            r"((?:Αγορά|Ανανέωση)\s+Πακέτου[^\n]+|Κατοχύρωση[^\n]+)",
+        parts = []
+        for match in re.finditer(
+            r"^\s*(?:\d{3}\.\d{3}\s+)?((?:Αγορά|Ανανέωση|Κατοχύρωση|Μεταφορά)\s[^\n]+)$",
             text,
-            re.IGNORECASE,
-        )
-        description = (
-            re.sub(r"\s{2,}.*$", "", description_match.group(1)).strip()
-            if description_match
-            else "Υπηρεσίες Διαδικτύου"
-        )
+            re.IGNORECASE | re.MULTILINE,
+        ):
+            part = re.sub(r"\s+\d+(?:\s+[\d.,]+)+\s*$", "", match.group(1)).strip()
+            if part:
+                parts.append(greek_upper(part))
+        description = " - ".join(parts) if parts else "ΥΠΗΡΕΣΙΕΣ ΔΙΑΔΙΚΤΥΟΥ"
 
         return InvoiceData(
             source_path=source_path,

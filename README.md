@@ -53,6 +53,19 @@ Dry-run με read-only SQL:
 softone-pilot dry-run "C:\Invoices" --config config\local.json
 ```
 
+Παραγωγή αρχείων για το SoftOne DImport script (Advanced Javascript):
+
+```powershell
+softone-pilot make-txt "C:\Invoices" --config config\local.json --out-dir C:\Soft1
+```
+
+Γράφει `C:\Soft1\DEVIN-EXP.txt` (δαπάνες, `kind: "expense"`) και/ή
+`C:\Soft1\DEVIN-IMPORT.txt` (αγορές ειδών, `kind: "purchase"`, με `item_map`
+κωδικός προμηθευτή -> κωδικός είδους SoftOne). Παραστατικό χωρίς πλήρη ρύθμιση
+(πιστωτής, σειρά, λογαριασμός ή αντιστοίχιση είδους) αναφέρεται ως ERROR και
+δεν γράφεται. Στη συνέχεια στο SoftOne: `DevinExpMakeHead`/`DevinMakeHead` ->
+οδηγός Import (`D TEST ΔΑΠΑΝΕΣ` / `D TEST ΑΓΟΡΕΣ`) -> `DevinExpAddLines`/`DevinAddLines`.
+
 Γραφικό περιβάλλον:
 
 ```powershell

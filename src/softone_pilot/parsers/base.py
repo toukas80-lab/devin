@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from abc import ABC, abstractmethod
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -15,13 +16,14 @@ class PdfParseError(ValueError):
     pass
 
 
-def extract_pdf_text(path: Path) -> str:
+def extract_pdf_text(path: Path, layout: bool = False) -> str:
     if not path.is_file():
         raise PdfParseError(f"Δεν βρέθηκε το PDF: {path}")
 
+    mode = "layout" if layout else "plain"
     try:
         reader = PdfReader(path)
-        text = "\n".join(page.extract_text() or "" for page in reader.pages)
+        text = "\n".join(page.extract_text(extraction_mode=mode) or "" for page in reader.pages)
     except Exception as exc:
         raise PdfParseError(f"Αποτυχία ανάγνωσης PDF: {path.name}") from exc
 
@@ -52,6 +54,13 @@ def parse_amount(value: str) -> Decimal:
         raise PdfParseError(f"Μη έγκυρο ποσό: {value}") from exc
 
 
+def greek_upper(value: str) -> str:
+    stripped = "".join(
+        ch for ch in unicodedata.normalize("NFD", value) if unicodedata.category(ch) != "Mn"
+    )
+    return re.sub(r"\s+", " ", stripped).upper().strip()
+
+
 def first_match(text: str, patterns: tuple[str, ...]) -> str | None:
     for pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE)
@@ -63,6 +72,7 @@ def first_match(text: str, patterns: tuple[str, ...]) -> str | None:
 class SupplierParser(ABC):
     vat: str
     name: str
+    layout: bool = False
 
     @abstractmethod
     def parse_text(self, source_path: Path, text: str) -> InvoiceData:

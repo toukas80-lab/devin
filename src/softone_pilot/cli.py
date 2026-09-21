@@ -6,6 +6,7 @@ import sys
 
 from softone_pilot.automation import SoftOneAutomationError, inspect_softone_controls
 from softone_pilot.config import default_config, load_config
+from softone_pilot.devin_txt import build_txt, write_txt
 from softone_pilot.parsers import parse_pdf
 from softone_pilot.parsers.base import PdfParseError
 from softone_pilot.planner import collect_pdfs, dry_run_steps, prepare_batch
@@ -25,6 +26,14 @@ def build_parser() -> argparse.ArgumentParser:
     dry_run.add_argument("--no-sql", action="store_true")
     dry_run.add_argument("--json", action="store_true")
 
+    make_txt = commands.add_parser(
+        "make-txt",
+        help="PDF -> DEVIN-EXP.txt / DEVIN-IMPORT.txt για το SoftOne DImport script",
+    )
+    make_txt.add_argument("path", help="PDF ή φάκελος PDF")
+    make_txt.add_argument("--config", required=True)
+    make_txt.add_argument("--out-dir", default=r"C:\Soft1")
+
     inspect = commands.add_parser(
         "inspect-softone",
         help="Read-only καταγραφή UI Automation controls",
@@ -40,6 +49,8 @@ def main() -> None:
         _parse(args)
     elif args.command == "dry-run":
         _dry_run(args)
+    elif args.command == "make-txt":
+        _make_txt(args)
     elif args.command == "inspect-softone":
         _inspect(args)
 
@@ -85,6 +96,39 @@ def _dry_run(args) -> None:
             print(f"  - {step}")
     for error in parse_errors:
         print(f"\nPARSE ERROR: {error}")
+
+
+def _make_txt(args) -> None:
+    config = load_config(args.config)
+    pdfs = collect_pdfs(args.path)
+    if not pdfs:
+        print("ERROR: Δεν βρέθηκαν PDF", file=sys.stderr)
+        raise SystemExit(1)
+
+    invoices = []
+    errors: list[str] = []
+    for path in pdfs:
+        try:
+            invoices.append(parse_pdf(path))
+        except PdfParseError as exc:
+            errors.append(f"{path.name}: {exc}")
+
+    result = build_txt(invoices, config)
+    errors.extend(result.errors)
+    for row in result.expense_rows:
+        print(f"EXP  {row}")
+    for row in result.purchase_rows:
+        print(f"PUR  {row}")
+    for error in errors:
+        print(f"ERROR: {error}", file=sys.stderr)
+
+    written = write_txt(result, args.out_dir)
+    for path in written:
+        print(f"Wrote {path}")
+    if not written:
+        print("Δεν γράφτηκε κανένα αρχείο", file=sys.stderr)
+    if errors:
+        raise SystemExit(2)
 
 
 def _inspect(args) -> None:
