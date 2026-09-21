@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from softone_pilot.parsers.base import PdfParseError, parse_amount, parse_date
+from softone_pilot.parsers.cognition import CognitionParser
 from softone_pilot.parsers.egnatia import EgnatiaOdosParser
 from softone_pilot.parsers.enartia import EnartiaParser
 from softone_pilot.parsers.fedex import FedexParser
@@ -224,3 +225,44 @@ def test_karasoulis_mixed_vat_lines() -> None:
         (Decimal("20.00"), Decimal("0")),
     ]
     assert invoice.total_value == Decimal("491.20")
+
+
+COGNITION_TEXT = """\xa0
+Invoice
+Invoice number ZZCYINBS\x000107
+Date of issue September 21, 2026
+Cognition AI Inc.
+Bill to
+FOUNTOUKAS THEODOROS MON.IKE
+GR VAT EL802313849
+$20.00 USD due September 21, 2026
+Description Qty Unit price Tax Amount
+Overage credits 1 $20.00 0% $20.00
+Subtotal $20.00
+Total $20.00
+Amount due $20.00\xa0USD
+\x001\x00 Tax to be paid on reverse charge basis
+"""
+
+
+def test_parse_cognition_usd_reverse_charge() -> None:
+    parser = CognitionParser()
+    assert parser.matches(COGNITION_TEXT.replace(" ", "").upper())
+    invoice = parser.parse_text(Path("cognition.pdf"), COGNITION_TEXT)
+    assert invoice.currency == "USD"
+    assert invoice.document_number == "ZZCYINBS-107"
+    assert invoice.document_date == date(2026, 9, 21)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("20.00"),
+        Decimal("0.00"),
+        Decimal("20.00"),
+    )
+    assert invoice.lines[0].vat_pct == 0
+
+
+def test_cognition_rejects_taxed_invoice() -> None:
+    text = COGNITION_TEXT.replace("Total $20.00", "Total $24.80").replace(
+        "Amount due $20.00", "Amount due $24.80"
+    )
+    with pytest.raises(PdfParseError, match="φόρο"):
+        CognitionParser().parse_text(Path("cognition.pdf"), text)

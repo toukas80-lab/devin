@@ -32,6 +32,7 @@ class InvoiceData:
     raw_text: str = field(repr=False)
     vat_pct: Decimal = Decimal("24")
     lines: tuple[InvoiceLine, ...] = ()
+    currency: str = "EUR"
 
     def to_dict(self) -> dict:
         data = asdict(self)

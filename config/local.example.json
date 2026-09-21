@@ -7,6 +7,7 @@
     "trusted_connection": true,
     "timeout_seconds": 10
   },
+  "vat_ids": {},
   "suppliers": {
     "999082935": {
       "name": "ENARTIA ΜΟΝΟΠΡΟΣΩΠΗ ΑΝΩΝΥΜΗ ΕΤΑΙΡΕΙΑ",
@@ -59,6 +60,15 @@
       "series_code": "ΤΙΜΔ",
       "line_code": "10002",
       "payment_method": "1003",
+      "settlement": false
+    },
+    "COGNITION": {
+      "name": "COGNITION AI INC - DEVIN",
+      "kind": "expense",
+      "trdr_code": "0238",
+      "series_code": "ΤΔΕΕ",
+      "line_code": "81013",
+      "payment_method": "1006",
       "settlement": false
     }
   }

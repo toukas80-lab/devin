@@ -31,6 +31,12 @@ def fmt(value: Decimal) -> str:
     return re.sub(r",?0+$", "", text) if "," in text else text
 
 
+def fmt_vat(pct: Decimal, vat_ids: dict[str, str]) -> str:
+    """`ID:n` when the percent is mapped to a SoftOne VAT id (e.g. 0% is ambiguous), else the %."""
+    vat_id = vat_ids.get(fmt(pct))
+    return f"ID:{vat_id}" if vat_id else fmt(pct)
+
+
 def docnum(invoice: InvoiceData) -> str:
     return DOC_TYPE_PREFIX.sub("", invoice.document_number.strip(), count=1)
 
@@ -39,9 +45,12 @@ def clean(text: str) -> str:
     return re.sub(r"[;\r\n]+", " ", text).strip()
 
 
-def build_rows(invoice: InvoiceData, settings: SupplierSettings) -> tuple[str, list[str]]:
+def build_rows(
+    invoice: InvoiceData, settings: SupplierSettings, vat_ids: dict[str, str] | None = None
+) -> tuple[str, list[str]]:
     date_text = invoice.document_date.strftime("%d/%m/%Y")
     number = docnum(invoice)
+    vat_ids = vat_ids or {}
 
     if settings.kind == "purchase":
         if not invoice.lines:
@@ -61,7 +70,7 @@ def build_rows(invoice: InvoiceData, settings: SupplierSettings) -> tuple[str, l
                         item,
                         fmt(line.quantity),
                         fmt(line.unit_price),
-                        fmt(line.vat_pct),
+                        fmt_vat(line.vat_pct, vat_ids),
                         fmt(line.discount_pct),
                     )
                 )
@@ -76,7 +85,7 @@ def build_rows(invoice: InvoiceData, settings: SupplierSettings) -> tuple[str, l
                     *head,
                     settings.expense_account(line),
                     fmt(line.value),
-                    fmt(line.vat_pct),
+                    fmt_vat(line.vat_pct, vat_ids),
                     clean(f"{line.description} ({invoice.document_number})"),
                 )
             )
@@ -88,7 +97,13 @@ def build_rows(invoice: InvoiceData, settings: SupplierSettings) -> tuple[str, l
         raise ValueError("λείπει line_code (λογαριασμός δαπάνης)")
     comment = clean(f"{invoice.description} ({invoice.document_number})")
     row = ";".join(
-        (*head, settings.line_code, fmt(invoice.net_value), fmt(invoice.vat_pct), comment)
+        (
+            *head,
+            settings.line_code,
+            fmt(invoice.net_value),
+            fmt_vat(invoice.vat_pct, vat_ids),
+            comment,
+        )
     )
     return "expense", [row]
 
@@ -117,7 +132,7 @@ def build_txt(invoices: list[InvoiceData], config: AppConfig) -> TxtResult:
             continue
         seen.add(key)
         try:
-            kind, rows = build_rows(invoice, settings)
+            kind, rows = build_rows(invoice, settings, config.vat_ids)
         except ValueError as exc:
             errors.append(f"{name}: {exc}")
             continue

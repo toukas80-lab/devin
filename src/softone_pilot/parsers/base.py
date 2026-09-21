@@ -80,6 +80,10 @@ class SupplierParser(ABC):
     def parse_text(self, source_path: Path, text: str) -> InvoiceData:
         raise NotImplementedError
 
+    def matches(self, normalized_text: str) -> bool:
+        """`normalized_text` is the PDF text without spaces, upper-cased."""
+        return self.vat in normalized_text or f"EL{self.vat}" in normalized_text
+
     def validate_total(self, net: Decimal, vat: Decimal, total: Decimal) -> None:
         if abs(net + vat - total) > Decimal("0.02"):
             raise PdfParseError(f"Ασυμφωνία ποσών: {net:.2f} + {vat:.2f} != {total:.2f}")

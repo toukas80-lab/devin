@@ -4,6 +4,7 @@ from pathlib import Path
 
 from softone_pilot.models import InvoiceData
 from softone_pilot.parsers.base import PdfParseError, SupplierParser, extract_pdf_text
+from softone_pilot.parsers.cognition import CognitionParser
 from softone_pilot.parsers.egnatia import EgnatiaOdosParser
 from softone_pilot.parsers.enartia import EnartiaParser
 from softone_pilot.parsers.fedex import FedexParser
@@ -16,6 +17,7 @@ PARSERS: tuple[SupplierParser, ...] = (
     TechnomaticParser(),
     FedexParser(),
     KarasoulisParser(),
+    CognitionParser(),
 )
 
 
@@ -25,7 +27,7 @@ def parse_pdf(path: str | Path) -> InvoiceData:
     normalized = text.replace(" ", "").upper()
 
     for parser in PARSERS:
-        if parser.vat in normalized or f"EL{parser.vat}" in normalized:
+        if parser.matches(normalized):
             if parser.layout:
                 text = extract_pdf_text(source_path, layout=True)
             return parser.parse_text(source_path, text)

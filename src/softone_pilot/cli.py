@@ -7,6 +7,8 @@ import sys
 from softone_pilot.automation import SoftOneAutomationError, inspect_softone_controls
 from softone_pilot.config import default_config, load_config
 from softone_pilot.devin_txt import build_txt, write_txt
+from softone_pilot.fx import FxError, convert_to_eur, rate_resolver
+from softone_pilot.models import InvoiceData
 from softone_pilot.parsers import parse_pdf
 from softone_pilot.parsers.base import PdfParseError
 from softone_pilot.planner import collect_pdfs, dry_run_steps, prepare_batch
@@ -33,6 +35,10 @@ def build_parser() -> argparse.ArgumentParser:
     make_txt.add_argument("path", help="PDF ή φάκελος PDF")
     make_txt.add_argument("--config", required=True)
     make_txt.add_argument("--out-dir", default=r"C:\Soft1")
+    make_txt.add_argument(
+        "--rate",
+        help="Ισοτιμία EUR ανά 1 USD (π.χ. 0,8585). Προεπιλογή: ισοτιμία ΕΚΤ ημέρας τιμολογίου",
+    )
 
     inspect = commands.add_parser(
         "inspect-softone",
@@ -105,7 +111,7 @@ def _make_txt(args) -> None:
         print("ERROR: Δεν βρέθηκαν PDF", file=sys.stderr)
         raise SystemExit(1)
 
-    invoices = []
+    invoices: list[InvoiceData] = []
     errors: list[str] = []
     for path in pdfs:
         try:
@@ -113,6 +119,7 @@ def _make_txt(args) -> None:
         except PdfParseError as exc:
             errors.append(f"{path.name}: {exc}")
 
+    invoices = _convert_currencies(invoices, args.rate, errors)
     result = build_txt(invoices, config)
     errors.extend(result.errors)
     for row in result.expense_rows:
@@ -129,6 +136,28 @@ def _make_txt(args) -> None:
         print("Δεν γράφτηκε κανένα αρχείο", file=sys.stderr)
     if errors:
         raise SystemExit(2)
+
+
+def _convert_currencies(
+    invoices: list[InvoiceData], rate_text: str | None, errors: list[str]
+) -> list[InvoiceData]:
+    foreign = [invoice for invoice in invoices if invoice.currency != "EUR"]
+    if not foreign:
+        return invoices
+
+    try:
+        rate_for = rate_resolver(rate_text)
+    except FxError as exc:
+        errors.extend(f"{invoice.source_path.name}: {exc}" for invoice in foreign)
+        return [invoice for invoice in invoices if invoice.currency == "EUR"]
+
+    converted: list[InvoiceData] = []
+    for invoice in invoices:
+        try:
+            converted.append(convert_to_eur(invoice, rate_for(invoice.document_date)))
+        except FxError as exc:
+            errors.append(f"{invoice.source_path.name}: {exc}")
+    return converted
 
 
 def _inspect(args) -> None:
