@@ -19,15 +19,30 @@ DEFAULT_BASE = Path(r"C:\Soft1")
 PDF_DIR = "PDF"
 DONE_DIR = "ΕΓΙΝΑΝ"
 CONFIG_FILE = "devin-config.json"
+INSTALLED_DEFAULT_FILE = "devin-config.default.json"
 REPORT_FILE = "DEVIN-REPORT.txt"
 DEFAULT_CONFIG = Path(__file__).with_name("devin-config.default.json")
 
 
-def ensure_config(base: Path) -> AppConfig:
-    """Load base/devin-config.json, creating it from the bundled default on first run."""
+def ensure_config(base: Path, report: list[str]) -> AppConfig:
+    """Load base/devin-config.json.
+
+    The bundled default is copied on first run and kept as devin-config.default.json.
+    A newer .exe replaces a config that still equals the previously installed default
+    (or predates that marker file); a hand-edited one is kept with a warning.
+    """
     target = base / CONFIG_FILE
-    if not target.exists():
-        shutil.copyfile(DEFAULT_CONFIG, target)
+    installed = base / INSTALLED_DEFAULT_FILE
+    bundled = DEFAULT_CONFIG.read_bytes()
+    unedited = not installed.exists() or installed.read_bytes() == target.read_bytes()
+    if not target.exists() or unedited:
+        target.write_bytes(bundled)
+    elif installed.read_bytes() != bundled:
+        report.append(
+            f"ΠΡΟΣΟΧΗ: το {target} έχει αλλαχθεί χειροκίνητα και δεν ενημερώθηκε — "
+            f"οι νέες ρυθμίσεις είναι στο {installed}"
+        )
+    installed.write_bytes(bundled)
     return load_config(target)
 
 
@@ -35,7 +50,7 @@ def run(base: Path) -> list[str]:
     report: list[str] = []
     pdf_dir = base / PDF_DIR
     pdf_dir.mkdir(parents=True, exist_ok=True)
-    config = ensure_config(base)
+    config = ensure_config(base, report)
 
     pdfs = collect_pdfs(pdf_dir)
     if not pdfs:

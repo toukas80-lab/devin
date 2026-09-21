@@ -60,3 +60,23 @@ def test_run_without_pdfs_leaves_existing_txt(tmp_path: Path) -> None:
     report = dropfolder.run(tmp_path)
     assert (tmp_path / "DEVIN-EXP.txt").read_text(encoding="utf-8") == "keep"
     assert "Δεν βρέθηκαν PDF" in report[0]
+
+
+def test_ensure_config_upgrades_unedited_and_keeps_edited(tmp_path: Path) -> None:
+    bundled = dropfolder.DEFAULT_CONFIG.read_bytes()
+    config = tmp_path / dropfolder.CONFIG_FILE
+    installed = tmp_path / dropfolder.INSTALLED_DEFAULT_FILE
+    old_default = bundled.replace(b'"duty": "10053"', b'"duty": "10000"')
+
+    config.write_bytes(old_default)
+    report: list[str] = []
+    dropfolder.ensure_config(tmp_path, report)
+    assert config.read_bytes() == bundled and installed.read_bytes() == bundled
+    assert report == []
+
+    edited = bundled.replace(b'"duty": "10053"', b'"duty": "10099"')
+    config.write_bytes(edited)
+    installed.write_bytes(old_default)
+    dropfolder.ensure_config(tmp_path, report)
+    assert config.read_bytes() == edited and installed.read_bytes() == bundled
+    assert report and report[0].startswith("ΠΡΟΣΟΧΗ")
