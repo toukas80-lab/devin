@@ -97,6 +97,29 @@ class EcbResolver:
             return eur_per_usd(self.rates, day)
 
 
+def convert_invoices(
+    invoices: list[InvoiceData], rate_text: str | None, errors: list[str]
+) -> list[InvoiceData]:
+    """EUR invoices pass through; foreign ones are converted or dropped with an error."""
+    foreign = [invoice for invoice in invoices if invoice.currency != "EUR"]
+    if not foreign:
+        return invoices
+
+    try:
+        rate_for = rate_resolver(rate_text)
+    except FxError as exc:
+        errors.extend(f"{invoice.source_path.name}: {exc}" for invoice in foreign)
+        return [invoice for invoice in invoices if invoice.currency == "EUR"]
+
+    converted: list[InvoiceData] = []
+    for invoice in invoices:
+        try:
+            converted.append(convert_to_eur(invoice, rate_for(invoice.document_date)))
+        except FxError as exc:
+            errors.append(f"{invoice.source_path.name}: {exc}")
+    return converted
+
+
 def to_eur(amount: Decimal, rate: Decimal) -> Decimal:
     return (amount * rate).quantize(CENT, rounding=ROUND_HALF_UP)
 

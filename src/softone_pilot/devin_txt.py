@@ -24,6 +24,8 @@ class TxtResult:
     expense_rows: tuple[str, ...]
     purchase_rows: tuple[str, ...]
     errors: tuple[str, ...]
+    done: tuple[Path, ...] = ()
+    """Source PDFs whose rows made it into the output."""
 
 
 def fmt(value: Decimal) -> str:
@@ -112,6 +114,7 @@ def build_txt(invoices: list[InvoiceData], config: AppConfig) -> TxtResult:
     expense: list[str] = []
     purchase: list[str] = []
     errors: list[str] = []
+    done: list[Path] = []
     seen: set[tuple[str, str]] = set()
 
     for invoice in invoices:
@@ -137,8 +140,9 @@ def build_txt(invoices: list[InvoiceData], config: AppConfig) -> TxtResult:
             errors.append(f"{name}: {exc}")
             continue
         (purchase if kind == "purchase" else expense).extend(rows)
+        done.append(invoice.source_path)
 
-    return TxtResult(tuple(expense), tuple(purchase), tuple(errors))
+    return TxtResult(tuple(expense), tuple(purchase), tuple(errors), tuple(done))
 
 
 def write_txt(result: TxtResult, out_dir: str | Path) -> list[Path]:
