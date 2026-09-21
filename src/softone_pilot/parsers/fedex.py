@@ -20,6 +20,17 @@ SHIPMENT_RE = re.compile(
     re.MULTILINE,
 )
 VAT_PCT_RE = re.compile(r"Ισχύον ΦΠΑ\s+(\d+(?:\.\d+)?)%")
+# "-225.63FOUNTOUKAS THEODOROS STOCKHOLM COUNTY, SWEDEN Εκπτωση": sender first, then recipient.
+SENDER_RE = re.compile(r"Αποστολέας Παραλήπτης[^\n]*\n-?[\d.]+(?P<sender>[A-Z][A-Z.&'-]*)")
+OWN_NAME = "FOUNTOUKA"
+
+
+def shipment_category(block: str, vat_pct: Decimal) -> str:
+    match = SENDER_RE.search(block)
+    if not match:
+        raise PdfParseError("Δεν βρέθηκε αποστολέας σε αποστολή FEDEX")
+    direction = "export" if OWN_NAME in match["sender"].upper() else "import"
+    return f"{direction}{vat_pct}"
 
 
 class FedexParser(SupplierParser):
@@ -90,6 +101,7 @@ class FedexParser(SupplierParser):
                     discount_pct=Decimal("0"),
                     value=value,
                     vat_pct=vat_pct,
+                    category=shipment_category(block, vat_pct),
                 )
             )
         return lines

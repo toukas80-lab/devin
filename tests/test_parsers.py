@@ -133,15 +133,21 @@ FEDEX_TEXT = """FedEx Express Greece Μονοπρόσωπη
 ΥπηρεσίαΑρ. Αποστολής Ημερομηνία
 ΦΠΑ Απαλ/μενη ΦΠΑ
 62.7102/09/2026876620512035 0.00 62.71FedEx Intl Priority 1 6.70 kg
+268.07Αποστολέας Παραλήπτης Χρέωση Μεταφορικών
+-225.63FOUNTOUKAS THEODOROS STOCKHOLM COUNTY, SWEDEN Εκπτωση
 Υποσύνολο EURG.MICHAEL 03/09/2026 15:05Υπογραφή: 62.71
 Ισχύον ΦΠΑ 24.00%
 ΥπηρεσίαΑρ. Αποστολής Ημερομηνία
 ΦΠΑ Απαλ/μενη ΦΠΑ
 37.7831/08/2026876495715856 0.00 37.78FedEx Regional Economy 2 31.00 kg 882922841073
+154.17Αποστολέας Παραλήπτης Χρέωση Μεταφορικών
+-125.11SABAN ERYASAR ORAIOKASTRO, GREECE Εκπτωση
 Ισχύον ΦΠΑ 24.00%
 ΥπηρεσίαΑρ. Αποστολής Ημερομηνία
 ΦΠΑ Απαλ/μενη ΦΠΑ
 31.7531/08/2026876497693791 0.00 31.75FedEx Regional Economy 2 29.00 kg 882923158514
+135.69Αποστολέας Παραλήπτης Χρέωση Μεταφορικών
+-111.27EMI PATRIZIO ORAIOKASTRO, GREECE Εκπτωση
 Ισχύον ΦΠΑ 24.00%
 Ποσοστό\xa0ΦΠΑ Χρεώσεις ΦΠΑ Αξία
 594.25 31.74 163.9824.00 %
@@ -167,6 +173,7 @@ def test_parse_fedex_shipments() -> None:
     ]
     assert invoice.lines[0].code == "876620512035"
     assert invoice.lines[0].description == "FEDEX INTL PRIORITY 876620512035 02/09/2026"
+    assert [line.category for line in invoice.lines] == ["export24", "import24", "import24"]
 
 
 def test_fedex_line_mismatch_is_rejected() -> None:

@@ -49,6 +49,17 @@ class KarasoulisParser(SupplierParser):
         if not number_text or not date_text:
             raise PdfParseError("Λείπουν αριθμός ή ημερομηνία ΚΑΡΑΣΟΥΛΗΣ")
 
+        sender = first_match(text, (r"\nΕΛΛΑΔΑ\n([^\n]+)\n[^\n]+\n([^\n]+)\n",))
+        origin = re.search(r"\nΕΛΛΑΔΑ\n[^\n]+\n[^\n]+\n([^\n]+)\n", text)
+        cargo = " ".join(
+            part
+            for part in (
+                greek_upper(sender) if sender else "",
+                f"({greek_upper(origin.group(1))})" if origin else "",
+            )
+            if part
+        )
+
         lines: list[InvoiceLine] = []
         for match in CHARGE_RE.finditer(text):
             vat = parse_amount(match["vat"])
@@ -58,7 +69,7 @@ class KarasoulisParser(SupplierParser):
             lines.append(
                 InvoiceLine(
                     code=desc,
-                    description=desc,
+                    description=f"{desc} {cargo}".strip(),
                     quantity=Decimal("1"),
                     unit_price=net,
                     discount_pct=Decimal("0"),
@@ -78,18 +89,6 @@ class KarasoulisParser(SupplierParser):
         if not re.search(rf"^{re.escape(fmt_el(total))}$", text, re.MULTILINE):
             raise PdfParseError(f"Το σύνολο {total:.2f} δεν επιβεβαιώνεται στο PDF ΚΑΡΑΣΟΥΛΗΣ")
 
-        sender = first_match(text, (r"\nΕΛΛΑΔΑ\n([^\n]+)\n[^\n]+\n([^\n]+)\n",))
-        origin = re.search(r"\nΕΛΛΑΔΑ\n[^\n]+\n[^\n]+\n([^\n]+)\n", text)
-        description = " ".join(
-            part
-            for part in (
-                lines[0].description,
-                greek_upper(sender) if sender else "",
-                f"({greek_upper(origin.group(1))})" if origin else "",
-            )
-            if part
-        )
-
         return InvoiceData(
             source_path=source_path,
             supplier_name=self.name,
@@ -99,7 +98,7 @@ class KarasoulisParser(SupplierParser):
             net_value=net,
             vat_value=vat,
             total_value=total,
-            description=description,
+            description=lines[0].description,
             raw_text=text,
             vat_pct=lines[0].vat_pct,
             lines=tuple(lines),

@@ -15,6 +15,7 @@ class InvoiceLine:
     discount_pct: Decimal
     value: Decimal
     vat_pct: Decimal
+    category: str = ""
 
 
 @dataclass(frozen=True)
@@ -56,12 +57,29 @@ class SupplierSettings:
     kind: str = "expense"
     trdr_code: str = ""
     item_map: dict[str, str] = field(default_factory=dict)
+    line_codes: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def has_expense_account(self) -> bool:
+        return bool(self.line_code or self.line_codes)
 
     @property
     def is_complete(self) -> bool:
         if self.kind == "purchase":
             return all((self.series_code, self.payment_method)) and bool(self.item_map)
-        return all((self.series_code, self.line_code, self.payment_method))
+        return all((self.series_code, self.payment_method)) and self.has_expense_account
+
+    def expense_account(self, line: InvoiceLine) -> str:
+        if line.category:
+            account = self.line_codes.get(line.category)
+            if not account:
+                raise ValueError(
+                    f"χωρίς λογαριασμό δαπάνης (line_codes) για κατηγορία {line.category}"
+                )
+            return account
+        if not self.line_code:
+            raise ValueError("λείπει line_code (λογαριασμός δαπάνης)")
+        return self.line_code
 
 
 @dataclass(frozen=True)

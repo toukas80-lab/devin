@@ -186,3 +186,51 @@ def test_purchase_is_complete_requires_item_map_not_line_code() -> None:
     expense = config({}).suppliers["999082935"]
     assert expense.is_complete
     assert not replace(expense, line_code="").is_complete
+
+
+def test_expense_line_category_selects_account() -> None:
+    base = expense_invoice()
+    invoice = InvoiceData(
+        **{
+            **{f.name: getattr(base, f.name) for f in fields(base)},
+            "lines": (
+                InvoiceLine(
+                    "A",
+                    "ΕΞΑΓΩΓΗ",
+                    Decimal("1"),
+                    Decimal("60"),
+                    Decimal("0"),
+                    Decimal("60"),
+                    Decimal("24"),
+                    "export24",
+                ),
+                InvoiceLine(
+                    "B",
+                    "ΕΙΣΑΓΩΓΗ",
+                    Decimal("1"),
+                    Decimal("40"),
+                    Decimal("0"),
+                    Decimal("40"),
+                    Decimal("24"),
+                    "import24",
+                ),
+            ),
+        }
+    )
+    fedex = replace(
+        config({}).suppliers["999082935"],
+        line_code="",
+        line_codes={"export24": "10016", "import24": "10002"},
+    )
+    cfg = AppConfig(sql=default_config().sql, suppliers={"999082935": fedex})
+    assert fedex.is_complete
+    result = build_txt([invoice], cfg)
+    assert [row.split(";")[4] for row in result.expense_rows] == ["10016", "10002"]
+
+    missing = AppConfig(
+        sql=default_config().sql,
+        suppliers={"999082935": replace(fedex, line_codes={"export24": "10016"})},
+    )
+    result = build_txt([invoice], missing)
+    assert result.expense_rows == ()
+    assert "import24" in result.errors[0]

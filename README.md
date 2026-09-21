@@ -61,7 +61,9 @@ softone-pilot make-txt "C:\Invoices" --config config\local.json --out-dir C:\Sof
 
 Γράφει `C:\Soft1\DEVIN-EXP.txt` (δαπάνες, `kind: "expense"`) και/ή
 `C:\Soft1\DEVIN-IMPORT.txt` (αγορές ειδών, `kind: "purchase"`, με `item_map`
-κωδικός προμηθευτή -> κωδικός είδους SoftOne). Παραστατικό χωρίς πλήρη ρύθμιση
+κωδικός προμηθευτή -> κωδικός είδους SoftOne). Δαπάνες με λογαριασμό ανά γραμμή
+(π.χ. FEDEX: εξαγωγή/εισαγωγή, 24%/0%) ρυθμίζονται με `line_codes`
+κατηγορία -> λογαριασμός, αντί για ενιαίο `line_code`. Παραστατικό χωρίς πλήρη ρύθμιση
 (πιστωτής, σειρά, λογαριασμός ή αντιστοίχιση είδους) αναφέρεται ως ERROR και
 δεν γράφεται. Στη συνέχεια στο SoftOne: `DevinExpMakeHead`/`DevinMakeHead` ->
 οδηγός Import (`D TEST ΔΑΠΑΝΕΣ` / `D TEST ΑΓΟΡΕΣ`) -> `DevinExpAddLines`/`DevinAddLines`.

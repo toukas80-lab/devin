@@ -68,12 +68,13 @@ def build_rows(invoice: InvoiceData, settings: SupplierSettings) -> tuple[str, l
             )
         return "purchase", rows
 
-    head = (date_text, settings.series_code, settings.trdr_code, number, settings.line_code)
+    head = (date_text, settings.series_code, settings.trdr_code, number)
     if invoice.lines:
         rows = [
             ";".join(
                 (
                     *head,
+                    settings.expense_account(line),
                     fmt(line.value),
                     fmt(line.vat_pct),
                     clean(f"{line.description} ({invoice.document_number})"),
@@ -83,8 +84,12 @@ def build_rows(invoice: InvoiceData, settings: SupplierSettings) -> tuple[str, l
         ]
         return "expense", rows
 
+    if not settings.line_code:
+        raise ValueError("λείπει line_code (λογαριασμός δαπάνης)")
     comment = clean(f"{invoice.description} ({invoice.document_number})")
-    row = ";".join((*head, fmt(invoice.net_value), fmt(invoice.vat_pct), comment))
+    row = ";".join(
+        (*head, settings.line_code, fmt(invoice.net_value), fmt(invoice.vat_pct), comment)
+    )
     return "expense", [row]
 
 
@@ -103,7 +108,7 @@ def build_txt(invoices: list[InvoiceData], config: AppConfig) -> TxtResult:
         if not settings.trdr_code or not settings.series_code:
             errors.append(f"{name}: λείπει trdr_code ή series_code για {settings.name}")
             continue
-        if settings.kind == "expense" and not settings.line_code:
+        if settings.kind == "expense" and not settings.has_expense_account:
             errors.append(f"{name}: λείπει line_code (λογαριασμός δαπάνης) για {settings.name}")
             continue
         key = (settings.trdr_code, docnum(invoice))
