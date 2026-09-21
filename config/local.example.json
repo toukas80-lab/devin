@@ -7,7 +7,7 @@
     "trusted_connection": true,
     "timeout_seconds": 10
   },
-  "vat_ids": {},
+  "vat_ids": { "0": "0" },
   "suppliers": {
     "999082935": {
       "name": "ENARTIA ΜΟΝΟΠΡΟΣΩΠΗ ΑΝΩΝΥΜΗ ΕΤΑΙΡΕΙΑ",
