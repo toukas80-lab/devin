@@ -73,6 +73,14 @@ reverse charge) μετατρέπονται σε EUR με την ισοτιμία
 δεν γράφεται. Στη συνέχεια στο SoftOne: `DevinExpMakeHead`/`DevinMakeHead` ->
 οδηγός Import (`D TEST ΔΑΠΑΝΕΣ` / `D TEST ΑΓΟΡΕΣ`) -> `DevinExpAddLines`/`DevinAddLines`.
 
+Καθημερινή χρήση χωρίς γραμμή εντολών (`DEVIN-PDF.exe`, βλ. Windows build):
+ρίξε τα PDF στο `C:\Soft1\PDF` και τρέξε το .exe. Διαβάζει όλα τα PDF, γράφει
+`DEVIN-EXP.txt` / `DEVIN-IMPORT.txt` / `DEVIN-REPORT.txt` στο `C:\Soft1`, μετακινεί
+τα επιτυχή PDF στο `C:\Soft1\PDF\ΕΓΙΝΑΝ\<ημερομηνία>` και αφήνει τα προβληματικά
+στη θέση τους με τον λόγο στην αναφορά. Στην πρώτη εκτέλεση δημιουργεί το
+`C:\Soft1\devin-config.json` (αντιστοιχίσεις προμηθευτών, επεξεργάσιμο).
+Από γραμμή εντολών: `devin-pdf [βάση]`.
+
 Γραφικό περιβάλλον:
 
 ```powershell
@@ -93,7 +101,8 @@ softone-pilot inspect-softone --workflow config\softone_workflow.example.json
 powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 ```
 
-Το executable δημιουργείται στον φάκελο `dist`.
+Το executable δημιουργείται στο `dist\DEVIN-PDF.exe`. Το ίδιο κάνει το GitHub Actions
+workflow `Build DEVIN-PDF.exe` σε κάθε push (artifact `DEVIN-PDF`).
 
 ## Ασφάλεια
 
