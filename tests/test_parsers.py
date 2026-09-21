@@ -177,6 +177,87 @@ def test_parse_fedex_shipments() -> None:
     assert [line.category for line in invoice.lines] == ["export24", "import24", "import24"]
 
 
+FEDEX_EXEMPT_TEXT = """FedEx Express Greece Μονοπρόσωπη
+ΑΦΜ: GR095283423
+685269238
+25/08/2026
+24/09/2026
+55.09 EUR
+Απόδειξη Ναύλων ­ Λεπτομερείς
+ΥπηρεσίαΑρ. Αποστολής Ημερομηνία
+12.0305/08/2026875343928958 0.00 12.03Economy Service 1 3.20 kg 882868182063
+54.66Αποστολέας Παραλήπτης Χρέωση Μεταφορικών
+-46.39FOUNTOUKAS THEODOROS MEGAM EMPORIKI LTD Εκπτωση
+Υποσύνολο EURA.NDREAS GEORGIOU 18/08/2026 12:31Υπογραφή: 12.03
+Ισχύον ΦΠΑ 24.00%
+ΥπηρεσίαΑρ. Αποστολής Ημερομηνία
+0.0006/08/2026875403298141 40.17 40.17Economy Service 1 8.94 kg
+2.40Αποστολέας Παραλήπτης Χρέωση διαχείρισης εκτελωνισμού εισαγωγών
+186.20FOUNTOUKAS THEODOROS JORDAN LAUDANO Χρέωση Μεταφορικών
+Υποσύνολο EURM.Metchin 20/08/2026 10:45Υπογραφή: 40.17
+Ποσοστό ΦΠΑ Χρεώσεις ΦΠΑ Αξία
+58.42 2.89 14.9224.00 %
+0,00% 200.41 0.00 40.17
+Συνολική Αξία EUR 55.09
+Έκπτωση Καθαρή Αξία
+-46.39 12.03
+-160.24 40.17
+Κάθε αποστολή
+"""
+
+FEDEX_DUTY_TEXT = """FedEx Express Greece Μονοπρόσωπη
+ΑΦΜ: GR095283423
+685275826
+03/09/2026
+Πληρωμή με απόδειξη
+53.04 EUR
+Απόδειξη Δασμών & Φόρων ­ Λεπτομερείς
+ΥπηρεσίαΑρ. Αποστολής Ημερομηνία
+10/06/2026872826082908 39.23 53.04Economy Service 13.81 0.00 0.00
+13.3715.00Αποστολέας Παραλήπτης Χρέωση δαπανών
+13.8115.49FOUNTOUKAS THEODOROS WASHINGTON, UNITED STATES Επαναχρέωση Δασμών
+Υποσύνολο EUR25/06/2026Υπογραφή: 53.04
+Άλλες χρεώσεις με τιμή 0,00% 25.86
+ΦΠΑ σε 0.00 % 0.00
+EUR 53.04Συνολική Αξία
+"""
+
+
+def test_parse_fedex_export_with_exempt_shipment() -> None:
+    invoice = FedexParser().parse_text(Path("fedex.pdf"), FEDEX_EXEMPT_TEXT)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("52.20"),
+        Decimal("2.89"),
+        Decimal("55.09"),
+    )
+    assert [(line.value, line.vat_pct, line.category) for line in invoice.lines] == [
+        (Decimal("12.03"), Decimal("24"), "export24"),
+        (Decimal("40.17"), Decimal("0"), "export0"),
+    ]
+    assert invoice.lines[1].description == "ECONOMY SERVICE 875403298141 06/08/2026"
+
+
+def test_parse_fedex_duty_receipt() -> None:
+    invoice = FedexParser().parse_text(Path("fedex.pdf"), FEDEX_DUTY_TEXT)
+    assert invoice.document_number == "685275826"
+    assert invoice.document_date == date(2026, 9, 3)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("53.04"),
+        Decimal("0"),
+        Decimal("53.04"),
+    )
+    assert [(line.value, line.vat_pct, line.category) for line in invoice.lines] == [
+        (Decimal("53.04"), Decimal("0"), "duty")
+    ]
+    assert invoice.description == "ΔΑΣΜΟΙ FEDEX 1 ΑΠΟΣΤΟΛΕΣ"
+
+
+def test_fedex_duty_receipt_with_vat_is_rejected() -> None:
+    text = FEDEX_DUTY_TEXT.replace("ΦΠΑ σε 0.00 % 0.00", "ΦΠΑ σε 24.00 % 3.21")
+    with pytest.raises(PdfParseError, match="δασμών FEDEX με ΦΠΑ"):
+        FedexParser().parse_text(Path("fedex.pdf"), text)
+
+
 def test_fedex_line_mismatch_is_rejected() -> None:
     text = FEDEX_TEXT.replace("-462.01 132.24", "-462.01 140.00")
     with pytest.raises(PdfParseError, match="Άθροισμα αποστολών"):

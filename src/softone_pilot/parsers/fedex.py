@@ -13,13 +13,19 @@ from softone_pilot.parsers.base import (
     parse_date,
 )
 
-# "62.7102/09/2026876620512035 0.00 62.71FedEx Intl Priority 1 6.70 kg"
+# Freight: "62.7102/09/2026876620512035 0.00 62.71FedEx Intl Priority 1 6.70 kg"
+# Duty:    "10/06/2026872826082908 39.23 53.04Economy Service 13.81 0.00 0.00"
+# The shipment total is the amount glued to the service name.
 SHIPMENT_RE = re.compile(
-    r"^(?P<value>\d+\.\d{2})(?P<date>\d{2}/\d{2}/\d{4})(?P<awb>\d{12})\s+"
-    r"(?P<a>\d+\.\d{2})\s+(?P<b>\d+\.\d{2})(?P<service>FedEx[^\d\n]*?)\s+\d+\s+[\d.]+\s*kg",
-    re.MULTILINE,
+    r"(?P<date>\d{2}/\d{2}/\d{4})(?P<awb>\d{12})[^\n]*?\s(?P<value>\d+\.\d{2})"
+    r"(?P<service>[A-Za-z][A-Za-z ]*?)\s+\d"
 )
 VAT_PCT_RE = re.compile(r"Ισχύον ΦΠΑ\s+(\d+(?:\.\d+)?)%")
+# "Έκπτωση Καθαρή Αξία" is followed by one "<discount> <net>" row per VAT rate.
+NET_ROWS_RE = re.compile(r"Καθαρή Αξία\s*\n((?:-?\d+\.\d{2} \d+\.\d{2}\n)+)")
+DUTY_TITLE = "Απόδειξη Δασμών"
+DUTY_VAT_RE = re.compile(r"ΦΠΑ σε [\d.]+ % (\d+\.\d{2})")
+DUTY_CATEGORY = "duty"
 # "-225.63FOUNTOUKAS THEODOROS STOCKHOLM COUNTY, SWEDEN Εκπτωση": sender first, then recipient.
 SENDER_RE = re.compile(r"Αποστολέας Παραλήπτης[^\n]*\n-?[\d.]+(?P<sender>[A-Z][A-Z.&'-]*)")
 OWN_NAME = "FOUNTOUKA"
@@ -42,17 +48,32 @@ class FedexParser(SupplierParser):
         if re.search(r"Πιστωτικό|Credit Note", text, re.IGNORECASE):
             raise PdfParseError("Πιστωτικό FEDEX — δεν υποστηρίζεται, καταχώριση χειροκίνητα")
 
+        duty = DUTY_TITLE in text
         header = re.search(r"^(\d{9})\n(\d{2}/\d{2}/\d{4})\n", text, re.MULTILINE)
         total_text = first_match(text, (r"Συνολική Αξία\s+EUR\s+([\d.]+)", r"([\d.]+)\s+EUR\b"))
-        net_text = first_match(text, (r"Καθαρή Αξία\s*\n\s*-?[\d.]+\s+([\d.]+)",))
-        if not header or not total_text or not net_text:
+        if not header or not total_text:
             raise PdfParseError("Λείπουν αριθμός, ημερομηνία ή σύνολα FEDEX")
-
         total = parse_amount(total_text)
-        net = parse_amount(net_text)
-        vat = total - net
 
-        lines = self._parse_shipments(text)
+        if duty:
+            vat_text = first_match(text, (DUTY_VAT_RE.pattern,))
+            if vat_text is None:
+                raise PdfParseError("Λείπει ΦΠΑ σε απόδειξη δασμών FEDEX")
+            vat = parse_amount(vat_text)
+            if vat != 0:
+                raise PdfParseError("Απόδειξη δασμών FEDEX με ΦΠΑ — καταχώριση χειροκίνητα")
+            net = total
+        else:
+            rows = NET_ROWS_RE.search(text)
+            if not rows:
+                raise PdfParseError("Λείπει καθαρή αξία FEDEX")
+            net = sum(
+                (parse_amount(row.split()[1]) for row in rows.group(1).splitlines()),
+                Decimal("0"),
+            )
+            vat = total - net
+
+        lines = self._parse_shipments(text, duty)
         if not lines:
             raise PdfParseError("Δεν βρέθηκαν αποστολές FEDEX")
         lines_net = sum((line.value for line in lines), Decimal("0"))
@@ -75,33 +96,40 @@ class FedexParser(SupplierParser):
             net_value=net,
             vat_value=vat,
             total_value=total,
-            description=f"ΜΕΤΑΦΟΡΙΚΑ FEDEX {len(lines)} ΑΠΟΣΤΟΛΕΣ",
+            description=f"{'ΔΑΣΜΟΙ' if duty else 'ΜΕΤΑΦΟΡΙΚΑ'} FEDEX {len(lines)} ΑΠΟΣΤΟΛΕΣ",
             raw_text=text,
             vat_pct=lines[0].vat_pct,
             lines=tuple(lines),
         )
 
-    def _parse_shipments(self, text: str) -> list[InvoiceLine]:
+    def _parse_shipments(self, text: str, duty: bool) -> list[InvoiceLine]:
         blocks = re.split(r"ΥπηρεσίαΑρ\. Αποστολής", text)[1:]
         lines: list[InvoiceLine] = []
         for block in blocks:
             match = SHIPMENT_RE.search(block)
             if not match:
                 continue
-            pct_match = VAT_PCT_RE.search(block)
-            vat_pct = Decimal(pct_match.group(1)).normalize() if pct_match else Decimal("0")
+            service = match["service"].strip().upper()
             value = parse_amount(match["value"])
-            service = re.sub(r"\s+", " ", match["service"]).strip().upper()
+            if duty:
+                vat_pct = Decimal("0")
+                category = DUTY_CATEGORY
+                description = f"{service} {match['awb']} {match['date']} ΔΑΣΜΟΙ"
+            else:
+                pct_match = VAT_PCT_RE.search(block)
+                vat_pct = Decimal(pct_match.group(1)).normalize() if pct_match else Decimal("0")
+                category = shipment_category(block, vat_pct)
+                description = f"{service} {match['awb']} {match['date']}"
             lines.append(
                 InvoiceLine(
                     code=match["awb"],
-                    description=f"{service} {match['awb']} {match['date']}",
+                    description=description,
                     quantity=Decimal("1"),
                     unit_price=value,
                     discount_pct=Decimal("0"),
                     value=value,
                     vat_pct=vat_pct,
-                    category=shipment_category(block, vat_pct),
+                    category=category,
                 )
             )
         return lines

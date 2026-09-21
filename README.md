@@ -62,7 +62,7 @@ softone-pilot make-txt "C:\Invoices" --config config\local.json --out-dir C:\Sof
 Γράφει `C:\Soft1\DEVIN-EXP.txt` (δαπάνες, `kind: "expense"`) και/ή
 `C:\Soft1\DEVIN-IMPORT.txt` (αγορές ειδών, `kind: "purchase"`, με `item_map`
 κωδικός προμηθευτή -> κωδικός είδους SoftOne). Δαπάνες με λογαριασμό ανά γραμμή
-(π.χ. FEDEX: εξαγωγή/εισαγωγή, 24%/0%) ρυθμίζονται με `line_codes`
+(π.χ. FEDEX: εξαγωγή/εισαγωγή 24%/0%, δασμοί `duty`) ρυθμίζονται με `line_codes`
 κατηγορία -> λογαριασμός, αντί για ενιαίο `line_code`. Τιμολόγια σε USD (COGNITION,
 reverse charge) μετατρέπονται σε EUR με την ισοτιμία αναφοράς ΕΚΤ της ημέρας του
 τιμολογίου (λήψη από ecb.europa.eu) ή με `--rate 0,8585` (EUR ανά 1 USD)· η αιτιολογία
