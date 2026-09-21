@@ -14,9 +14,11 @@ from softone_pilot.parsers.base import (
     parse_amount,
 )
 
-# "Overage credits 1 $20.00 0% $20.00"
+# "Overage credits 1 $20.00 0% $20.00"  or  "Pro\nMay 30 Jun 30, 2026\n1 $20.00 0% $20.00"
 ITEM_RE = re.compile(
-    r"^(?P<desc>.+?)\s+(?P<qty>\d+)\s+\$(?P<price>[\d,]+\.\d{2})\s+(?P<tax>\d+)%\s+"
+    r"^(?P<desc>[A-Za-z][^\n$]*?)"
+    r"(?:\n(?P<period>[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2} \d{1,2}, \d{4}))?"
+    r"\s+(?P<qty>\d+)\s+\$(?P<price>[\d,]+\.\d{2})\s+(?P<tax>\d+)%\s+"
     r"\$(?P<value>[\d,]+\.\d{2})\s*$",
     re.MULTILINE,
 )
@@ -63,10 +65,13 @@ class CognitionParser(SupplierParser):
             if match["tax"] != "0":
                 raise PdfParseError(f"Γραμμή COGNITION με φόρο {match['tax']}%")
             value = parse_amount(match["value"])
+            desc = match["desc"].strip()
+            if match["period"]:
+                desc = f"{desc} ({match['period']})"
             lines.append(
                 InvoiceLine(
                     code="",
-                    description=greek_upper(match["desc"]),
+                    description=greek_upper(desc),
                     quantity=Decimal(match["qty"]),
                     unit_price=parse_amount(match["price"]),
                     discount_pct=Decimal("0"),

@@ -8,12 +8,12 @@ from collections.abc import Callable
 from dataclasses import replace
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
-from functools import partial
 from xml.etree import ElementTree
 
 from softone_pilot.models import InvoiceData
 
 ECB_90D_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml"
+ECB_HIST_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml"
 MAX_RATE_AGE = timedelta(days=7)
 CENT = Decimal("0.01")
 RATE_PLACES = Decimal("0.0001")
@@ -21,6 +21,10 @@ RATE_PLACES = Decimal("0.0001")
 
 class FxError(ValueError):
     pass
+
+
+class RateTooOld(FxError):
+    """The requested day precedes the downloaded ECB window."""
 
 
 def parse_ecb_usd_rates(xml_text: str) -> dict[date, Decimal]:
@@ -43,7 +47,7 @@ def eur_per_usd(rates: dict[date, Decimal], day: date) -> Decimal:
     """ECB reference rate valid on `day` (last published on or before it), as EUR per 1 USD."""
     candidates = [d for d in rates if d <= day]
     if not candidates:
-        raise FxError(f"Δεν υπάρχει ισοτιμία ΕΚΤ για {day:%d/%m/%Y} ή νωρίτερα")
+        raise RateTooOld(f"Δεν υπάρχει ισοτιμία ΕΚΤ για {day:%d/%m/%Y} ή νωρίτερα")
     latest = max(candidates)
     if day - latest > MAX_RATE_AGE:
         raise FxError(
@@ -72,7 +76,25 @@ def rate_resolver(rate_text: str | None) -> Callable[[date], Decimal]:
     if rate_text:
         fixed = parse_rate(rate_text)
         return lambda _day: fixed
-    return partial(eur_per_usd, fetch_ecb_usd_rates())
+    return EcbResolver()
+
+
+class EcbResolver:
+    """Uses the 90-day ECB feed; downloads the full history (8 MB) only for older invoices."""
+
+    def __init__(self) -> None:
+        self.rates = fetch_ecb_usd_rates(ECB_90D_URL)
+        self.full_history = False
+
+    def __call__(self, day: date) -> Decimal:
+        try:
+            return eur_per_usd(self.rates, day)
+        except RateTooOld:
+            if self.full_history:
+                raise
+            self.rates = fetch_ecb_usd_rates(ECB_HIST_URL)
+            self.full_history = True
+            return eur_per_usd(self.rates, day)
 
 
 def to_eur(amount: Decimal, rate: Decimal) -> Decimal:

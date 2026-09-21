@@ -260,6 +260,17 @@ def test_parse_cognition_usd_reverse_charge() -> None:
     assert invoice.lines[0].vat_pct == 0
 
 
+def test_parse_cognition_subscription_line_with_period() -> None:
+    text = COGNITION_TEXT.replace(
+        "Overage credits 1 $20.00 0% $20.00",
+        "Pro\nMay 30 Jun 30, 2026\n1 $20.00 0% $20.00",
+    )
+    invoice = CognitionParser().parse_text(Path("cognition.pdf"), text)
+    assert [line.description for line in invoice.lines] == ["PRO (MAY 30 JUN 30, 2026)"]
+    assert invoice.description == "DEVIN PRO (MAY 30 JUN 30, 2026)"
+    assert invoice.net_value == Decimal("20.00")
+
+
 def test_cognition_rejects_taxed_invoice() -> None:
     text = COGNITION_TEXT.replace("Total $20.00", "Total $24.80").replace(
         "Amount due $20.00", "Amount due $24.80"

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from softone_pilot import fx
 from softone_pilot.config import default_config
 from softone_pilot.devin_txt import build_txt
 from softone_pilot.fx import FxError, convert_to_eur, eur_per_usd, parse_ecb_usd_rates, parse_rate
@@ -46,6 +47,31 @@ def usd_invoice() -> InvoiceData:
         lines=(line,),
         currency="USD",
     )
+
+
+def test_ecb_resolver_falls_back_to_full_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    feeds = {
+        fx.ECB_90D_URL: {date(2026, 9, 21): Decimal("1.1490")},
+        fx.ECB_HIST_URL: {
+            date(2026, 5, 15): Decimal("1.1200"),
+            date(2026, 9, 21): Decimal("1.1490"),
+        },
+    }
+    calls: list[str] = []
+
+    def fake_fetch(url: str) -> dict[date, Decimal]:
+        calls.append(url)
+        return feeds[url]
+
+    monkeypatch.setattr(fx, "fetch_ecb_usd_rates", fake_fetch)
+    resolver = fx.rate_resolver(None)
+    assert resolver(date(2026, 9, 21)) == Decimal("0.8703")
+    assert calls == [fx.ECB_90D_URL]
+    assert resolver(date(2026, 5, 17)) == Decimal("0.8929")
+    assert calls == [fx.ECB_90D_URL, fx.ECB_HIST_URL]
+    with pytest.raises(FxError):
+        resolver(date(2026, 1, 5))
+    assert len(calls) == 2
 
 
 def test_ecb_rate_uses_last_published_day_on_or_before() -> None:
