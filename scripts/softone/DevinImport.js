@@ -532,6 +532,40 @@ function DevinTxtNet(d, spec) {
     return DevinRound2(net);
 }
 
+// FINDOC id of the document DBPOST just created, when the object does not report it:
+// the single new row for this creditor/supplier above the id seen before posting.
+function DevinNewDocId(spec, d, maxBefore) {
+    var ds = X.GETSQLDATASET(
+        'SELECT FINDOC, FINCODE FROM FINDOC WHERE COMPANY=:1 AND SOSOURCE=' + spec.sosource + ' AND TRDR=:2 AND FINDOC>:3 ORDER BY FINDOC',
+        X.SYS.COMPANY, d.trdr, maxBefore);
+    if (ds.RECORDCOUNT != 1)
+        throw new Error('saved, but found ' + ds.RECORDCOUNT + ' new documents for this trdr afterwards (expected 1) - check manually');
+    return parseInt(ds.FINDOC, 10);
+}
+
+function DevinDocRow(findoc) {
+    var chk = X.GETSQLDATASET(
+        'SELECT FINDOC, FINCODE, FISCPRD, PERIOD, TRNDATE, NETAMNT, VATAMNT, SUMAMNT, ' +
+        '(SELECT COUNT(*) FROM MTRLINES M WHERE M.FINDOC=F.FINDOC) AS LINES FROM FINDOC F WHERE FINDOC=:1', findoc);
+    if (chk.RECORDCOUNT != 1) throw new Error('FINDOC ' + findoc + ' not found after save - check manually');
+    return chk;
+}
+
+// Re-open a saved document and set its number (same DBLOCATE -> change -> DBPOST path as AddLines).
+function DevinRenumber(spec, findoc, fincode) {
+    var obj = X.CREATEOBJFORM(spec.objName), posted = false;
+    try {
+        obj.DBLOCATE(findoc);
+        obj.FindTable('FINDOC').FINCODE = fincode;
+        var r = obj.DBPOST;
+        if (!r) throw new Error('renumber: ' + String(obj.GETLASTERROR));
+        posted = true;
+    } finally {
+        if (!posted) { try { obj.DBCANCEL; } catch (e0) { } }
+        obj.FREE;
+    }
+}
+
 // spec: { objName, sosource, linesTable, fillLine(lns, L), lineNet(L), what }
 function DevinCreateDocs(docs, spec, dryRun) {
     var out = [(dryRun ? 'DRY RUN (nothing saved) - ' : '') + spec.what + ': ' + docs.length + ' document(s) in file'];
@@ -596,25 +630,36 @@ function DevinCreateDocs(docs, spec, dryRun) {
                 made++;
                 continue;
             }
+            var maxBefore = parseInt(X.SQL('SELECT ISNULL(MAX(FINDOC), 0) FROM FINDOC WHERE COMPANY=:1 AND SOSOURCE=' + spec.sosource, X.SYS.COMPANY), 10) || 0;
+            var newId = 0;
             try {
                 var r = obj.DBPOST;
                 if (!r) throw new Error(String(obj.GETLASTERROR));
                 posted = true;
+                try { newId = parseInt(hdr.FINDOC, 10) || 0; } catch (e2) { }
             } finally {
                 if (!posted) { try { obj.DBCANCEL; } catch (e1) { } }
                 obj.FREE;
             }
-            var chk = X.GETSQLDATASET(
-                'SELECT FINDOC, FINCODE, FISCPRD, PERIOD, TRNDATE, NETAMNT, VATAMNT, SUMAMNT, ' +
-                '(SELECT COUNT(*) FROM MTRLINES M WHERE M.FINDOC=F.FINDOC) AS LINES FROM FINDOC F ' +
-                'WHERE COMPANY=:1 AND SOSOURCE=' + spec.sosource + ' AND TRDR=:2 AND FINCODE=:3 ORDER BY FINDOC DESC',
-                X.SYS.COMPANY, d.trdr, fincode);
-            if (chk.RECORDCOUNT != 1) throw new Error('saved, but found ' + chk.RECORDCOUNT + ' documents afterwards - check manually');
+            if (!newId) newId = DevinNewDocId(spec, d, maxBefore);
+            var chk = DevinDocRow(newId);
+            var note = '';
+            if (String(chk.FINCODE) != fincode) {
+                // AUTONUMBER series: DBPOST of a new document replaces FINCODE with the next series number.
+                // Editing the saved document does not renumber, so write the supplier's number now.
+                var got = String(chk.FINCODE), why = '';
+                try { DevinRenumber(spec, newId, fincode); } catch (eR) { why = ': ' + eR.message; }
+                chk = DevinDocRow(newId);
+                if (String(chk.FINCODE) != fincode)
+                    throw new Error('SAVED as FINDOC ' + newId + ' with number "' + chk.FINCODE + '" but the number could NOT be changed to ' +
+                        fincode + why + ' - delete FINDOC ' + newId + ' (number ' + chk.FINCODE + ') manually before running again');
+                note = '  (numbered ' + got + ' by SoftOne, renamed to ' + fincode + ')';
+            }
             var p = DevinDateParts(d.trndate), warn = '';
             if (parseInt(chk.FISCPRD, 10) != p.y || parseInt(chk.PERIOD, 10) != p.m)
                 warn = '  WARNING period ' + chk.FISCPRD + '/' + chk.PERIOD + ' <> date ' + d.trndate;
-            out.push('OK   ' + fincode + ' -> FINDOC ' + chk.FINDOC + ': lines ' + chk.LINES + ' net ' + chk.NETAMNT +
-                ' vat ' + chk.VATAMNT + ' total ' + chk.SUMAMNT + warn);
+            out.push('OK   ' + fincode + ' -> FINDOC ' + newId + ': lines ' + chk.LINES + ' net ' + chk.NETAMNT +
+                ' vat ' + chk.VATAMNT + ' total ' + chk.SUMAMNT + warn + note);
             made++;
         }
         catch (e) {
@@ -679,6 +724,45 @@ function DevinAll(dryRun) {
 }
 
 function DevinDryRun() { return DevinAll(1); }
+
+// Read-only: the n latest documents of a source (default: expenses 1653) with FINCODE/comments,
+// followed by every column of the SERIES row of the latest one (numbering settings).
+function DevinShowLast(sosource, n, seriesCode) {
+    sosource = parseInt(sosource, 10) || 1653; n = parseInt(n, 10) || 5; if (!seriesCode) seriesCode = 'ΤΔΕΕ';
+    var out = ['Latest ' + n + ' documents, SOSOURCE ' + sosource + ', company ' + X.SYS.COMPANY];
+    var h = X.GETSQLDATASET(
+        'SELECT TOP ' + n + ' F.FINDOC, F.FINCODE, F.SERIES, S.CODE AS SERIESCODE, T.CODE AS TRDRCODE, F.TRNDATE, ' +
+        'F.NETAMNT, F.SUMAMNT, F.PAYMENT, F.COMMENTS, F.INSDATE, F.FISCPRD, F.PERIOD ' +
+        'FROM FINDOC F LEFT JOIN SERIES S ON S.SERIES=F.SERIES AND S.COMPANY=F.COMPANY AND S.SOSOURCE=F.SOSOURCE ' +
+        'LEFT JOIN TRDR T ON T.TRDR=F.TRDR AND T.COMPANY=F.COMPANY AND T.SODTYPE=16 ' +
+        'WHERE F.COMPANY=:1 AND F.SOSOURCE=' + sosource + ' ORDER BY F.FINDOC DESC', X.SYS.COMPANY);
+    h.FIRST;
+    while (!h.EOF) {
+        out.push('FINDOC ' + h.FINDOC + ' | FINCODE "' + h.FINCODE + '" | series ' + h.SERIESCODE + ' (' + h.SERIES + ')' +
+            ' | trdr ' + h.TRDRCODE + ' | ' + h.TRNDATE + ' | net ' + h.NETAMNT + ' total ' + h.SUMAMNT + ' | payment ' + h.PAYMENT +
+            ' | ' + h.FISCPRD + '/' + h.PERIOD + ' | ins ' + h.INSDATE + ' | comments "' + h.COMMENTS + '"');
+        var l = X.GETSQLDATASET('SELECT L.LINENUM, M.CODE, L.LINEVAL, L.VAT, L.COMMENTS FROM MTRLINES L JOIN MTRL M ON M.MTRL=L.MTRL WHERE L.FINDOC=:1 ORDER BY L.LINENUM', h.FINDOC);
+        l.FIRST;
+        while (!l.EOF) { out.push('    line ' + l.LINENUM + ' ' + l.CODE + ' value ' + l.LINEVAL + ' vat ' + l.VAT + ' "' + l.COMMENTS + '"'); l.NEXT; }
+        h.NEXT;
+    }
+    var codes = [seriesCode, 'ΤΙΜΔ'];
+    for (var k = 0; k < codes.length; k++) {
+        var sid = 0;
+        try { sid = DevinOne('SELECT SERIES AS ID FROM SERIES WHERE COMPANY=:1 AND SOSOURCE=' + sosource + ' AND CODE=:2', [X.SYS.COMPANY, codes[k]], 'Series'); }
+        catch (eS) { out.push('', 'SERIES ' + codes[k] + ': ' + eS.message); continue; }
+        out.push('', 'SERIES ' + codes[k] + ' (' + sid + ') settings:');
+        var cols = X.GETSQLDATASET("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='SERIES' ORDER BY ORDINAL_POSITION");
+        cols.FIRST;
+        while (!cols.EOF) {
+            var c = String(cols.COLUMN_NAME), v = '';
+            try { v = String(X.SQL('SELECT CAST(' + c + ' AS NVARCHAR(200)) FROM SERIES WHERE COMPANY=:1 AND SOSOURCE=' + sosource + ' AND SERIES=:2', X.SYS.COMPANY, sid)); } catch (e) { v = '?' + e.message; }
+            if (v != '' && v != 'null' && v != 'undefined' && v != '0') out.push('  ' + c + ' = ' + v);
+            cols.NEXT;
+        }
+    }
+    return out.join('\n');
+}
 
 // Read-only: DBINSERT on the object, show header defaults + which tables exist, then DBCANCEL.
 function DevinProbeInsert(objName) {
