@@ -467,3 +467,21 @@ def test_finloup_rejects_non_invoice_kind() -> None:
     )
     with pytest.raises(PdfParseError, match="Πιστωτικό"):
         FinloupLeasing2Parser().parse_text(Path("finloup.pdf"), text)
+
+
+def test_parse_finloup_einvoice_pypdf57_glued_tokens() -> None:
+    """pypdf 5.7 (the Windows build) glues code/description/amounts on one line."""
+    text = FINLOUP_EINVOICE_TEXT.replace(
+        "P01946 2447 - Fixed 24 - 1 x Lenovo ThinkPad L16 Gen2 CoreUltra5 32GB | 1TB (at\n"
+        "€54.16 / month)\n1,00Τεμάχια 54,16 0,00 0,00 54,16 24 13,00 67,16",
+        "P019462447 - Fixed 24 - 1 x Lenovo ThinkPad L16 Gen2 CoreUltra5 32GB | 1TB "
+        "(at€54.16 / month) 1,00Τεμάχια 54,16 0,00 0,00 54,16 24 13,0067,16",
+    ).replace("Σύνολο  Φ . Π . Α 13,00", "Σύνολο  Φ. Π . Α 13,00")
+    invoice = FinloupLeasing2Parser().parse_text(Path("finloup.pdf"), text)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("54.16"),
+        Decimal("13.00"),
+        Decimal("67.16"),
+    )
+    assert [(line.code, line.value) for line in invoice.lines] == [("P01946", Decimal("54.16"))]
+    assert invoice.description == "ΜΙΣΘΩΜΑ LENOVO THINKPAD L16 GEN2 COREULTRA5 32GB | 1TB"

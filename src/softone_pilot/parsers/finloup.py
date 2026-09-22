@@ -24,7 +24,7 @@ from softone_pilot.parsers.base import (
 EINVOICE_ROW_RE = re.compile(
     r"(?P<qty>\d+,\d{2})Τεμάχια (?P<price>[\d.]+,\d{2}) (?P<disc_pct>[\d.]+,\d{2}) "
     r"(?P<disc>[\d.]+,\d{2}) (?P<net>[\d.]+,\d{2}) (?P<vat_pct>\d+) "
-    r"(?P<vat>[\d.]+,\d{2}) (?P<total>[\d.]+,\d{2})"
+    r"(?P<vat>[\d.]+,\d{2}) ?(?P<total>[\d.]+,\d{2})"
 )
 EINVOICE_LINES_RE = re.compile(r"Τελικό\n(?P<body>.*?)\nΕκπτώσεις / Χρεώσεις", re.DOTALL)
 STRIPE_ROW_RE = re.compile(
@@ -82,7 +82,7 @@ class FinloupParser(SupplierParser):
         number_text = first_match(text, (r"Αριθμός\s*\nΤΠΥ (\d+)\n",))
         date_text = first_match(text, (r"Ημερομηνία Έκδοσης\s*\n(\d{2}/\d{2}/\d{4})",))
         net_text = first_match(text, (r"Σύνολο Καθαρού Ποσού ([\d.]+,\d{2})",))
-        vat_text = first_match(text, (r"Σύνολο Φ \. Π \. Α ([\d.]+,\d{2})",))
+        vat_text = first_match(text, (r"Σύνολο Φ ?\. Π ?\. ?Α ([\d.]+,\d{2})",))
         total_text = first_match(text, (r"Συνολική Αξία ([\d.]+,\d{2})",))
         currency = first_match(text, (r"Νόμισμα (\w+)",))
         if not (number_text and date_text and net_text and vat_text and total_text):
@@ -99,7 +99,7 @@ class FinloupParser(SupplierParser):
         for match in EINVOICE_ROW_RE.finditer(segment):
             raw = segment[cursor : match.start()]
             cursor = match.end()
-            code = first_match(raw, (r"^\s*(\S+) ",)) or ""
+            code = first_match(raw, (r"^\s*([A-Z]+\d{5})", r"^\s*(\S+) ")) or ""
             lines.append(
                 InvoiceLine(
                     code=code,
@@ -199,8 +199,8 @@ class FinloupParser(SupplierParser):
 
 def clean_description(raw: str) -> str:
     text = greek_upper(raw.replace("\n", " "))
-    text = re.sub(r"^\S+ \d+ - FIXED \d+ - 1 X ", "", text)
-    return "ΜΙΣΘΩΜΑ " + re.sub(r"\s*\(AT €[\d.]+ / MONTH\)$", "", text).strip()
+    text = re.sub(r"^\S+ ?\d+ - FIXED \d+ - 1 X ", "", text)
+    return "ΜΙΣΘΩΜΑ " + re.sub(r"\s*\(AT ?€[\d.]+ / MONTH\)$", "", text).strip()
 
 
 class FinloupLeasing2Parser(FinloupParser):
