@@ -509,12 +509,17 @@ function DevinSetDate(tbl, field, s) {
     for (var i = 0; i < attempts.length && !ok; i++) {
         try {
             tbl[field] = attempts[i];
-            var back = String(tbl[field]);
-            var dd = ('0' + p.d).slice(-2), mm = ('0' + p.m).slice(-2);
-            ok = back.indexOf(String(p.y)) >= 0 &&
-                (back.indexOf(dd + '/' + mm) >= 0 || back.indexOf(dd + '-' + mm) >= 0 ||
-                 back.indexOf(mm + '/' + dd) >= 0 || back.indexOf(p.y + '-' + mm + '-' + dd) >= 0 ||
-                 back.indexOf(p.y + '/' + mm + '/' + dd) >= 0);
+            var raw = tbl[field], back = String(raw);
+            var bd = (raw && typeof raw.getTime == 'function') ? raw : new Date(back);
+            if (!isNaN(bd.getTime())) {
+                ok = bd.getFullYear() == p.y && bd.getMonth() == p.m - 1 && bd.getDate() == p.d;
+            } else {
+                var dd = ('0' + p.d).slice(-2), mm = ('0' + p.m).slice(-2);
+                ok = back.indexOf(String(p.y)) >= 0 &&
+                    (back.indexOf(dd + '/' + mm) >= 0 || back.indexOf(dd + '-' + mm) >= 0 ||
+                     back.indexOf(mm + '/' + dd) >= 0 || back.indexOf(p.y + '-' + mm + '-' + dd) >= 0 ||
+                     back.indexOf(p.y + '/' + mm + '/' + dd) >= 0);
+            }
             if (!ok) err = 'read back ' + back;
         } catch (e) { err = e.message; }
     }
@@ -655,16 +660,18 @@ function DevinExpImportAll(fileName, dryRun) {
     return 'File: ' + fileName + '\n' + DevinCreateDocs(DevinGroup(DevinExpReadRows(fileName)), DevinExpSpec(), DevinFlag(dryRun));
 }
 
-function DevinFileExists(fileName) {
-    try { var f = X.EXEC('CODE:PILib.OpenText', fileName, 65001); X.EXEC('CODE:PILib.CloseText', f); return true; }
-    catch (e) { return false; }
+// '' when the file opens, otherwise the reason (used only to skip missing files in DevinAll)
+function DevinFileProblem(fileName) {
+    try { var f = X.EXEC('CODE:PILib.OpenText', fileName, 65001); X.EXEC('CODE:PILib.CloseText', f); return ''; }
+    catch (e) { return e.message; }
 }
 
 // Everything the .exe produced, in one call. dryRun=1 -> DevinDryRun.
 function DevinAll(dryRun) {
     var out = [], files = [['C:\\Soft1\\DEVIN-EXP.txt', DevinExpImportAll], ['C:\\Soft1\\DEVIN-IMPORT.txt', DevinImportAll]];
     for (var i = 0; i < files.length; i++) {
-        if (!DevinFileExists(files[i][0])) { out.push('File: ' + files[i][0] + ' - not found, nothing to do'); continue; }
+        var problem = DevinFileProblem(files[i][0]);
+        if (problem) { out.push('File: ' + files[i][0] + ' - cannot open (' + problem + '), nothing to do'); continue; }
         try { out.push(files[i][1](files[i][0], dryRun)); }
         catch (e) { out.push('File: ' + files[i][0] + '\nERR  ' + e.message); }
     }
