@@ -72,8 +72,12 @@ reverse charge) μετατρέπονται σε EUR με την ισοτιμία
 `DevinExpMakeHead` μέσω ΑΦΜ (π.χ. FINLOUP LEASING II, που έχει ξεχωριστό ΑΦΜ από τη Leasing I).
 Παραστατικό χωρίς πλήρη ρύθμιση
 (πιστωτής, σειρά, λογαριασμός ή αντιστοίχιση είδους) αναφέρεται ως ERROR και
-δεν γράφεται. Στη συνέχεια στο SoftOne: `DevinExpMakeHead`/`DevinMakeHead` ->
-οδηγός Import (`D TEST ΔΑΠΑΝΕΣ` / `D TEST ΑΓΟΡΕΣ`) -> `DevinExpAddLines`/`DevinAddLines`.
+δεν γράφεται. Στη συνέχεια στο SoftOne (Advanced Javascript, module `DImport`,
+κώδικας στο `scripts/softone/DevinImport.js`): `DevinDryRun` (δείχνει τι θα δημιουργηθεί,
+δεν αποθηκεύει τίποτα) -> `DevinAll` (δημιουργεί κεφαλίδα + όλες τις γραμμές μέσω των
+αντικειμένων PURDOC/LINCREDOC της SoftOne, SKIP όσα υπάρχουν ήδη). Εναλλακτική ροή με
+τον οδηγό ASCII Import: `DevinExpMakeHead`/`DevinMakeHead` -> οδηγός
+(`D TEST ΔΑΠΑΝΕΣ` / `D TEST ΑΓΟΡΕΣ`) -> `DevinExpAddLines`/`DevinAddLines`.
 
 Καθημερινή χρήση χωρίς γραμμή εντολών (`DEVIN-PDF.exe`, βλ. Windows build):
 ρίξε τα PDF στο `C:\Soft1\PDF` και τρέξε το .exe. Διαβάζει όλα τα PDF, γράφει
