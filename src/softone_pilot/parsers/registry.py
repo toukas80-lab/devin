@@ -8,6 +8,7 @@ from softone_pilot.parsers.cognition import CognitionParser
 from softone_pilot.parsers.egnatia import EgnatiaOdosParser
 from softone_pilot.parsers.enartia import EnartiaParser
 from softone_pilot.parsers.fedex import FedexParser
+from softone_pilot.parsers.finloup import FinloupLeasing1Parser, FinloupLeasing2Parser
 from softone_pilot.parsers.karasoulis import KarasoulisParser
 from softone_pilot.parsers.technomatic import TechnomaticParser
 
@@ -18,6 +19,8 @@ PARSERS: tuple[SupplierParser, ...] = (
     FedexParser(),
     KarasoulisParser(),
     CognitionParser(),
+    FinloupLeasing1Parser(),
+    FinloupLeasing2Parser(),
 )
 
 

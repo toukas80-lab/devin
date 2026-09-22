@@ -9,6 +9,7 @@ from softone_pilot.parsers.cognition import CognitionParser
 from softone_pilot.parsers.egnatia import EgnatiaOdosParser
 from softone_pilot.parsers.enartia import EnartiaParser
 from softone_pilot.parsers.fedex import FedexParser
+from softone_pilot.parsers.finloup import FinloupLeasing1Parser, FinloupLeasing2Parser
 from softone_pilot.parsers.karasoulis import KarasoulisParser
 from softone_pilot.parsers.technomatic import TechnomaticParser
 
@@ -358,3 +359,111 @@ def test_cognition_rejects_taxed_invoice() -> None:
     )
     with pytest.raises(PdfParseError, match="φόρο"):
         CognitionParser().parse_text(Path("cognition.pdf"), text)
+
+
+FINLOUP_EINVOICE_TEXT = """FINLOUP LEASING II ΜΟΝΟΠΡΟΣΩΠΗ  Α  Ε  Αρ . Εγκατάστασης  Εδρα
+ΓΡΑΦΕΙΟΥ  ΚΑΙ  ΑΦΜ  EL803183981 Δ. Ο . Υ . ΚΕΦΟΔΕ  ΑΤΤΙΚΗΣ  Αριθμός  ΓΕΜΗ
+Είδος  Παραστατικού
+Τιμολόγιο  Παροχής  Υπηρεσιών
+Αριθμός
+ΤΠΥ 0000988
+Ημερομηνία  Έκδοσης
+09/07/2026 3:54 μ . μ .
+Στοιχεία  Πελάτη
+ΑΦΜ802313849
+Ανάλυση
+ΚωδικόςΠεριγραφή ΠοσότηταM.M.
+Φ . Π . ΑΤελικό
+P01946 2447 - Fixed 24 - 1 x Lenovo ThinkPad L16 Gen2 CoreUltra5 32GB | 1TB (at
+€54.16 / month)
+1,00Τεμάχια 54,16 0,00 0,00 54,16 24 13,00 67,16
+Εκπτώσεις / Χρεώσεις
+Ανάλυση  ΦΠΑ
+24,00% 54,16 13,00
+Νόμισμα EUR
+Σύνολο  Καθαρού  Ποσού 54,16
+Σύνολο  Φ . Π . Α 13,00
+Συνολική  Αξία 67,16
+Σχόλια  FINCO2-0988
+"""
+
+FINLOUP_STRIPE_TEXT = """\xa0
+Τɩμολόγɩο
+Αρɩθμός τɩμολογίου FINCO1\x0016086
+Ημερομηνία έκδοσης 6 Ιουλίου 2026
+Finloup Leasing I
+GR VAT EL802285336
+Χρέωση σε
+GR VAT EL802313849
+36,51\xa0€ πληρωτέο στɩς 6 Ιουλίου 2026
+Περɩγραφή Ποσότητα
+Samsung Galaxy S25
+6 Ιουλ 2026\x006 Αυγ 2026
+1 29,44\xa0€ 24% 29,44\xa0€
+\xa0
+Μερɩκό σύνολο 29,44\xa0€
+Σύνολο χωρίς φόρο 29,44\xa0€
+VAT - Greece \x0024% επί του ποσού 29,44\xa0€\x00 7,07\xa0€
+Σύνολο 36,51\xa0€
+Πληρωτέο ποσό 36,51\xa0€
+"""
+
+
+def test_parse_finloup_einvoice_leasing2() -> None:
+    parser = FinloupLeasing2Parser()
+    normalized = FINLOUP_EINVOICE_TEXT.replace(" ", "").upper()
+    assert parser.matches(normalized)
+    assert not FinloupLeasing1Parser().matches(normalized)
+    invoice = parser.parse_text(Path("finloup.pdf"), FINLOUP_EINVOICE_TEXT)
+    assert invoice.supplier_vat == "803183981"
+    assert invoice.document_number == "988"
+    assert invoice.document_date == date(2026, 7, 9)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("54.16"),
+        Decimal("13.00"),
+        Decimal("67.16"),
+    )
+    assert invoice.vat_pct == Decimal("24")
+    assert [(line.code, line.value, line.vat_pct) for line in invoice.lines] == [
+        ("P01946", Decimal("54.16"), Decimal("24"))
+    ]
+    assert invoice.description == "ΜΙΣΘΩΜΑ LENOVO THINKPAD L16 GEN2 COREULTRA5 32GB | 1TB"
+
+
+def test_parse_finloup_stripe_leasing1() -> None:
+    parser = FinloupLeasing1Parser()
+    normalized = FINLOUP_STRIPE_TEXT.replace(" ", "").upper()
+    assert parser.matches(normalized)
+    assert not FinloupLeasing2Parser().matches(normalized)
+    invoice = parser.parse_text(Path("finloup.pdf"), FINLOUP_STRIPE_TEXT)
+    assert invoice.supplier_vat == "802285336"
+    assert invoice.document_number == "16086"
+    assert invoice.document_date == date(2026, 7, 6)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("29.44"),
+        Decimal("7.07"),
+        Decimal("36.51"),
+    )
+    assert invoice.vat_pct == Decimal("24")
+    assert [line.value for line in invoice.lines] == [Decimal("29.44")]
+    assert invoice.description == "ΜΙΣΘΩΜΑ SAMSUNG GALAXY S25 (6 ΙΟΥΛ 2026 - 6 ΑΥΓ 2026)"
+
+
+def test_finloup_rejects_total_mismatch() -> None:
+    text = FINLOUP_EINVOICE_TEXT.replace("Συνολική  Αξία 67,16", "Συνολική  Αξία 68,16")
+    with pytest.raises(PdfParseError):
+        FinloupLeasing2Parser().parse_text(Path("finloup.pdf"), text)
+
+
+def test_finloup_rejects_lines_not_matching_net() -> None:
+    text = FINLOUP_STRIPE_TEXT.replace("1 29,44\xa0€ 24% 29,44\xa0€", "1 29,44\xa0€ 24% 19,44\xa0€")
+    with pytest.raises(PdfParseError, match="γραμμές"):
+        FinloupLeasing1Parser().parse_text(Path("finloup.pdf"), text)
+
+
+def test_finloup_rejects_non_invoice_kind() -> None:
+    text = FINLOUP_EINVOICE_TEXT.replace(
+        "Τιμολόγιο  Παροχής  Υπηρεσιών", "Πιστωτικό  Τιμολόγιο  Παροχής  Υπηρεσιών"
+    )
+    with pytest.raises(PdfParseError, match="Πιστωτικό"):
+        FinloupLeasing2Parser().parse_text(Path("finloup.pdf"), text)

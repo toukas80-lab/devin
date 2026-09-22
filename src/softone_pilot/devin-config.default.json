@@ -71,6 +71,24 @@
       "line_code": "81013",
       "payment_method": "1006",
       "settlement": false
+    },
+    "802285336": {
+      "name": "FINLOUP LEASING I Α.Ε.",
+      "kind": "expense",
+      "trdr_code": "0227",
+      "series_code": "ΤΙΜΔ",
+      "line_code": "81016",
+      "payment_method": "1008",
+      "settlement": false
+    },
+    "803183981": {
+      "name": "FINLOUP LEASING II ΜΟΝΟΠΡΟΣΩΠΗ Α.Ε.",
+      "kind": "expense",
+      "trdr_code": "AFM:803183981",
+      "series_code": "ΤΙΜΔ",
+      "line_code": "81016",
+      "payment_method": "1008",
+      "settlement": false
     }
   }
 }
