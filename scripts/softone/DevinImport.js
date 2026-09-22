@@ -566,6 +566,31 @@ function DevinRenumber(spec, findoc, fincode) {
     }
 }
 
+// Manual fix: give an existing expense document (found by its visible number, e.g. '221', for creditor code trdrCode)
+// the supplier's number, e.g. DevinSetNumber('221', 'ZZCYINBS-110', '0238'). Series code defaults to ΤΔΕΕ; use
+// DevinSetNumber('221', 'ZZCYINBS-110', '0238', 'ΤΔΕΕ', 'PURDOC') for purchases (SOSOURCE 1251).
+function DevinSetNumber(num, docNum, trdrCode, seriesCode, objName) {
+    if (!num || !docNum || !trdrCode) throw new Error('usage: DevinSetNumber(num, docNum, trdrCode[, seriesCode[, objName]])');
+    if (!seriesCode) seriesCode = 'ΤΔΕΕ';
+    var purchase = String(objName || '').toUpperCase() == 'PURDOC';
+    var spec = { objName: purchase ? 'PURDOC' : 'LINCREDOC', sosource: purchase ? 1251 : 1653 };
+    var trdr = DevinOne('SELECT TRDR AS ID FROM TRDR WHERE COMPANY=:1 AND SODTYPE=' + (purchase ? 12 : 16) + ' AND CODE=:2', [X.SYS.COMPANY, trdrCode], 'Trdr');
+    var series = DevinOne('SELECT SERIES AS ID FROM SERIES WHERE COMPANY=:1 AND SOSOURCE=' + spec.sosource + ' AND CODE=:2', [X.SYS.COMPANY, seriesCode], 'Series');
+    var target = seriesCode + '-' + docNum;
+    var ds = X.GETSQLDATASET(
+        'SELECT FINDOC, FINCODE, TRNDATE, SUMAMNT FROM FINDOC WHERE COMPANY=:1 AND SOSOURCE=' + spec.sosource +
+        ' AND TRDR=:2 AND SERIES=:3 AND (FINCODE=:4 OR FINCODE=:5) ORDER BY FINDOC',
+        X.SYS.COMPANY, trdr, series, String(num), seriesCode + '-' + num);
+    if (ds.RECORDCOUNT != 1) throw new Error('found ' + ds.RECORDCOUNT + ' documents with number ' + num + ' for ' + trdrCode + '/' + seriesCode + ' (need exactly 1)');
+    var findoc = parseInt(ds.FINDOC, 10), before = String(ds.FINCODE);
+    var dup = X.GETSQLDATASET('SELECT FINDOC FROM FINDOC WHERE COMPANY=:1 AND SOSOURCE=' + spec.sosource + ' AND TRDR=:2 AND FINCODE=:3', X.SYS.COMPANY, trdr, target);
+    if (dup.RECORDCOUNT > 0) throw new Error(target + ' already exists (FINDOC ' + dup.FINDOC + ') - nothing changed');
+    DevinRenumber(spec, findoc, target);
+    var after = DevinDocRow(findoc);
+    return 'FINDOC ' + findoc + ': number "' + before + '" -> "' + after.FINCODE + '"' + (String(after.FINCODE) == target ? '  OK' : '  NOT CHANGED') +
+        ' | ' + after.TRNDATE + ' total ' + after.SUMAMNT + ' lines ' + after.LINES;
+}
+
 // spec: { objName, sosource, linesTable, fillLine(lns, L), lineNet(L), what }
 function DevinCreateDocs(docs, spec, dryRun) {
     var out = [(dryRun ? 'DRY RUN (nothing saved) - ' : '') + spec.what + ': ' + docs.length + ' document(s) in file'];
@@ -636,12 +661,17 @@ function DevinCreateDocs(docs, spec, dryRun) {
                 var r = obj.DBPOST;
                 if (!r) throw new Error(String(obj.GETLASTERROR));
                 posted = true;
+                // after DBPOST the object may still hold a temporary negative id (e.g. -1500003); only trust a real one
                 try { newId = parseInt(hdr.FINDOC, 10) || 0; } catch (e2) { }
+                if (newId <= 0) newId = 0;
             } finally {
                 if (!posted) { try { obj.DBCANCEL; } catch (e1) { } }
                 obj.FREE;
             }
-            if (!newId) newId = DevinNewDocId(spec, d, maxBefore);
+            var foundId = DevinNewDocId(spec, d, maxBefore);
+            if (newId && newId != foundId)
+                throw new Error('saved: object reports FINDOC ' + newId + ' but the new row is FINDOC ' + foundId + ' - check manually');
+            newId = foundId;
             var chk = DevinDocRow(newId);
             var note = '';
             if (String(chk.FINCODE) != fincode) {
