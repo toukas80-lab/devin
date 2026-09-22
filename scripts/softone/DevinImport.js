@@ -566,9 +566,20 @@ function DevinRenumber(spec, findoc, fincode) {
     }
 }
 
-// Manual fix: give an existing expense document (found by its visible number, e.g. '221', for creditor code trdrCode)
-// the supplier's number, e.g. DevinSetNumber('221', 'ZZCYINBS-110', '0238'). Series code defaults to ΤΔΕΕ; use
-// DevinSetNumber('221', 'ZZCYINBS-110', '0238', 'ΤΔΕΕ', 'PURDOC') for purchases (SOSOURCE 1251).
+// Name of the FINDOC column holding the series counter (the visible "Αριθ." 221), if this build has one.
+function DevinNumColumn() {
+    var cand = ['SERIESNUM', 'FINNUM', 'NUM', 'DOCNUM'];
+    for (var i = 0; i < cand.length; i++) {
+        var ds = X.GETSQLDATASET("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='FINDOC' AND COLUMN_NAME=:1", cand[i]);
+        if (ds.RECORDCOUNT == 1) return cand[i];
+    }
+    return '';
+}
+
+// Manual fix: give an existing expense document the supplier's number. `num` is the internal FINDOC (as shown by
+// DevinShowLast), the series counter ("Αριθ." 221) or the current FINCODE; trdrCode = creditor/supplier code.
+// e.g. DevinSetNumber('253801', 'ZZCYINBS-110', '0238')   (series defaults to ΤΔΕΕ)
+//      DevinSetNumber('253801', 'ZZCYINBS-110', '0238', 'ΤΔΕΕ', 'PURDOC') for purchases (SOSOURCE 1251).
 function DevinSetNumber(num, docNum, trdrCode, seriesCode, objName) {
     if (!num || !docNum || !trdrCode) throw new Error('usage: DevinSetNumber(num, docNum, trdrCode[, seriesCode[, objName]])');
     if (!seriesCode) seriesCode = 'ΤΔΕΕ';
@@ -577,11 +588,14 @@ function DevinSetNumber(num, docNum, trdrCode, seriesCode, objName) {
     var trdr = DevinOne('SELECT TRDR AS ID FROM TRDR WHERE COMPANY=:1 AND SODTYPE=' + (purchase ? 12 : 16) + ' AND CODE=:2', [X.SYS.COMPANY, trdrCode], 'Trdr');
     var series = DevinOne('SELECT SERIES AS ID FROM SERIES WHERE COMPANY=:1 AND SOSOURCE=' + spec.sosource + ' AND CODE=:2', [X.SYS.COMPANY, seriesCode], 'Series');
     var target = seriesCode + '-' + docNum;
+    var numCol = DevinNumColumn(), numInt = parseInt(num, 10) || -1;
     var ds = X.GETSQLDATASET(
         'SELECT FINDOC, FINCODE, TRNDATE, SUMAMNT FROM FINDOC WHERE COMPANY=:1 AND SOSOURCE=' + spec.sosource +
-        ' AND TRDR=:2 AND SERIES=:3 AND (FINCODE=:4 OR FINCODE=:5) ORDER BY FINDOC',
-        X.SYS.COMPANY, trdr, series, String(num), seriesCode + '-' + num);
-    if (ds.RECORDCOUNT != 1) throw new Error('found ' + ds.RECORDCOUNT + ' documents with number ' + num + ' for ' + trdrCode + '/' + seriesCode + ' (need exactly 1)');
+        ' AND TRDR=:2 AND SERIES=:3 AND (FINDOC=:4 OR FINCODE=:5 OR FINCODE=:6' + (numCol ? ' OR ' + numCol + '=:7' : '') + ') ORDER BY FINDOC',
+        X.SYS.COMPANY, trdr, series, numInt, String(num), seriesCode + '-' + num, numInt);
+    if (ds.RECORDCOUNT != 1)
+        throw new Error('found ' + ds.RECORDCOUNT + ' documents matching ' + num + ' for ' + trdrCode + '/' + seriesCode +
+            ' (need exactly 1)' + (numCol ? '' : ' - no series counter column found, use the FINDOC from DevinShowLast'));
     var findoc = parseInt(ds.FINDOC, 10), before = String(ds.FINCODE);
     var dup = X.GETSQLDATASET('SELECT FINDOC FROM FINDOC WHERE COMPANY=:1 AND SOSOURCE=' + spec.sosource + ' AND TRDR=:2 AND FINCODE=:3', X.SYS.COMPANY, trdr, target);
     if (dup.RECORDCOUNT > 0) throw new Error(target + ' already exists (FINDOC ' + dup.FINDOC + ') - nothing changed');
