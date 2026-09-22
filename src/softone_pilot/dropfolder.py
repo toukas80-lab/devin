@@ -3,6 +3,7 @@ next to it and move the processed PDFs to PDF\\ΕΓΙΝΑΝ\\<date>. UI lives in
 
 from __future__ import annotations
 
+import json
 import shutil
 from datetime import date
 from pathlib import Path
@@ -29,7 +30,8 @@ def ensure_config(base: Path, report: list[str]) -> AppConfig:
 
     The bundled default is copied on first run and kept as devin-config.default.json.
     A newer .exe replaces a config that still equals the previously installed default
-    (or predates that marker file); a hand-edited one is kept with a warning.
+    (or predates that marker file). A hand-edited one is kept: only suppliers/vat_ids
+    missing from it are added from the bundled default, everything else is left alone.
     """
     target = base / CONFIG_FILE
     installed = base / INSTALLED_DEFAULT_FILE
@@ -38,12 +40,33 @@ def ensure_config(base: Path, report: list[str]) -> AppConfig:
     if not target.exists() or unedited:
         target.write_bytes(bundled)
     elif installed.read_bytes() != bundled:
-        report.append(
-            f"ΠΡΟΣΟΧΗ: το {target} έχει αλλαχθεί χειροκίνητα και δεν ενημερώθηκε — "
-            f"οι νέες ρυθμίσεις είναι στο {installed}"
-        )
+        added = merge_new_entries(target, json.loads(bundled))
+        if added:
+            report.append(
+                f"Το {target} είναι χειροκίνητα αλλαγμένο — προστέθηκαν μόνο: {', '.join(added)}"
+            )
     installed.write_bytes(bundled)
     return load_config(target)
+
+
+def merge_new_entries(target: Path, bundled: dict[str, object]) -> list[str]:
+    with target.open(encoding="utf-8") as handle:
+        current = json.load(handle)
+    added: list[str] = []
+    for section in ("suppliers", "vat_ids"):
+        bundled_section = bundled.get(section)
+        if not isinstance(bundled_section, dict):
+            continue
+        current_section = current.setdefault(section, {})
+        for key, value in bundled_section.items():
+            if key not in current_section:
+                current_section[key] = value
+                added.append(f"{section}/{key}")
+    if added:
+        target.write_text(
+            json.dumps(current, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+    return added
 
 
 def run(base: Path) -> list[str]:

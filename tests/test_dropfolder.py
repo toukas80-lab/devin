@@ -79,4 +79,26 @@ def test_ensure_config_upgrades_unedited_and_keeps_edited(tmp_path: Path) -> Non
     installed.write_bytes(old_default)
     dropfolder.ensure_config(tmp_path, report)
     assert config.read_bytes() == edited and installed.read_bytes() == bundled
-    assert report and report[0].startswith("ΠΡΟΣΟΧΗ")
+    assert report == []
+
+
+def test_ensure_config_adds_new_suppliers_to_edited_config(tmp_path: Path) -> None:
+    bundled = json.loads(dropfolder.DEFAULT_CONFIG.read_text(encoding="utf-8"))
+    edited = json.loads(dropfolder.DEFAULT_CONFIG.read_text(encoding="utf-8"))
+    del edited["suppliers"]["094012139"]
+    edited["suppliers"]["800745478"]["item_map"]["NEW-1"] = "09999"
+    config = tmp_path / dropfolder.CONFIG_FILE
+    config.write_text(json.dumps(edited, ensure_ascii=False, indent=2), encoding="utf-8")
+    (tmp_path / dropfolder.INSTALLED_DEFAULT_FILE).write_bytes(b"{}")
+
+    report: list[str] = []
+    loaded = dropfolder.ensure_config(tmp_path, report)
+
+    merged = json.loads(config.read_text(encoding="utf-8"))
+    assert merged["suppliers"]["094012139"] == bundled["suppliers"]["094012139"]
+    assert merged["suppliers"]["800745478"]["item_map"]["NEW-1"] == "09999"
+    assert loaded.suppliers["800745478"].item_map["NEW-1"] == "09999"
+    assert loaded.suppliers["094012139"].trdr_code == "0097"
+    assert report == [
+        f"Το {config} είναι χειροκίνητα αλλαγμένο — προστέθηκαν μόνο: suppliers/094012139"
+    ]

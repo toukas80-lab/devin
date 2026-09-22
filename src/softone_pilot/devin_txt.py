@@ -61,7 +61,9 @@ def build_rows(
         for line in invoice.lines:
             item = settings.item_map.get(line.code)
             if not item:
-                raise ValueError(f"χωρίς αντιστοίχιση είδους SoftOne ο κωδικός {line.code}")
+                raise ValueError(
+                    f'χωρίς κωδικό είδους SoftOne — πρόσθεσε στο item_map: "{line.code}": "..."'
+                )
             rows.append(
                 ";".join(
                     (

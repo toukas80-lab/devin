@@ -89,6 +89,16 @@
       "line_code": "81016",
       "payment_method": "1008",
       "settlement": false
+    },
+    "094012139": {
+      "name": "ΠΡΟΜΕΤΑΛ ΜΠΑΚΛΗ ΑΕΒΕ",
+      "kind": "purchase",
+      "trdr_code": "0097",
+      "series_code": "ΤΔΑ",
+      "line_code": "",
+      "payment_method": "1000",
+      "settlement": false,
+      "item_map": {}
     }
   }
 }

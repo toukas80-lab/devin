@@ -11,6 +11,7 @@ from softone_pilot.parsers.enartia import EnartiaParser
 from softone_pilot.parsers.fedex import FedexParser
 from softone_pilot.parsers.finloup import FinloupLeasing1Parser, FinloupLeasing2Parser
 from softone_pilot.parsers.karasoulis import KarasoulisParser
+from softone_pilot.parsers.prometal import PrometalParser
 from softone_pilot.parsers.technomatic import TechnomaticParser
 
 
@@ -485,3 +486,73 @@ def test_parse_finloup_einvoice_pypdf57_glued_tokens() -> None:
     )
     assert [(line.code, line.value) for line in invoice.lines] == [("P01946", Decimal("54.16"))]
     assert invoice.description == "ΜΙΣΘΩΜΑ LENOVO THINKPAD L16 GEN2 COREULTRA5 32GB | 1TB"
+
+
+PROMETAL_TEXT = """\
+   Πάροχος:   ENTERSOFTONE Α.Ε.
+   M.A.R.K.:   400015369735293
+
+   ΤΙΜΟΛΟΓΙΟ ΠΩΛΗΣΗΣ - ΔΕΛΤΙΟ ΑΠΟΣΤΟΛΗΣ
+   ΣΕΛ.:   1/2
+ ΠΕΛΑΤΗΣ   ΣΕΙΡΑ - ΑΡΙΘΜΟΣ   Β 1838
+35298   ΗΜΕΡΟΜΗΝΙΑ   22/09/2026
+ΦΟΥΝΤΟΥΚΑΣ ΘΕΟΔΩΡΟΣ ΜΟΝ. Ι.Κ.Ε
+Α.Φ.Μ.: 802313849 - Δ.Ο.Υ.: ΑΜΠΕΛΟΚΗΠΩΝ ΘΕΣ/ΚΗΣ
+ ΣΧΕΤΙΚΑ ΕΓΓΡΑΦΑ
+   ΠΕΡΙΓΡΑΦΗ   Μ.Μ   ΠΟΣΟΤΗΣ   ΤΙΜΗ   ΚΑΘΑΡΗ ΑΞΙΑ
+  0  ΑΝΟΞ. ΑΞΟΝΕΣ EN 1.4301  CDR Φ6*3000   ΚΙΛ   24,00   3,82   91,68
+   ΠΛΗΘΟΣ ΣΥΣΚΕΥΑΣΙΩΝ : 1
+
+
+   ΑΞΙΑ   % ΦΠΑ   ΑΞΙΑ ΦΠΑ   ΠΡΟΗΓ. ΥΠΟΛΟΙΠΟ   ΚΑΘΑΡΗ ΑΞΙΑ   91,68
+   91,68   24   22,00   ΝΕΟ ΥΠΟΛΟΙΠΟ   ΣΥΝΟΛΟ ΦΠΑ   22,00
+   0,00   0,00   ΤΕΛΙΚΗ ΑΞΙΑ (€)   113,68
+
+της εταιρείας: www.prometalbakli.gr
+"""
+
+
+def test_parse_prometal() -> None:
+    parser = PrometalParser()
+    assert parser.matches(PROMETAL_TEXT.replace(" ", "").upper())
+    invoice = parser.parse_text(Path("prometal.pdf"), PROMETAL_TEXT)
+    assert invoice.supplier_vat == "094012139"
+    assert invoice.document_number == "001838"
+    assert invoice.document_date == date(2026, 9, 22)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("91.68"),
+        Decimal("22.00"),
+        Decimal("113.68"),
+    )
+    assert invoice.vat_pct == Decimal("24")
+    assert [
+        (line.code, line.quantity, line.unit_price, line.value, line.vat_pct)
+        for line in invoice.lines
+    ] == [
+        (
+            "ΑΝΟΞ. ΑΞΟΝΕΣ EN 1.4301 CDR Φ6*3000",
+            Decimal("24.00"),
+            Decimal("3.82"),
+            Decimal("91.68"),
+            Decimal("24"),
+        )
+    ]
+    assert invoice.description == "ΤΠ-ΔΑ Β 1838"
+
+
+def test_prometal_rejects_total_mismatch() -> None:
+    text = PROMETAL_TEXT.replace("ΤΕΛΙΚΗ ΑΞΙΑ (€)   113,68", "ΤΕΛΙΚΗ ΑΞΙΑ (€)   114,68")
+    with pytest.raises(PdfParseError):
+        PrometalParser().parse_text(Path("prometal.pdf"), text)
+
+
+def test_prometal_rejects_lines_not_matching_net() -> None:
+    text = PROMETAL_TEXT.replace("3,82   91,68", "3,82   81,68")
+    with pytest.raises(PdfParseError, match="γραμμών"):
+        PrometalParser().parse_text(Path("prometal.pdf"), text)
+
+
+def test_prometal_rejects_credit_note() -> None:
+    text = PROMETAL_TEXT.replace("ΤΙΜΟΛΟΓΙΟ ΠΩΛΗΣΗΣ - ΔΕΛΤΙΟ ΑΠΟΣΤΟΛΗΣ", "ΠΙΣΤΩΤΙΚΟ ΤΙΜΟΛΟΓΙΟ")
+    with pytest.raises(PdfParseError, match="Πιστωτικό"):
+        PrometalParser().parse_text(Path("prometal.pdf"), text)
