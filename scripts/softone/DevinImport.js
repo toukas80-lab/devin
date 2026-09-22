@@ -1,10 +1,10 @@
 // DevinImport - SoftOne Advanced Javascript (module DImport)
 //
-// Daily use (one step, see ONE-STEP IMPORT at the end):
-//   DevinDryRun  -> shows what would be created from C:\Soft1\DEVIN-EXP.txt + DEVIN-IMPORT.txt, saves nothing
-//   DevinAll     -> creates the documents (header + all lines) via the SoftOne objects; SKIP if already there
+// Daily use = the hybrid flow below (MakeHead -> ASCII Import wizard -> AddLines). The one-step
+// DevinAll is DISABLED for real saves (see ONE-STEP IMPORT at the end for why); DevinDryRun still
+// works as a pre-check of the txt files.
 //
-// Fallback / legacy hybrid purchase import (no SQL writes, SoftOne-native only):
+// Hybrid purchase import (no SQL writes, SoftOne-native only):
 //   step 1  ASCII Import wizard : C:\Soft1\DEVIN-HEAD.txt   (1 row per document = header + FIRST line;
 //           field 4 must be the FULL code e.g. 'ΤΔΑ-017838' because the wizard stores it verbatim)
 //           -> creates the document with the correct FINCODE ("Παραστατικό").
@@ -470,12 +470,21 @@ function DevinExpShowDoc(fincode) {
 }
 
 // ============================================================================
-// ONE-STEP IMPORT (no ASCII wizard, no HEAD files)
+// ONE-STEP IMPORT (no ASCII wizard, no HEAD files) - DRY RUN ONLY
 //
-// DevinImportAll(fileName, dryRun)     : DEVIN-IMPORT.txt -> new PURDOC documents (header + ALL lines)
-// DevinExpImportAll(fileName, dryRun)  : DEVIN-EXP.txt    -> new LINCREDOC documents (header + ALL lines)
+// Verified on 6.00.622 / company 1001 (FINDOC 253801/253802, series ΤΔΕΕ AUTONUMBER=1 HANDMD=1):
+// DBPOST of a new document, and DBPOST of an edited one, rewrite FINCODE with the series' own value
+// ("ΤΔΕΕ", counter in SERIESNUM/TAXSERIESNUM) even though FINCODE/TAXSERIES/TAXSERIESNUM hold the
+// supplier's number in memory right up to DBPOST. Only the form (typed number) and the ASCII wizard
+// keep it. So a real DevinAll would create documents without the supplier's number and the SKIP
+// check could never recognise them -> DevinAll(real) refuses; use DevinDryRun + the hybrid flow.
+//
+// DevinImportAll(fileName, dryRun)     : DEVIN-IMPORT.txt -> PURDOC documents (header + ALL lines), dry run only
+// DevinExpImportAll(fileName, dryRun)  : DEVIN-EXP.txt    -> LINCREDOC documents (header + ALL lines), dry run only
 // DevinDryRun()                        : both files, nothing is saved - shows what SoftOne WOULD create
 // DevinProbeInsert(objName)            : read-only, lists header fields/defaults after DBINSERT, then DBCANCEL
+// DevinDumpDoc(findoc)                 : read-only, every non-empty FINDOC/MTRLINES column of one document
+// DevinSetNumber(...)                  : renumber attempt via the object; kept as a probe, reports NOT CHANGED
 //
 // Per document: SKIP if supplier+FINCODE already exists (any line count), otherwise
 //   DBINSERT -> header (SERIES, TRNDATE, TRDR, FINCODE) -> Append every line -> compare the totals
@@ -551,22 +560,38 @@ function DevinDocRow(findoc) {
     return chk;
 }
 
+// DBPOST rebuilds FINCODE from the tax series/number pair, exactly like the form does when the
+// user types a number: everything before the last '-' is TAXSERIES, the rest TAXSERIESNUM.
+function DevinSetFincode(hdr, fincode) {
+    hdr.FINCODE = fincode;
+    var k = fincode.lastIndexOf('-');
+    var num = k >= 0 ? parseInt(fincode.substring(k + 1), 10) : NaN;
+    if (k > 0 && !isNaN(num)) {
+        hdr.TAXSERIES = fincode.substring(0, k);
+        hdr.TAXSERIESNUM = num;
+    }
+}
+
 // Re-open a saved document and set its number (same DBLOCATE -> change -> DBPOST path as AddLines).
 function DevinRenumber(spec, findoc, fincode) {
-    var obj = X.CREATEOBJFORM(spec.objName), posted = false;
+    var obj = X.CREATEOBJFORM(spec.objName), posted = false, trace = [];
     try {
         obj.DBLOCATE(findoc);
         var hdr = obj.FindTable('FINDOC');
-        try { hdr.Edit; } catch (eE) { }
-        hdr.FINCODE = fincode;
-        try { hdr.Post; } catch (eP) { }
+        trace.push('located FINCODE=' + hdr.FINCODE + ' TAXSERIES=' + hdr.TAXSERIES + ' TAXSERIESNUM=' + hdr.TAXSERIESNUM);
+        try { hdr.EDIT; } catch (eE) { trace.push('EDIT: ' + eE.message); }
+        DevinSetFincode(hdr, fincode);
+        try { hdr.POST; } catch (eP) { trace.push('POST: ' + eP.message); }
+        trace.push('before DBPOST FINCODE=' + hdr.FINCODE + ' TAXSERIES=' + hdr.TAXSERIES + ' TAXSERIESNUM=' + hdr.TAXSERIESNUM);
         var r = obj.DBPOST;
-        if (!r) throw new Error('renumber: ' + String(obj.GETLASTERROR));
+        if (!r) throw new Error('renumber: ' + String(obj.GETLASTERROR) + ' [' + trace.join('; ') + ']');
         posted = true;
+        trace.push('after DBPOST FINCODE=' + hdr.FINCODE);
     } finally {
         if (!posted) { try { obj.DBCANCEL; } catch (e0) { } }
         obj.FREE;
     }
+    return trace.join('; ');
 }
 
 // Name of the FINDOC column holding the series counter (the visible "Αριθ." 221), if this build has one.
@@ -602,14 +627,18 @@ function DevinSetNumber(num, docNum, trdrCode, seriesCode, objName) {
     var findoc = parseInt(ds.FINDOC, 10), before = String(ds.FINCODE);
     var dup = X.GETSQLDATASET('SELECT FINDOC FROM FINDOC WHERE COMPANY=:1 AND SOSOURCE=' + spec.sosource + ' AND TRDR=:2 AND FINCODE=:3', X.SYS.COMPANY, trdr, target);
     if (dup.RECORDCOUNT > 0) throw new Error(target + ' already exists (FINDOC ' + dup.FINDOC + ') - nothing changed');
-    DevinRenumber(spec, findoc, target);
+    var trace = DevinRenumber(spec, findoc, target);
     var after = DevinDocRow(findoc);
     return 'FINDOC ' + findoc + ': number "' + before + '" -> "' + after.FINCODE + '"' + (String(after.FINCODE) == target ? '  OK' : '  NOT CHANGED') +
-        ' | ' + after.TRNDATE + ' total ' + after.SUMAMNT + ' lines ' + after.LINES;
+        ' | ' + after.TRNDATE + ' total ' + after.SUMAMNT + ' lines ' + after.LINES + '\n  trace: ' + trace;
 }
 
 // spec: { objName, sosource, linesTable, fillLine(lns, L), lineNet(L), what }
 function DevinCreateDocs(docs, spec, dryRun) {
+    if (!dryRun)
+        throw new Error('one-step save is disabled: DBPOST replaces FINCODE with the series number on this build, ' +
+            'so the supplier number would be lost. Use DevinDryRun to check the files, then ' +
+            spec.makeHead + ' -> ASCII Import wizard -> ' + spec.addLines + '.');
     var out = [(dryRun ? 'DRY RUN (nothing saved) - ' : '') + spec.what + ': ' + docs.length + ' document(s) in file'];
     var made = 0, skipped = 0, errors = 0;
     for (var i = 0; i < docs.length; i++) {
@@ -636,7 +665,7 @@ function DevinCreateDocs(docs, spec, dryRun) {
                 hdr.SERIES = d.series;
                 DevinSetDate(hdr, 'TRNDATE', d.trndate);
                 hdr.TRDR = d.trdr;
-                hdr.FINCODE = fincode;
+                DevinSetFincode(hdr, fincode);
                 var lns = obj.FindTable(spec.linesTable);
                 for (var j = 0; j < d.lines.length; j++) {
                     lns.Append;
@@ -719,7 +748,7 @@ function DevinCreateDocs(docs, spec, dryRun) {
 }
 
 function DevinPurSpec() { return {
-    what: 'Purchases (PURDOC)', objName: 'PURDOC', sosource: 1251, linesTable: 'ITELINES', addLines: 'DevinAddLines',
+    what: 'Purchases (PURDOC)', objName: 'PURDOC', sosource: 1251, linesTable: 'ITELINES', addLines: 'DevinAddLines', makeHead: 'DevinMakeHead',
     fillLine: function (lns, L) {
         lns.MTRL = L.mtrl;
         lns.QTY1 = L.qty;
@@ -732,7 +761,7 @@ function DevinPurSpec() { return {
 }; }
 
 function DevinExpSpec() { return {
-    what: 'Expenses (LINCREDOC)', objName: 'LINCREDOC', sosource: 1653, linesTable: 'LINLINES', addLines: 'DevinExpAddLines',
+    what: 'Expenses (LINCREDOC)', objName: 'LINCREDOC', sosource: 1653, linesTable: 'LINLINES', addLines: 'DevinExpAddLines', makeHead: 'DevinExpMakeHead',
     fillLine: function (lns, L) {
         lns.MTRL = L.mtrl;
         lns.LINEVAL = L.val;
@@ -758,7 +787,7 @@ function DevinFileProblem(fileName) {
     catch (e) { return e.message; }
 }
 
-// Everything the .exe produced, in one call. dryRun=1 -> DevinDryRun.
+// Everything the .exe produced, in one call. Only dryRun=1 (DevinDryRun) does anything: a real save is refused.
 function DevinAll(dryRun) {
     var out = [], files = [['C:\\Soft1\\DEVIN-EXP.txt', DevinExpImportAll], ['C:\\Soft1\\DEVIN-IMPORT.txt', DevinImportAll]];
     for (var i = 0; i < files.length; i++) {
@@ -820,9 +849,9 @@ function DevinColValue(tb, col, findoc) {
 }
 
 // Read-only: every non-empty column of one FINDOC row and of its MTRLINES rows.
-function DevinShowDoc(findoc) {
+function DevinDumpDoc(findoc) {
     findoc = parseInt(findoc, 10);
-    if (!findoc) throw new Error('usage: DevinShowDoc(findoc)');
+    if (!findoc) throw new Error('usage: DevinDumpDoc(findoc)');
     var out = [];
     var tables = ['FINDOC', 'MTRLINES'];
     for (var t = 0; t < tables.length; t++) {

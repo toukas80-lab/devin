@@ -73,11 +73,14 @@ reverse charge) μετατρέπονται σε EUR με την ισοτιμία
 Παραστατικό χωρίς πλήρη ρύθμιση
 (πιστωτής, σειρά, λογαριασμός ή αντιστοίχιση είδους) αναφέρεται ως ERROR και
 δεν γράφεται. Στη συνέχεια στο SoftOne (Advanced Javascript, module `DImport`,
-κώδικας στο `scripts/softone/DevinImport.js`): `DevinDryRun` (δείχνει τι θα δημιουργηθεί,
-δεν αποθηκεύει τίποτα) -> `DevinAll` (δημιουργεί κεφαλίδα + όλες τις γραμμές μέσω των
-αντικειμένων PURDOC/LINCREDOC της SoftOne, SKIP όσα υπάρχουν ήδη). Εναλλακτική ροή με
-τον οδηγό ASCII Import: `DevinExpMakeHead`/`DevinMakeHead` -> οδηγός
+κώδικας στο `scripts/softone/DevinImport.js`): `DevinDryRun` (προέλεγχος: στήνει τα
+παραστατικά στη μνήμη μέσω PURDOC/LINCREDOC, δείχνει σύνολα, δεν αποθηκεύει τίποτα) ->
+`DevinExpMakeHead`/`DevinMakeHead` -> οδηγός ASCII Import
 (`D TEST ΔΑΠΑΝΕΣ` / `D TEST ΑΓΟΡΕΣ`) -> `DevinExpAddLines`/`DevinAddLines`.
+Η αποθήκευση με ένα βήμα (`DevinAll`) είναι απενεργοποιημένη: στη 6.00.622 το `DBPOST`
+των αντικειμένων αντικαθιστά το «Παραστατικό» (FINCODE) με τον αυτόματο αριθμό της σειράς
+(ΤΔΕΕ/221) και ο αριθμός του προμηθευτή χάνεται — μόνο ο οδηγός ASCII και η φόρμα τον
+κρατούν (δοκιμάστηκε σε FINDOC 253801/253802).
 
 Καθημερινή χρήση χωρίς γραμμή εντολών (`DEVIN-PDF.exe`, βλ. Windows build):
 ρίξε τα PDF στο `C:\Soft1\PDF` και τρέξε το .exe. Διαβάζει όλα τα PDF, γράφει
