@@ -556,7 +556,10 @@ function DevinRenumber(spec, findoc, fincode) {
     var obj = X.CREATEOBJFORM(spec.objName), posted = false;
     try {
         obj.DBLOCATE(findoc);
-        obj.FindTable('FINDOC').FINCODE = fincode;
+        var hdr = obj.FindTable('FINDOC');
+        try { hdr.Edit; } catch (eE) { }
+        hdr.FINCODE = fincode;
+        try { hdr.Post; } catch (eP) { }
         var r = obj.DBPOST;
         if (!r) throw new Error('renumber: ' + String(obj.GETLASTERROR));
         posted = true;
@@ -803,6 +806,36 @@ function DevinShowLast(sosource, n, seriesCode) {
             try { v = String(X.SQL('SELECT CAST(' + c + ' AS NVARCHAR(200)) FROM SERIES WHERE COMPANY=:1 AND SOSOURCE=' + sosource + ' AND SERIES=:2', X.SYS.COMPANY, sid)); } catch (e) { v = '?' + e.message; }
             if (v != '' && v != 'null' && v != 'undefined' && v != '0') out.push('  ' + c + ' = ' + v);
             cols.NEXT;
+        }
+    }
+    return out.join('\n');
+}
+
+function DevinColValue(tb, col, findoc) {
+    try {
+        return String(X.SQL('SELECT CAST(' + col + ' AS NVARCHAR(300)) FROM ' + tb + ' WHERE FINDOC=:1', findoc));
+    } catch (e) {
+        return '?' + e.message;
+    }
+}
+
+// Read-only: every non-empty column of one FINDOC row and of its MTRLINES rows.
+function DevinShowDoc(findoc) {
+    findoc = parseInt(findoc, 10);
+    if (!findoc) throw new Error('usage: DevinShowDoc(findoc)');
+    var out = [];
+    var tables = ['FINDOC', 'MTRLINES'];
+    for (var t = 0; t < tables.length; t++) {
+        var tb = tables[t];
+        out.push('');
+        out.push(tb + ' where FINDOC=' + findoc + ':');
+        var cols = X.GETSQLDATASET("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME=:1 ORDER BY ORDINAL_POSITION", tb);
+        var names = [];
+        cols.FIRST;
+        while (!cols.EOF) { names.push(String(cols.COLUMN_NAME)); cols.NEXT; }
+        for (var i = 0; i < names.length; i++) {
+            var v = DevinColValue(tb, names[i], findoc);
+            if (v != '' && v != 'null' && v != 'undefined' && v != '0' && v != '0.00') out.push('  ' + names[i] + ' = ' + v);
         }
     }
     return out.join('\n');
