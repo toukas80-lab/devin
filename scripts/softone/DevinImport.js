@@ -320,7 +320,9 @@ function DevinProbeExp(sosource) {
 //     LINCREDOC.TRNDATE=imp(1)  LINCREDOC.SERIES=imp(2)  LINCREDOC.TRDR=imp(3)  LINCREDOC.FINCODE=imp(4)
 //     LINLINES.MTRL=imp(5)      LINLINES.LINEVAL=imp(6)  LINLINES.VAT=imp(7)    LINLINES.COMMENTS=imp(8)
 //   DevinExpAddLines  -> appends lines 2..n via LINCREDOC/LINLINES and copies the 1st line's comment
-//                        into the empty header "Αιτιολογία" (the wizard fills only the line); SKIP when complete
+//                        into the empty header "Αιτιολογία" (the wizard fills only the line); SKIP when complete.
+//                        Also re-applies the file's VAT to lines the wizard got wrong: with VAT id 0 (0%) in
+//                        the HEAD row, series ΕΞΕΝ falls back to the account's default 24% (ΤΔΕΕ does not).
 // ============================================================================
 
 function DevinExpSeries(s) {
@@ -418,7 +420,8 @@ function DevinExpAddLines(fileName) {
             var wantComment = String(d.lines[0].comment || '');
             var setComment = wantComment && !headComment.replace(/^\s+|\s+$/g, '');
             var addLines = have < d.lines.length;
-            if (!addLines && !setComment) { out.push('SKIP ' + fincode + ' -> FINDOC ' + id + ' (already ' + have + ' lines, header comment set)'); continue; }
+            var fixVat = DevinExpVatFixes(id, d.lines);
+            if (!addLines && !setComment && fixVat.length == 0) { out.push('SKIP ' + fincode + ' -> FINDOC ' + id + ' (already ' + have + ' lines, header comment set, vat ok)'); continue; }
             if (addLines && have != 1) { out.push('ERR  ' + fincode + ' -> FINDOC ' + id + ': has ' + have + ' lines, expected 1 - check manually'); continue; }
             var firstMtrl = parseInt(X.SQL('SELECT TOP 1 MTRL FROM MTRLINES WHERE FINDOC=:1 ORDER BY LINENUM', id), 10);
             if (firstMtrl != d.lines[0].mtrl) { out.push('ERR  ' + fincode + ' -> FINDOC ' + id + ': first line account ' + firstMtrl + ' <> file ' + d.lines[0].mtrl); continue; }
@@ -431,8 +434,20 @@ function DevinExpAddLines(fileName) {
                     try { hdr.EDIT; } catch (eE) { }
                     hdr.COMMENTS = wantComment;
                 }
+                var lns = obj.FindTable('LINLINES');
+                if (fixVat.length) {
+                    lns.FIRST;
+                    while (!lns.EOF) {
+                        for (var q = 0; q < fixVat.length; q++) {
+                            if (parseInt(lns.LINENUM, 10) != fixVat[q].linenum) continue;
+                            try { lns.EDIT; } catch (eV) { }
+                            lns.VAT = fixVat[q].vat;
+                            lns.Post;
+                        }
+                        lns.NEXT;
+                    }
+                }
                 if (addLines) {
-                    var lns = obj.FindTable('LINLINES');
                     for (var j = 1; j < d.lines.length; j++) {
                         var L = d.lines[j];
                         lns.Append;
@@ -453,10 +468,17 @@ function DevinExpAddLines(fileName) {
             }
             var now = X.GETSQLDATASET(
                 "SELECT FINCODE, ISNULL(COMMENTS,'') AS COMMENTS, (SELECT COUNT(*) FROM MTRLINES M WHERE M.FINDOC=F.FINDOC) AS LINES, NETAMNT, VATAMNT, SUMAMNT FROM FINDOC F WHERE FINDOC=:1", id);
-            var did = (addLines ? 'added ' + (d.lines.length - 1) + ' line(s)' : '') +
-                (addLines && setComment ? ', ' : '') + (setComment ? 'set header comment' : '');
+            var parts = [];
+            if (addLines) parts.push('added ' + (d.lines.length - 1) + ' line(s)');
+            if (setComment) parts.push('set header comment');
+            for (var v = 0; v < fixVat.length; v++) parts.push('line ' + fixVat[v].linenum + ' VAT ' + fixVat[v].was + ' -> ' + fixVat[v].vat);
+            var did = parts.join(', ');
             if (String(now.FINCODE) != fincode) { out.push('ERR  ' + fincode + ' -> FINDOC ' + id + ': ' + did + ' but the number changed to "' + now.FINCODE + '" - fix it in the form'); continue; }
-            out.push('OK   ' + fincode + ' -> FINDOC ' + id + ': ' + did + ', now ' + now.JSON);
+            var left = DevinExpVatFixes(id, d.lines);
+            var expVat = DevinExpExpectedVat(d.lines);
+            var vatOk = left.length == 0 && Math.abs(DevinNum(now.VATAMNT) - expVat) < 0.015;
+            out.push((vatOk ? 'OK   ' : 'WARN ') + fincode + ' -> FINDOC ' + id + ': ' + did + ', now ' + now.JSON +
+                (vatOk ? '' : ' - VAT expected ' + expVat.toFixed(2) + (left.length ? ', ' + left.length + ' line(s) still wrong - fix in the form' : '')));
         }
         catch (e) {
             out.push('ERR  ' + fincode + ': ' + e.message);
@@ -464,6 +486,35 @@ function DevinExpAddLines(fileName) {
     }
     out.push(DevinEmptyHead(fileName.replace(/DEVIN-EXP\.txt$/i, 'DEVIN-EXPHEAD.txt'), out));
     return out.join('\n');
+}
+
+// Lines whose stored VAT id differs from the file (same order as the file): [{linenum, was, vat}]
+function DevinExpVatFixes(findoc, lines) {
+    var fixes = [], k = 0;
+    var lq = X.GETSQLDATASET('SELECT LINENUM, VAT FROM MTRLINES WHERE FINDOC=:1 ORDER BY LINENUM', findoc);
+    lq.FIRST;
+    while (!lq.EOF && k < lines.length) {
+        var was = parseInt(lq.VAT, 10);
+        if (isNaN(was)) was = 0;
+        if (was != lines[k].vat) fixes.push({ linenum: parseInt(lq.LINENUM, 10), was: was, vat: lines[k].vat });
+        k++;
+        lq.NEXT;
+    }
+    return fixes;
+}
+
+// Σ line value x VAT % of the file's VAT ids (id 0 / unknown id = 0%), rounded per line
+function DevinExpExpectedVat(lines) {
+    var sum = 0, pct = {};
+    for (var i = 0; i < lines.length; i++) {
+        var id = lines[i].vat;
+        if (!(id in pct)) {
+            var p = id ? X.GETSQLDATASET('SELECT PERCNT FROM VAT WHERE VAT=:1', id) : null;
+            pct[id] = p && p.RECORDCOUNT ? DevinNum(p.PERCNT) : 0;
+        }
+        sum += Math.round(lines[i].val * pct[id]) / 100;
+    }
+    return Math.round(sum * 100) / 100;
 }
 
 // Read-only: header + lines of existing expense documents (SOSOURCE 1653) with this FINCODE, in txt codes.
