@@ -8,6 +8,7 @@ from softone_pilot.parsers.brevo import BrevoParser
 from softone_pilot.parsers.carveco import CarvecoParser
 from softone_pilot.parsers.cognition import CognitionParser
 from softone_pilot.parsers.egnatia import EgnatiaOdosParser
+from softone_pilot.parsers.elta import EltaCourierParser
 from softone_pilot.parsers.enartia import EnartiaParser
 from softone_pilot.parsers.fedex import FedexParser
 from softone_pilot.parsers.finloup import FinloupLeasing1Parser, FinloupLeasing2Parser
@@ -26,6 +27,7 @@ PARSERS: tuple[SupplierParser, ...] = (
     CarvecoParser(),
     BrevoParser(),
     GrSamsonParser(),
+    EltaCourierParser(),
     FinloupLeasing1Parser(),
     FinloupLeasing2Parser(),
     PrometalParser(),

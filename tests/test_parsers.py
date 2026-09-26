@@ -9,6 +9,7 @@ from softone_pilot.parsers.brevo import BrevoParser
 from softone_pilot.parsers.carveco import CarvecoParser
 from softone_pilot.parsers.cognition import CognitionParser
 from softone_pilot.parsers.egnatia import EgnatiaOdosParser
+from softone_pilot.parsers.elta import EltaCourierParser
 from softone_pilot.parsers.enartia import EnartiaParser
 from softone_pilot.parsers.fedex import FedexParser
 from softone_pilot.parsers.finloup import FinloupLeasing1Parser, FinloupLeasing2Parser
@@ -736,4 +737,57 @@ def test_gr_samson_rejects_total_mismatch_and_credit_note() -> None:
     with pytest.raises(PdfParseError, match="Πιστωτικό"):
         GrSamsonParser().parse_text(
             Path("samson.pdf"), SAMSON_TEXT.replace("ORIGINAL", "ΠΙΣΤΩΤΙΚΟ")
+        )
+
+
+ELTA_TEXT = """ΣΤΟΙΧΕΙΑ ΠΕΛΑΤΗ ΣΤΟΙΧΕΙΑ ΠΑΡΑΛΗΠΤΗ
+Ανάλυση Φ.Π.Α Καθαρή Αξία
+Καθαρή Αξία ΦΠΑ % Αξία ΦΠΑ
+ΕΞΟΦΛΗΣΗ ΤΗΛ. ΕΠΙΚΟΙΝΩΝΙΑΣ ΤΜΗΜΑΤΟΣ ΤΙΜΟΛΟΓΗΣΗΣ : 210 6073030ΚΩΔΙΚΟΣ ΗΛΕΚΤΡΟΝΙΚΗΣ ΠΛΗΡΩΜΗΣ
+Είδος Παραστατικού(021)   Σειρά   Αριθμός   Ημερομηνία
+ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ (Επι Πιστώσει)   ECΘ   195940   31/08/2026
+Επωνυμία : ΚΡΕ-ΖΥ-ΣΟΥΒΛ - ΦΟΥΝΤΟΥΚΑΣ ΘΕΟΔΩΡΟΣ ΜΟΝ.
+Τηλέφωνο : 2310227642   Κωδικός  : 312861
+ΑΦΜ/ΔΟΥ  : GR802313849   ΑΜΠΕΛΟΚΗΠΩΝ   Τρόπος Πληρωμής : Πίστωση
+Περιγραφή   |Ποσότητα|Αξία Προ Έκπτωσης|Έκπτωση(%)|   Αξία|   ΦΠΑ(%)
+101 ΕΝΤΟΣ ΠΟΛΗΣ - ΠΠ   1   3.50   3.50   24.00
+201 ΠΟΛΗ ΠΟΛΗ - ΠΠ   9   53.70   53.70   24.00
+202 ΠΟΛΗ ΠΟΛΗ - ΘΠ   2   7.00   7.00   24.00
+211 ΠΟΛΗ ΠΟΛΗ -ΠΠ- ΝΗΣΙ   1   5.30   5.30   24.00
+231 ΠΟΛΗ ΠΟΛΗ -ΠΠ- ΔΥΣΠΡΟΣΙΤΟ   3   11.70   10.00   10.53   24.00
+450 ΕΠΙΣΤΡΟΦΕΣ   1   1.80   1.80   24.00
+81.83
+19.6424.0081.83 19.64
+101.47
+*RF37918009312861802313849*RF37918009312861802313849
+ΠΡΩΤΟΤΥΠΟ
+"""
+
+
+def test_parse_elta_courier_monthly_invoice() -> None:
+    parser = EltaCourierParser()
+    assert parser.matches(ELTA_TEXT.replace(" ", "").upper())
+    invoice = parser.parse_text(Path("elta.pdf"), ELTA_TEXT)
+    assert invoice.supplier_vat == "099759170"
+    assert invoice.document_number == "195940"
+    assert invoice.document_date == date(2026, 8, 31)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("81.83"),
+        Decimal("19.64"),
+        Decimal("101.47"),
+    )
+    assert invoice.vat_pct == 24
+    assert invoice.lines == ()
+    assert invoice.description == "ΕΛΤΑ COURIER 08/2026 - 17 ΑΠΟΣΤΟΛΕΣ"
+
+
+def test_elta_rejects_total_mismatch_and_credit_note() -> None:
+    with pytest.raises(PdfParseError, match="ΦΠΑ"):
+        EltaCourierParser().parse_text(
+            Path("elta.pdf"), ELTA_TEXT.replace("\n101.47\n", "\n102.47\n")
+        )
+    with pytest.raises(PdfParseError, match="Πιστωτικό"):
+        EltaCourierParser().parse_text(
+            Path("elta.pdf"),
+            ELTA_TEXT.replace("ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ", "ΠΙΣΤΩΤΙΚΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ"),
         )
