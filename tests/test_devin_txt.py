@@ -4,7 +4,14 @@ from decimal import Decimal
 from pathlib import Path
 
 from softone_pilot.config import AppConfig, default_config
-from softone_pilot.devin_txt import EXPENSE_FILE, PURCHASE_FILE, build_txt, fmt, write_txt
+from softone_pilot.devin_txt import (
+    EXPENSE_FILE,
+    HEAD_FILES,
+    PURCHASE_FILE,
+    build_txt,
+    fmt,
+    write_txt,
+)
 from softone_pilot.models import InvoiceData, InvoiceLine, SupplierSettings
 
 
@@ -198,9 +205,12 @@ def test_write_txt_keeps_rows_of_previous_run(tmp_path: Path) -> None:
 
 def test_write_txt_removes_file_only_when_nothing_to_keep(tmp_path: Path) -> None:
     (tmp_path / PURCHASE_FILE).write_text("\r\n", encoding="utf-8")
+    for head in HEAD_FILES:
+        (tmp_path / head).write_text("stale wizard input", encoding="utf-8")
     written = write_txt(build_txt([expense_invoice()], config({})), tmp_path)
     assert [f.path.name for f in written] == [EXPENSE_FILE]
     assert not (tmp_path / PURCHASE_FILE).exists()
+    assert not any((tmp_path / head).exists() for head in HEAD_FILES)
 
 
 def test_purchase_is_complete_requires_item_map_not_line_code() -> None:

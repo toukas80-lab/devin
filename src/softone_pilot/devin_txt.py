@@ -16,6 +16,9 @@ from softone_pilot.models import InvoiceData, SupplierSettings
 
 EXPENSE_FILE = "DEVIN-EXP.txt"
 PURCHASE_FILE = "DEVIN-IMPORT.txt"
+# written by DevinExpMakeHead / DevinMakeHead for the ASCII wizard, which re-creates whatever
+# they contain: a stale one must never survive a new run
+HEAD_FILES = ("DEVIN-EXPHEAD.txt", "DEVIN-HEAD.txt")
 DOC_TYPE_PREFIX = re.compile(r"^[Α-ΩA-Z]{2,5}-")
 
 
@@ -177,6 +180,8 @@ class WrittenFile:
 def write_txt(result: TxtResult, out_dir: str | Path) -> list[WrittenFile]:
     target = Path(out_dir)
     target.mkdir(parents=True, exist_ok=True)
+    for head in HEAD_FILES:
+        (target / head).unlink(missing_ok=True)
     written: list[WrittenFile] = []
     for filename, rows in (
         (EXPENSE_FILE, result.expense_rows),

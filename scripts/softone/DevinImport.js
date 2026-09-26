@@ -23,6 +23,9 @@
 // DEVIN-HEAD.txt (written by DevinMakeHead) always contains the resolved internal ids for the wizard.
 //
 // Result per document: OK / SKIP / ERR. Idempotent: a complete document is SKIPped.
+// The wizard itself is NOT idempotent (it re-creates whatever is in the HEAD file), so never run it
+// without a fresh MakeHead; AddLines empties the HEAD file once every document is complete and the
+// .exe deletes it on every run.
 
 function DevinNum(s) {
     return parseFloat(String(s).replace(',', '.'));
@@ -189,7 +192,18 @@ function DevinAddLines(fileName) {
             out.push('ERR  ' + fincode + ': ' + e.message);
         }
     }
+    out.push(DevinEmptyHead(fileName.replace(/DEVIN-IMPORT\.txt$/i, 'DEVIN-HEAD.txt'), out));
     return out.join('\n');
+}
+
+// Once every document of the txt is in SoftOne (no ERR line), the HEAD file is emptied so that
+// running the wizard again by mistake (without MakeHead) cannot create the same documents twice.
+function DevinEmptyHead(headName, out) {
+    for (var i = 0; i < out.length; i++) if (out[i].indexOf('ERR ') == 0) return 'HEAD file kept (there are ERR lines): ' + headName;
+    if (DevinFileProblem(headName)) return '';
+    var f = X.EXEC('CODE:PILib.CreateText', headName, 28597);
+    X.EXEC('CODE:PILib.CloseText', f);
+    return 'All documents complete - emptied ' + headName + ' (do NOT run the wizard again; MakeHead rewrites it)';
 }
 
 // Read-only: shows header + lines of existing purchase documents with this FINCODE (any supplier),
@@ -430,6 +444,7 @@ function DevinExpAddLines(fileName) {
             out.push('ERR  ' + fincode + ': ' + e.message);
         }
     }
+    out.push(DevinEmptyHead(fileName.replace(/DEVIN-EXP\.txt$/i, 'DEVIN-EXPHEAD.txt'), out));
     return out.join('\n');
 }
 
