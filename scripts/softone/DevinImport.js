@@ -319,7 +319,8 @@ function DevinProbeExp(sosource) {
 //   ASCII Import wizard on list "Ειδικές πιστωτών", definition mapping:
 //     LINCREDOC.TRNDATE=imp(1)  LINCREDOC.SERIES=imp(2)  LINCREDOC.TRDR=imp(3)  LINCREDOC.FINCODE=imp(4)
 //     LINLINES.MTRL=imp(5)      LINLINES.LINEVAL=imp(6)  LINLINES.VAT=imp(7)    LINLINES.COMMENTS=imp(8)
-//   DevinExpAddLines  -> appends lines 2..n via LINCREDOC/LINLINES (SKIP when complete)
+//   DevinExpAddLines  -> appends lines 2..n via LINCREDOC/LINLINES and copies the 1st line's comment
+//                        into the empty header "Αιτιολογία" (the wizard fills only the line); SKIP when complete
 // ============================================================================
 
 function DevinExpSeries(s) {
@@ -412,33 +413,50 @@ function DevinExpAddLines(fileName) {
             if (ds.RECORDCOUNT > 1) { out.push('ERR  ' + fincode + ': ' + ds.RECORDCOUNT + ' documents with this code for the creditor - check manually'); continue; }
             var id = parseInt(ds.FINDOC, 10);
             var have = parseInt(X.SQL('SELECT COUNT(*) FROM MTRLINES WHERE FINDOC=:1', id), 10);
-            if (have >= d.lines.length) { out.push('SKIP ' + fincode + ' -> FINDOC ' + id + ' (already ' + have + ' lines)'); continue; }
-            if (have != 1) { out.push('ERR  ' + fincode + ' -> FINDOC ' + id + ': has ' + have + ' lines, expected 1 - check manually'); continue; }
-            var firstMtrl = parseInt(X.SQL('SELECT MTRL FROM MTRLINES WHERE FINDOC=:1', id), 10);
+            // the wizard fills only the line comment; the header "Αιτιολογία" (shown in the list) gets the 1st line's text
+            var headComment = String(X.SQL("SELECT ISNULL(COMMENTS,'') FROM FINDOC WHERE FINDOC=:1", id) || '');
+            var wantComment = String(d.lines[0].comment || '');
+            var setComment = wantComment && !headComment.replace(/^\s+|\s+$/g, '');
+            var addLines = have < d.lines.length;
+            if (!addLines && !setComment) { out.push('SKIP ' + fincode + ' -> FINDOC ' + id + ' (already ' + have + ' lines, header comment set)'); continue; }
+            if (addLines && have != 1) { out.push('ERR  ' + fincode + ' -> FINDOC ' + id + ': has ' + have + ' lines, expected 1 - check manually'); continue; }
+            var firstMtrl = parseInt(X.SQL('SELECT TOP 1 MTRL FROM MTRLINES WHERE FINDOC=:1 ORDER BY LINENUM', id), 10);
             if (firstMtrl != d.lines[0].mtrl) { out.push('ERR  ' + fincode + ' -> FINDOC ' + id + ': first line account ' + firstMtrl + ' <> file ' + d.lines[0].mtrl); continue; }
 
-            var obj = X.CREATEOBJFORM('LINCREDOC');
+            var obj = X.CREATEOBJFORM('LINCREDOC'), posted = false;
             try {
                 obj.DBLOCATE(id);
-                var lns = obj.FindTable('LINLINES');
-                for (var j = 1; j < d.lines.length; j++) {
-                    var L = d.lines[j];
-                    lns.Append;
-                    lns.MTRL = L.mtrl;
-                    lns.LINEVAL = L.val;
-                    lns.VAT = L.vat;
-                    if (L.comment) lns.COMMENTS = L.comment;
-                    lns.Post;
+                if (setComment) {
+                    var hdr = obj.FindTable('FINDOC');
+                    try { hdr.EDIT; } catch (eE) { }
+                    hdr.COMMENTS = wantComment;
+                }
+                if (addLines) {
+                    var lns = obj.FindTable('LINLINES');
+                    for (var j = 1; j < d.lines.length; j++) {
+                        var L = d.lines[j];
+                        lns.Append;
+                        lns.MTRL = L.mtrl;
+                        lns.LINEVAL = L.val;
+                        lns.VAT = L.vat;
+                        if (L.comment) lns.COMMENTS = L.comment;
+                        lns.Post;
+                    }
                 }
                 var r = obj.DBPOST;
                 if (!r) throw new Error(String(obj.GETLASTERROR));
+                posted = true;
             }
             finally {
+                if (!posted) { try { obj.DBCANCEL; } catch (e0) { } }
                 obj.FREE;
             }
             var now = X.GETSQLDATASET(
-                'SELECT FINCODE, (SELECT COUNT(*) FROM MTRLINES M WHERE M.FINDOC=F.FINDOC) AS LINES, NETAMNT, VATAMNT, SUMAMNT FROM FINDOC F WHERE FINDOC=:1', id);
-            out.push('OK   ' + fincode + ' -> FINDOC ' + id + ': added ' + (d.lines.length - 1) + ' line(s), now ' + now.JSON);
+                "SELECT FINCODE, ISNULL(COMMENTS,'') AS COMMENTS, (SELECT COUNT(*) FROM MTRLINES M WHERE M.FINDOC=F.FINDOC) AS LINES, NETAMNT, VATAMNT, SUMAMNT FROM FINDOC F WHERE FINDOC=:1", id);
+            var did = (addLines ? 'added ' + (d.lines.length - 1) + ' line(s)' : '') +
+                (addLines && setComment ? ', ' : '') + (setComment ? 'set header comment' : '');
+            if (String(now.FINCODE) != fincode) { out.push('ERR  ' + fincode + ' -> FINDOC ' + id + ': ' + did + ' but the number changed to "' + now.FINCODE + '" - fix it in the form'); continue; }
+            out.push('OK   ' + fincode + ' -> FINDOC ' + id + ': ' + did + ', now ' + now.JSON);
         }
         catch (e) {
             out.push('ERR  ' + fincode + ': ' + e.message);
