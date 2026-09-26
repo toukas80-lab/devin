@@ -33,6 +33,20 @@ CHARGE_RE = re.compile(
     re.MULTILINE,
 )
 TOTAL_RE = re.compile(r"^(?P<total>[\d.,]+)\s*\n\*?RF\d", re.MULTILINE)
+MONTH_GENITIVE = (
+    "ΙΑΝΟΥΑΡΙΟΥ",
+    "ΦΕΒΡΟΥΑΡΙΟΥ",
+    "ΜΑΡΤΙΟΥ",
+    "ΑΠΡΙΛΙΟΥ",
+    "ΜΑΙΟΥ",
+    "ΙΟΥΝΙΟΥ",
+    "ΙΟΥΛΙΟΥ",
+    "ΑΥΓΟΥΣΤΟΥ",
+    "ΣΕΠΤΕΜΒΡΙΟΥ",
+    "ΟΚΤΩΒΡΙΟΥ",
+    "ΝΟΕΜΒΡΙΟΥ",
+    "ΔΕΚΕΜΒΡΙΟΥ",
+)
 
 
 def elta_amount(value: str) -> Decimal:
@@ -78,7 +92,8 @@ class EltaCourierParser(SupplierParser):
             )
 
         document_date = parse_date(head["date"])
-        description = f"ΕΛΤΑ COURIER {document_date.strftime('%m/%Y')} - {shipments} ΑΠΟΣΤΟΛΕΣ"
+        month = MONTH_GENITIVE[document_date.month - 1]
+        description = f"ΜΕΤΑΦΟΡΙΚΑ {month} {document_date.year} - {shipments} ΑΠΟΣΤΟΛΕΣ ΕΛΤΑ"
         return InvoiceData(
             source_path=source_path,
             supplier_name=self.name,

@@ -778,7 +778,7 @@ def test_parse_elta_courier_monthly_invoice() -> None:
     )
     assert invoice.vat_pct == 24
     assert invoice.lines == ()
-    assert invoice.description == "ΕΛΤΑ COURIER 08/2026 - 17 ΑΠΟΣΤΟΛΕΣ"
+    assert invoice.description == "ΜΕΤΑΦΟΡΙΚΑ ΑΥΓΟΥΣΤΟΥ 2026 - 17 ΑΠΟΣΤΟΛΕΣ ΕΛΤΑ"
 
 
 def test_elta_rejects_total_mismatch_and_credit_note() -> None:

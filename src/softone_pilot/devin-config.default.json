@@ -99,6 +99,15 @@
       "payment_method": "1007",
       "settlement": false
     },
+    "099759170": {
+      "name": "ΤΑΧΥΜΕΤΑΦΟΡΕΣ ΕΛΤΑ ΑΝΩΝΥΜΟΣ ΕΤΑΙΡΕΙΑ",
+      "kind": "expense",
+      "trdr_code": "0061",
+      "series_code": "ΤΙΜΔ",
+      "line_code": "81004",
+      "payment_method": "1006",
+      "settlement": false
+    },
     "802285336": {
       "name": "FINLOUP LEASING I Α.Ε.",
       "kind": "expense",
