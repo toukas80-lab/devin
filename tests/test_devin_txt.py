@@ -9,6 +9,7 @@ from softone_pilot.devin_txt import (
     HEAD_FILES,
     PURCHASE_FILE,
     build_txt,
+    docnum,
     fmt,
     write_txt,
 )
@@ -88,6 +89,13 @@ def test_fmt_uses_comma_and_trims_zeros() -> None:
     assert fmt(Decimal("25.50")) == "25,5"
     assert fmt(Decimal("7.00")) == "7"
     assert fmt(Decimal("100.00")) == "100"
+
+
+def test_docnum_drops_greek_type_prefix_but_keeps_supplier_prefix() -> None:
+    assert docnum(replace(expense_invoice(), document_number="ΑΠΥ-E1L-324247")) == "E1L-324247"
+    assert docnum(replace(expense_invoice(), document_number="INV-9328198")) == "9328198"
+    assert docnum(replace(expense_invoice(), document_number="SIB-5637019")) == "SIB-5637019"
+    assert docnum(replace(expense_invoice(), document_number="ZZCYINBS-112")) == "ZZCYINBS-112"
 
 
 def test_expense_and_purchase_rows() -> None:

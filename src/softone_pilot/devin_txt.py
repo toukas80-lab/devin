@@ -19,7 +19,9 @@ PURCHASE_FILE = "DEVIN-IMPORT.txt"
 # written by DevinExpMakeHead / DevinMakeHead for the ASCII wizard, which re-creates whatever
 # they contain: a stale one must never survive a new run
 HEAD_FILES = ("DEVIN-EXPHEAD.txt", "DEVIN-HEAD.txt")
-DOC_TYPE_PREFIX = re.compile(r"^[Α-ΩA-Z]{2,5}-")
+# Greek document-type prefixes (ΤΠΥ-, ΑΠΥ-, ...) and INV- are dropped; Latin prefixes that are
+# part of the supplier's numbering (SIB-, ZZCYINBS-) stay, matching the historical FINCODEs.
+DOC_TYPE_PREFIX = re.compile(r"^(?:[Α-Ω]{2,5}|INV)-")
 
 
 @dataclass(frozen=True)

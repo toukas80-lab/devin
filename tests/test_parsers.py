@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from softone_pilot.parsers.base import PdfParseError, parse_amount, parse_date
+from softone_pilot.parsers.brevo import BrevoParser
 from softone_pilot.parsers.carveco import CarvecoParser
 from softone_pilot.parsers.cognition import CognitionParser
 from softone_pilot.parsers.egnatia import EgnatiaOdosParser
@@ -13,6 +14,7 @@ from softone_pilot.parsers.fedex import FedexParser
 from softone_pilot.parsers.finloup import FinloupLeasing1Parser, FinloupLeasing2Parser
 from softone_pilot.parsers.karasoulis import KarasoulisParser
 from softone_pilot.parsers.prometal import PrometalParser
+from softone_pilot.parsers.samson import GrSamsonParser
 from softone_pilot.parsers.technomatic import TechnomaticParser
 
 
@@ -611,3 +613,127 @@ def test_carveco_rejects_tax_not_matching_rate() -> None:
     text = CARVECO_TEXT.replace("1 4.20", "1 3.20").replace("Total USD$21.70", "Total USD$20.70")
     with pytest.raises(PdfParseError):
         CarvecoParser().parse_text(Path("077540.pdf"), text)
+
+
+BREVO_TEXT = """Sendinblue
+17 rue Salneuve
+75017 Paris
+France
+FR80498019298
+VAT Reg # : FR80498019298
+INVOICE
+Invoice #—SIB-5637019
+Invoice Date—Aug 10, 2026
+Invoice Amount—€25.00 (EUR)
+Customer ID—8218689
+PAID
+BILLED TO
+Theodoros Fountoukas Mon. Ike
+VAT Reg # : EL802313849
+SUBSCRIPTION
+Billing Period—Aug 10 to Sep 10, 2026
+ 
+DESCRIPTION UNITS UNIT PRICEVAT %AMOUNT (EUR)
+ 
+Starter plan - Monthly
+Starter plan - Monthly
+1 €7.000 % €7.00
+Recurring emails monthly 20000 - 0 % €18.00
+ 
+Total €25.00
+Payments(€25.00)
+Amount Due (EUR) €0.00
+VAT EXEMPTION NOTE
+VAT is not applicable to this invoice because a valid VAT registration number has been
+provided, and the reverse charge
+mechanism has been applied.
+"""
+
+
+def test_parse_brevo_reverse_charge() -> None:
+    parser = BrevoParser()
+    assert parser.matches(BREVO_TEXT.replace(" ", "").upper())
+    invoice = parser.parse_text(Path("Invoice-SIB-5637019.pdf"), BREVO_TEXT)
+    assert invoice.document_number == "SIB-5637019"
+    assert invoice.document_date == date(2026, 8, 10)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("25.00"),
+        Decimal("0.00"),
+        Decimal("25.00"),
+    )
+    assert [(line.description, line.value) for line in invoice.lines] == [
+        ("STARTER PLAN - MONTHLY", Decimal("7.00")),
+        ("RECURRING EMAILS MONTHLY 20000", Decimal("18.00")),
+    ]
+    assert invoice.description == "BREVO STARTER PLAN - MONTHLY"
+
+
+def test_brevo_single_line_layout_and_rejects_without_reverse_charge() -> None:
+    text = BREVO_TEXT.replace(
+        "Starter plan - Monthly\nStarter plan - Monthly\n1 €7.000 % €7.00",
+        "Starter plan monthly 1 €7.000 % €7.00",
+    )
+    invoice = BrevoParser().parse_text(Path("brevo.pdf"), text)
+    assert invoice.lines[0].description == "STARTER PLAN MONTHLY"
+    with pytest.raises(PdfParseError, match="reverse charge"):
+        BrevoParser().parse_text(Path("brevo.pdf"), text.replace("reverse charge", "charge"))
+
+
+SAMSON_TEXT = """ΠΡΩΤΟΤΥΠΟ - ORIGINAL
+ΗΜΕΡΟΜΗΝΙΑ / DATEΑΡΙΘΜΟΣ / ΝUMBER5.1 e-ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ ΣΕΙΡΑ Ε /
+e-INVOICE SERIES E 23/09/2026 76976
+ΠΕΛΑΤΗΣ / CUSTOMER
+ΦΟΥΝΤΟΥΚΑΣ ΘΕΟΔΩΡΟΣ ΜΟΝΟΠΡΟΣΩΠΗ ΙΔΙΩΤΙΚΗ ΚΕΦΑΛΑΙΟΥΧΙΚΗ ΕΤΑΙΡΕΙΑ
+Α.Φ.Μ. / VAT: 802313849
+ΑΠΟΣΤΟΛΕΑΣ / CONSIGNOR
+ALBERT KERBL GMBH
+84428  BUCHBACH
+GERMANY
+ΕΞΟΔΑ / CHARGES CURRENC
+01  24,000,00ΝΑΥΛΟΣ ΓΕΡΜΑΝΙΑ - ΣΙΝΔΟΣ 155,00155,00
+ΣΥΝΟΛΑ / TOTALS :  155,00  155,00 0,00
+ΣΥΝΟΛΟ / TOTAL:
+Φ.Π.Α / VAT:
+ΣΥΝΟΛΙΚΗ ΑΞΙΑ / TOTAL AMOUNT:
+ 155,00
+ 37,20
+AMOUNT
+ 155,00 24,00  37,20
+ΑΝΑΛΥΣΗ
+Φ.Π.Α./
+V.A.T.
+ANALYSIS
+ 192,20
+ΤΡΑΠΕΖΕΣ - BANKS:
+ALPHA BANK: GR2801407220722002002000077 - SWIFT: CRBAGRAA
+https://einvoice.impact.gr
+ΣΥΝΑΛΛΑΣΟΜΑΣΤΕ ΜΟΝΟ ΜΕ ΤΟΥΣ ΓΕΝΙΚΟΥΣ ΟΡΟΥΣ ΔΙΑΜΕΤΑΦΟΡΑΣ
+"""
+
+
+def test_parse_gr_samson_freight() -> None:
+    parser = GrSamsonParser()
+    assert parser.matches(SAMSON_TEXT.replace(" ", "").upper())
+    invoice = parser.parse_text(Path("samson.pdf"), SAMSON_TEXT)
+    assert invoice.supplier_vat == "999716715"
+    assert invoice.document_number == "76976"
+    assert invoice.document_date == date(2026, 9, 23)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("155.00"),
+        Decimal("37.20"),
+        Decimal("192.20"),
+    )
+    assert invoice.vat_pct == 24
+    assert [(line.description, line.value, line.vat_pct) for line in invoice.lines] == [
+        ("ΝΑΥΛΟΣ ΓΕΡΜΑΝΙΑ - ΣΙΝΔΟΣ", Decimal("155.00"), Decimal("24")),
+    ]
+    assert invoice.description == "ALBERT KERBL GMBH ΝΑΥΛΟΣ ΓΕΡΜΑΝΙΑ - ΣΙΝΔΟΣ"
+
+
+def test_gr_samson_rejects_total_mismatch_and_credit_note() -> None:
+    with pytest.raises(PdfParseError):
+        GrSamsonParser().parse_text(Path("samson.pdf"), SAMSON_TEXT.replace(" 192,20", " 193,20"))
+    with pytest.raises(PdfParseError, match="Πιστωτικό"):
+        GrSamsonParser().parse_text(
+            Path("samson.pdf"), SAMSON_TEXT.replace("ORIGINAL", "ΠΙΣΤΩΤΙΚΟ")
+        )

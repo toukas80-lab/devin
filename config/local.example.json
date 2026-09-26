@@ -81,6 +81,24 @@
       "payment_method": "1007",
       "settlement": false
     },
+    "FR80498019298": {
+      "name": "BREVO - SENDINBLUE",
+      "kind": "expense",
+      "trdr_code": "0168",
+      "series_code": "ΕΞΕΝ",
+      "line_code": "81013",
+      "payment_method": "1008",
+      "settlement": false
+    },
+    "999716715": {
+      "name": "GR SAMSON ΔΙΑΜΕΤΑΦΟΡΕΣ Α.Ε.",
+      "kind": "expense",
+      "trdr_code": "0080",
+      "series_code": "ΤΙΜΔ",
+      "line_code": "10002",
+      "payment_method": "1007",
+      "settlement": false
+    },
     "802285336": {
       "name": "FINLOUP LEASING I Α.Ε.",
       "kind": "expense",
@@ -107,7 +125,11 @@
       "line_code": "",
       "payment_method": "1000",
       "settlement": false,
-      "item_map": {}
+      "item_map": {
+        "ΑΝΟΞ. ΑΞΟΝΕΣ EN 1.4301 CDR Φ6*3000": "03865",
+        "ΑΝΟΞ. ΑΞΟΝΕΣ EN 1.4301 CDR Φ4*3000": "00645",
+        "ΑΝΟΞ. ΑΞΟΝΕΣ EN 1.4301 CDR Φ3*3000": "00644"
+      }
     }
   }
 }
