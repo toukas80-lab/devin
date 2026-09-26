@@ -26,9 +26,13 @@ build = [
 [project.scripts]
 softone-pilot = "softone_pilot.cli:main"
 softone-pilot-gui = "softone_pilot.gui:main"
+devin-pdf = "softone_pilot.dropfolder_app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+softone_pilot = ["devin-config.default.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

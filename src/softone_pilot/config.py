@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from softone_pilot.models import SupplierSettings
@@ -21,6 +21,7 @@ class SqlSettings:
 class AppConfig:
     sql: SqlSettings
     suppliers: dict[str, SupplierSettings]
+    vat_ids: dict[str, str] = field(default_factory=dict)
 
 
 def load_config(path: str | Path) -> AppConfig:
@@ -44,10 +45,15 @@ def load_config(path: str | Path) -> AppConfig:
             line_code=str(item.get("line_code", "")),
             payment_method=str(item.get("payment_method", "")),
             settlement=bool(item.get("settlement", False)),
+            kind=str(item.get("kind", "expense")),
+            trdr_code=str(item.get("trdr_code", "")),
+            item_map={str(k): str(v) for k, v in item.get("item_map", {}).items()},
+            line_codes={str(k): str(v) for k, v in item.get("line_codes", {}).items()},
         )
         for vat, item in raw.get("suppliers", {}).items()
     }
-    return AppConfig(sql=sql, suppliers=suppliers)
+    vat_ids = {str(k): str(v) for k, v in raw.get("vat_ids", {}).items()}
+    return AppConfig(sql=sql, suppliers=suppliers, vat_ids=vat_ids)
 
 
 def default_config() -> AppConfig:
