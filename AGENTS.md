@@ -15,9 +15,10 @@ SQL Server και δώσε την απάντηση σύντομα, σε πίνα
   ```powershell
   sqlcmd -S .\SOFTONE -d FOUNTOUKAS -U devin_ro -W -s "|" -Q "<query>"
   ```
-  Αν λείπει το `sqlcmd`, εναλλακτικά με Python/pyodbc (driver "ODBC Driver 17 for SQL Server"):
+  Αν λείπει το `sqlcmd`, γράψε το query σε αρχείο `q.sql` και τρέξε με Python/pyodbc
+  (driver "ODBC Driver 17 for SQL Server"):
   ```powershell
-  python -c "import os,pyodbc; c=pyodbc.connect('DRIVER={ODBC Driver 17 for SQL Server};SERVER=.\\SOFTONE;DATABASE=FOUNTOUKAS;UID=devin_ro;PWD='+os.environ['SQLCMDPASSWORD']); [print(r) for r in c.execute('<query>')]"
+  python -c "import os,pyodbc; c=pyodbc.connect('DRIVER={ODBC Driver 17 for SQL Server};SERVER=.\\SOFTONE;DATABASE=FOUNTOUKAS;UID=devin_ro;PWD='+os.environ['SQLCMDPASSWORD']); [print(r) for r in c.execute(open('q.sql',encoding='utf-8').read())]"
   ```
 - ΜΟΝΟ `SELECT`. Ποτέ INSERT/UPDATE/DELETE/EXEC, ποτέ `SELECT *` σε μεγάλους πίνακες
   χωρίς `TOP`/`WHERE`. Η βάση είναι παραγωγική: κράτα τα queries ελαφριά. Μην βάζεις
