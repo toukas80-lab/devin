@@ -130,8 +130,8 @@ def _make_txt(args) -> None:
         print(f"ERROR: {error}", file=sys.stderr)
 
     written = write_txt(result, args.out_dir)
-    for path in written:
-        print(f"Wrote {path}")
+    for file in written:
+        print(f"Wrote {file.path} ({file.new_rows} new, {file.kept_rows} kept from previous run)")
     if not written:
         print("Δεν γράφτηκε κανένα αρχείο", file=sys.stderr)
     if errors:

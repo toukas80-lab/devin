@@ -168,14 +168,38 @@ def test_expense_lines_produce_one_row_each() -> None:
     )
 
 
-def test_write_txt_removes_stale_files(tmp_path: Path) -> None:
+def test_write_txt_keeps_rows_of_previous_run(tmp_path: Path) -> None:
     both = build_txt([expense_invoice(), purchase_invoice()], config({"130-CST220": "03762"}))
-    write_txt(both, tmp_path)
-    assert (tmp_path / EXPENSE_FILE).exists() and (tmp_path / PURCHASE_FILE).exists()
+    written = write_txt(both, tmp_path)
+    assert [(f.path.name, f.new_rows, f.kept_rows) for f in written] == [
+        (EXPENSE_FILE, 1, 0),
+        (PURCHASE_FILE, 1, 0),
+    ]
+
+    old_row = "01/01/2026;ΤΙΜΔ;0077;OLD-1;81013;5;24;previous run"
+    (tmp_path / EXPENSE_FILE).write_text(old_row + "\r\n", encoding="utf-8")
 
     only_expense = build_txt([expense_invoice()], config({}))
     written = write_txt(only_expense, tmp_path)
-    assert written == [tmp_path / EXPENSE_FILE]
+    assert [(f.path.name, f.new_rows, f.kept_rows) for f in written] == [
+        (EXPENSE_FILE, 1, 1),
+        (PURCHASE_FILE, 0, 1),
+    ]
+    exp_rows = (tmp_path / EXPENSE_FILE).read_text(encoding="utf-8").splitlines()
+    assert exp_rows == [old_row, *only_expense.expense_rows]
+    pur_rows = (tmp_path / PURCHASE_FILE).read_text(encoding="utf-8").splitlines()
+    assert pur_rows == list(both.purchase_rows)
+
+    # the same document again replaces its old rows instead of duplicating them
+    written = write_txt(only_expense, tmp_path)
+    assert (written[0].new_rows, written[0].kept_rows) == (1, 1)
+    assert (tmp_path / EXPENSE_FILE).read_text(encoding="utf-8").splitlines() == exp_rows
+
+
+def test_write_txt_removes_file_only_when_nothing_to_keep(tmp_path: Path) -> None:
+    (tmp_path / PURCHASE_FILE).write_text("\r\n", encoding="utf-8")
+    written = write_txt(build_txt([expense_invoice()], config({})), tmp_path)
+    assert [f.path.name for f in written] == [EXPENSE_FILE]
     assert not (tmp_path / PURCHASE_FILE).exists()
 
 

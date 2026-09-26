@@ -9,7 +9,7 @@ from datetime import date
 from pathlib import Path
 
 from softone_pilot.config import AppConfig, load_config
-from softone_pilot.devin_txt import build_txt, write_txt
+from softone_pilot.devin_txt import EXPENSE_FILE, PURCHASE_FILE, build_txt, write_txt
 from softone_pilot.fx import convert_invoices
 from softone_pilot.models import InvoiceData
 from softone_pilot.parsers import parse_pdf
@@ -100,13 +100,22 @@ def run(base: Path) -> list[str]:
 
     report.append(f"PDF: {len(pdfs)}   ΟΚ: {len(result.done)}   ΠΡΟΒΛΗΜΑ: {len(errors)}")
     report.append("")
-    if result.expense_rows:
-        report.append(f"ΔΑΠΑΝΕΣ -> DEVIN-EXP.txt ({len(result.expense_rows)} γραμμές)")
-        report.extend(f"  {row}" for row in result.expense_rows)
-        report.append("")
-    if result.purchase_rows:
-        report.append(f"ΑΓΟΡΕΣ -> DEVIN-IMPORT.txt ({len(result.purchase_rows)} γραμμές)")
-        report.extend(f"  {row}" for row in result.purchase_rows)
+    kept_by_name = {file.path.name: file.kept_rows for file in written}
+    for title, filename, rows in (
+        ("ΔΑΠΑΝΕΣ", EXPENSE_FILE, result.expense_rows),
+        ("ΑΓΟΡΕΣ", PURCHASE_FILE, result.purchase_rows),
+    ):
+        kept = kept_by_name.get(filename, 0)
+        if not rows and not kept:
+            continue
+        note = f" + {kept} από προηγούμενο τρέξιμο" if kept else ""
+        report.append(f"{title} -> {filename} ({len(rows)} νέες γραμμές{note})")
+        report.extend(f"  {row}" for row in rows)
+        if kept:
+            report.append(
+                f"  (οι {kept} παλιές γραμμές μένουν στο αρχείο — η SoftOne τις κάνει SKIP"
+                " αν έχουν ήδη περάσει· σβήσε το αρχείο για καθαρή αρχή)"
+            )
         report.append("")
     if errors:
         report.append("ΔΕΝ ΠΕΡΑΣΑΝ (μένουν στον φάκελο PDF):")

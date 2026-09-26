@@ -147,18 +147,46 @@ def build_txt(invoices: list[InvoiceData], config: AppConfig) -> TxtResult:
     return TxtResult(tuple(expense), tuple(purchase), tuple(errors), tuple(done))
 
 
-def write_txt(result: TxtResult, out_dir: str | Path) -> list[Path]:
+def row_key(row: str) -> tuple[str, str]:
+    """(trdr, docnum) - the pair the DImport script uses to recognise an existing document."""
+    fields = row.split(";")
+    return (fields[2], fields[3]) if len(fields) >= 4 else (row, "")
+
+
+def read_rows(path: Path) -> list[str]:
+    if not path.exists():
+        return []
+    return [row for row in path.read_text(encoding="utf-8").splitlines() if row.strip()]
+
+
+def merge_rows(existing: list[str], new: tuple[str, ...]) -> tuple[list[str], list[str]]:
+    """Rows of a previous run stay in the file (the SoftOne side SKIPs what already exists);
+    a document that appears again replaces its old rows. Returns (kept old rows, merged)."""
+    new_keys = {row_key(row) for row in new}
+    kept = [row for row in existing if row_key(row) not in new_keys]
+    return kept, kept + list(new)
+
+
+@dataclass(frozen=True)
+class WrittenFile:
+    path: Path
+    new_rows: int
+    kept_rows: int
+
+
+def write_txt(result: TxtResult, out_dir: str | Path) -> list[WrittenFile]:
     target = Path(out_dir)
     target.mkdir(parents=True, exist_ok=True)
-    written: list[Path] = []
+    written: list[WrittenFile] = []
     for filename, rows in (
         (EXPENSE_FILE, result.expense_rows),
         (PURCHASE_FILE, result.purchase_rows),
     ):
         path = target / filename
-        if not rows:
+        kept, merged = merge_rows(read_rows(path), rows)
+        if not merged:
             path.unlink(missing_ok=True)
             continue
-        path.write_text("\r\n".join(rows) + "\r\n", encoding="utf-8")
-        written.append(path)
+        path.write_text("\r\n".join(merged) + "\r\n", encoding="utf-8")
+        written.append(WrittenFile(path, len(rows), len(kept)))
     return written
