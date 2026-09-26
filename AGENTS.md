@@ -31,12 +31,11 @@ SQL Server και δώσε την απάντηση σύντομα, σε πίνα
 ## Εταιρείες (COMPANY) — ΣΗΜΑΝΤΙΚΟ
 | COMPANY | Τι είναι | Χρήση |
 |---|---|---|
-| **1001** | ΦΟΥΝΤΟΥΚΑΣ ΘΕΟΔΩΡΟΣ ΜΟΝ ΙΚΕ | **Η κύρια εταιρεία. Default για όλα** (δεδομένα από 2024). |
-| 1000 | Φουντούκας Θεόδωρος (ατομική) | Παλιά εταιρεία, δεδομένα 2018–2024. Μόνο αν ζητηθούν παλιά έτη. |
+| **3000** | Η εταιρεία που δουλεύει ο Θεόδωρος στο SoftOne (δεδομένα 2018–σήμερα) | **Default για όλα.** |
+| 1000 / 1001 | Φουντούκας Θεόδωρος (ατομική) / ΜΟΝ ΙΚΕ | **Μην** τις χρησιμοποιείς εκτός αν ζητηθεί ρητά. |
 | 2000 | «ΑΡΧΙΚΗ ΕΤΑΙΡΙΑ ΑΠΟ ΛΑΘΟΣ» | Αγνόησε. |
-| 3000 | ΔΟΚΙΜΑΣΤΙΚΟ ΠΕΡΙΒΑΛΛΟΝ | Δοκιμαστικά/αντίγραφα — **ποτέ** στα αποτελέσματα. |
 
-Πάντα `COMPANY = 1001` (όχι 1). Οι πίνακες `SERIES`, `FPRMS`, `TRDR`, `MTRL`, `BRANCH`
+Πάντα `COMPANY = 3000` (όχι 1, όχι 1001). Οι πίνακες `SERIES`, `FPRMS`, `TRDR`, `MTRL`, `BRANCH`
 έχουν κι αυτοί στήλη `COMPANY`: **κάθε JOIN πρέπει να περιλαμβάνει `AND x.COMPANY = f.COMPANY`**,
 αλλιώς οι γραμμές διπλασιάζονται.
 
@@ -85,7 +84,7 @@ SELECT p.NAME AS Τύπος, COUNT(*) AS Παραστατικά,
        CAST(SUM(f.SUMAMNT * CASE WHEN p.TFPRMS IN (151,152,181) THEN -1 ELSE 1 END) AS decimal(18,2)) AS Σύνολο
 FROM dbo.FINDOC f
 JOIN dbo.FPRMS p ON p.FPRMS=f.FPRMS AND p.COMPANY=f.COMPANY AND p.SOSOURCE=f.SOSOURCE
-WHERE f.COMPANY=1001 AND f.SOSOURCE=1351 AND f.ISCANCEL=0
+WHERE f.COMPANY=3000 AND f.SOSOURCE=1351 AND f.ISCANCEL=0
   AND p.TFPRMS IN (102,103,131,151,152,181)
   AND f.TRNDATE >= '2026-08-01' AND f.TRNDATE < '2026-09-01'
 GROUP BY p.NAME ORDER BY Σύνολο DESC;
@@ -97,7 +96,7 @@ SELECT FORMAT(f.TRNDATE,'yyyy-MM') AS Μήνας, COUNT(*) AS Παραστατι
        CAST(SUM(f.SUMAMNT * CASE WHEN p.TFPRMS IN (151,152,181) THEN -1 ELSE 1 END) AS decimal(18,2)) AS Σύνολο
 FROM dbo.FINDOC f
 JOIN dbo.FPRMS p ON p.FPRMS=f.FPRMS AND p.COMPANY=f.COMPANY AND p.SOSOURCE=f.SOSOURCE
-WHERE f.COMPANY=1001 AND f.SOSOURCE=1351 AND f.ISCANCEL=0
+WHERE f.COMPANY=3000 AND f.SOSOURCE=1351 AND f.ISCANCEL=0
   AND p.TFPRMS IN (102,103,131,151,152,181)
   AND f.TRNDATE >= DATEFROMPARTS(YEAR(GETDATE()),1,1)
 GROUP BY FORMAT(f.TRNDATE,'yyyy-MM') ORDER BY 1;
@@ -109,7 +108,7 @@ SELECT TOP 10 t.CODE, t.NAME, COUNT(*) AS Παραστατικά,
 FROM dbo.FINDOC f
 JOIN dbo.FPRMS p ON p.FPRMS=f.FPRMS AND p.COMPANY=f.COMPANY AND p.SOSOURCE=f.SOSOURCE
 JOIN dbo.TRDR t ON t.TRDR=f.TRDR AND t.COMPANY=f.COMPANY
-WHERE f.COMPANY=1001 AND f.SOSOURCE=1351 AND f.ISCANCEL=0
+WHERE f.COMPANY=3000 AND f.SOSOURCE=1351 AND f.ISCANCEL=0
   AND p.TFPRMS IN (102,103,131,151,152,181)
   AND f.TRNDATE >= '2026-08-01' AND f.TRNDATE < '2026-09-01'
 GROUP BY t.CODE, t.NAME ORDER BY Σύνολο DESC;
@@ -120,7 +119,7 @@ SELECT TOP 20 t.CODE, t.NAME, t.AFM, COUNT(*) AS Παραστατικά,
        CAST(SUM(f.SUMAMNT) AS decimal(18,2)) AS Σύνολο
 FROM dbo.FINDOC f
 JOIN dbo.TRDR t ON t.TRDR=f.TRDR AND t.COMPANY=f.COMPANY
-WHERE f.COMPANY=1001 AND f.SOSOURCE=1251 AND f.ISCANCEL=0
+WHERE f.COMPANY=3000 AND f.SOSOURCE=1251 AND f.ISCANCEL=0
   AND f.TRNDATE >= DATEFROMPARTS(YEAR(GETDATE()),1,1)
 GROUP BY t.CODE,t.NAME,t.AFM ORDER BY Σύνολο DESC;
 ```
@@ -132,14 +131,14 @@ FROM dbo.MTRLINES l
 JOIN dbo.FINDOC f ON f.FINDOC=l.FINDOC
 JOIN dbo.FPRMS p ON p.FPRMS=f.FPRMS AND p.COMPANY=f.COMPANY AND p.SOSOURCE=f.SOSOURCE
 JOIN dbo.MTRL m ON m.MTRL=l.MTRL AND m.COMPANY=f.COMPANY
-WHERE f.COMPANY=1001 AND f.SOSOURCE=1351 AND f.ISCANCEL=0 AND p.TFPRMS IN (102,103,131)
+WHERE f.COMPANY=3000 AND f.SOSOURCE=1351 AND f.ISCANCEL=0 AND p.TFPRMS IN (102,103,131)
   AND f.TRNDATE >= DATEFROMPARTS(YEAR(GETDATE()),1,1)
 GROUP BY m.CODE,m.NAME ORDER BY Καθαρή DESC;
 ```
 Αναζήτηση προμηθευτή με ΑΦΜ:
 ```sql
 SELECT TRDR, CODE, NAME, AFM FROM dbo.TRDR
-WHERE COMPANY=1001 AND SODTYPE=12 AND REPLACE(AFM,'EL','') = '999082935';
+WHERE COMPANY=3000 AND SODTYPE=12 AND REPLACE(AFM,'EL','') = '999082935';
 ```
 
 ## Setup (μία φορά)
