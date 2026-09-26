@@ -8,16 +8,20 @@ SQL Server και δώσε την απάντηση σύντομα, σε πίνα
 
 ## Σύνδεση
 - Instance: `.\SOFTONE` — Database: `FOUNTOUKAS`
-- Login: `devin_ro` (read-only, `db_datareader`). Password στη μεταβλητή περιβάλλοντος
-  `SOFTONE_SQL_PASSWORD` (user env var στα Windows). Μην την εκτυπώνεις ποτέ.
-- Εντολή:
+- Login: `devin_ro` (read-only, `db_datareader`). Ο κωδικός βρίσκεται στη μεταβλητή
+  περιβάλλοντος `SQLCMDPASSWORD` (user env var στα Windows), την οποία το `sqlcmd`
+  διαβάζει μόνο του — **μην** χρησιμοποιείς `-P` και μην εκτυπώνεις ποτέ τον κωδικό.
+- Shell: PowerShell. Εντολή:
+  ```powershell
+  sqlcmd -S .\SOFTONE -d FOUNTOUKAS -U devin_ro -W -s "|" -Q "<query>"
   ```
-  sqlcmd -S .\SOFTONE -d FOUNTOUKAS -U devin_ro -P "%SOFTONE_SQL_PASSWORD%" -W -s "|" -Q "<query>"
+  Αν λείπει το `sqlcmd`, εναλλακτικά με Python/pyodbc (driver "ODBC Driver 17 for SQL Server"):
+  ```powershell
+  python -c "import os,pyodbc; c=pyodbc.connect('DRIVER={ODBC Driver 17 for SQL Server};SERVER=.\\SOFTONE;DATABASE=FOUNTOUKAS;UID=devin_ro;PWD='+os.environ['SQLCMDPASSWORD']); [print(r) for r in c.execute('<query>')]"
   ```
-  PowerShell: `-P "$env:SOFTONE_SQL_PASSWORD"`. Αν λείπει το `sqlcmd`, εναλλακτικά
-  `PYTHONPATH=src python -c` με `pyodbc` (driver "ODBC Driver 17 for SQL Server").
 - ΜΟΝΟ `SELECT`. Ποτέ INSERT/UPDATE/DELETE/EXEC, ποτέ `SELECT *` σε μεγάλους πίνακες
-  χωρίς `TOP`/`WHERE`. Βάζε πάντα `WITH (NOLOCK)`; η βάση είναι παραγωγική.
+  χωρίς `TOP`/`WHERE`. Η βάση είναι παραγωγική: κράτα τα queries ελαφριά. Μην βάζεις
+  `NOLOCK` σε οικονομικά ποσά (μπορεί να δείξει μη οριστικοποιημένες κινήσεις).
 
 ## Βασικοί πίνακες SoftONE (schema dbo)
 | Πίνακας | Τι είναι | Κλειδί / σημαντικές στήλες |
@@ -48,7 +52,7 @@ SQL Server και δώσε την απάντηση σύντομα, σε πίνα
 SELECT FORMAT(TRNDATE,'yyyy-MM') AS Μήνας,
        COUNT(*) AS Παραστατικά,
        ROUND(SUM(NETAMNT),2) AS Καθαρή, ROUND(SUM(SUMAMNT),2) AS Σύνολο
-FROM dbo.FINDOC WITH (NOLOCK)
+FROM dbo.FINDOC
 WHERE SOSOURCE=1351 AND ISCANCEL=0 AND COMPANY=1
   AND TRNDATE >= DATEFROMPARTS(YEAR(GETDATE()),1,1)
 GROUP BY FORMAT(TRNDATE,'yyyy-MM') ORDER BY 1;
@@ -57,8 +61,8 @@ GROUP BY FORMAT(TRNDATE,'yyyy-MM') ORDER BY 1;
 ```sql
 SELECT TOP 20 t.CODE, t.NAME, t.AFM,
        COUNT(*) AS Παραστατικά, ROUND(SUM(f.SUMAMNT),2) AS Σύνολο
-FROM dbo.FINDOC f WITH (NOLOCK)
-JOIN dbo.TRDR t WITH (NOLOCK) ON t.TRDR=f.TRDR
+FROM dbo.FINDOC f
+JOIN dbo.TRDR t ON t.TRDR=f.TRDR
 WHERE f.SOSOURCE=1251 AND f.ISCANCEL=0 AND f.COMPANY=1
   AND f.TRNDATE >= DATEFROMPARTS(YEAR(GETDATE()),1,1)
 GROUP BY t.CODE,t.NAME,t.AFM ORDER BY Σύνολο DESC;
@@ -67,24 +71,26 @@ Top είδη σε πωλήσεις:
 ```sql
 SELECT TOP 20 m.CODE, m.NAME,
        ROUND(SUM(l.QTY1),2) AS Ποσότητα, ROUND(SUM(l.LINEVAL),2) AS Καθαρή
-FROM dbo.MTRLINES l WITH (NOLOCK)
-JOIN dbo.FINDOC f WITH (NOLOCK) ON f.FINDOC=l.FINDOC
-JOIN dbo.MTRL m WITH (NOLOCK) ON m.MTRL=l.MTRL
+FROM dbo.MTRLINES l
+JOIN dbo.FINDOC f ON f.FINDOC=l.FINDOC
+JOIN dbo.MTRL m ON m.MTRL=l.MTRL
 WHERE f.SOSOURCE=1351 AND f.ISCANCEL=0 AND f.COMPANY=1
   AND f.TRNDATE >= DATEFROMPARTS(YEAR(GETDATE()),1,1)
 GROUP BY m.CODE,m.NAME ORDER BY Καθαρή DESC;
 ```
 Αναζήτηση προμηθευτή με ΑΦΜ:
 ```sql
-SELECT TRDR, CODE, NAME, AFM FROM dbo.TRDR WITH (NOLOCK)
-WHERE REPLACE(AFM,'EL','') = '999082935';
+SELECT TRDR, CODE, NAME, AFM FROM dbo.TRDR
+WHERE SODTYPE=12 AND REPLACE(AFM,'EL','') = '999082935';
 ```
 
 ## Setup (μία φορά)
 1. Τρέξε `scripts/sql/create_readonly_login.sql` στο SSMS (άλλαξε το password).
-2. Windows: `setx SOFTONE_SQL_PASSWORD "<το password>"` και άνοιξε νέο terminal.
-3. Έλεγχος: `sqlcmd -S .\SOFTONE -d FOUNTOUKAS -U devin_ro -P "%SOFTONE_SQL_PASSWORD%" -Q "SELECT TOP 1 CODE,NAME FROM dbo.TRDR"`.
-4. Άνοιξε το Devin CLI σε αυτόν τον φάκελο και ρώτα ό,τι θέλεις.
+2. PowerShell: `setx SQLCMDPASSWORD "<το password>"` και άνοιξε νέο PowerShell.
+3. Έλεγχος: `sqlcmd -S .\SOFTONE -d FOUNTOUKAS -U devin_ro -Q "SELECT TOP 1 CODE,NAME FROM dbo.TRDR"`.
+   Αν λείπει το `sqlcmd`: https://learn.microsoft.com/sql/tools/sqlcmd/sqlcmd-utility (ή `winget install sqlcmd`).
+4. Devin CLI (PowerShell): `irm https://static.devin.ai/cli/setup.ps1 | iex`, μετά `cd` στον
+   φάκελο του repo και `devin`. Ρώτα ό,τι θέλεις.
 
 ## Υπόλοιπο repo
 Το `softone-pilot` (PDF → SoftOne) παραμένει ως έχει: lint `ruff check src tests`,
