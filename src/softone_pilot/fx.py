@@ -130,8 +130,6 @@ def convert_to_eur(invoice: InvoiceData, rate: Decimal) -> InvoiceData:
         return invoice
     if invoice.currency != "USD":
         raise FxError(f"Μη υποστηριζόμενο νόμισμα {invoice.currency}")
-    if invoice.vat_value != 0:
-        raise FxError("Μετατροπή μόνο για τιμολόγια USD χωρίς ΦΠΑ (reverse charge)")
 
     def tag(amount: Decimal) -> str:
         return f"${amount:.2f} X {rate}".replace(".", ",")
@@ -146,12 +144,16 @@ def convert_to_eur(invoice: InvoiceData, rate: Decimal) -> InvoiceData:
         for line in invoice.lines
     )
     net = to_eur(invoice.net_value, rate)
+    vat = to_eur(invoice.vat_value, rate)
+    total = to_eur(invoice.total_value, rate)
+    if abs(net + vat - total) > CENT * 2:
+        raise FxError(f"Ασυμφωνία μετά τη μετατροπή: {net} + {vat} != {total}")
     return replace(
         invoice,
         currency="EUR",
         net_value=net,
-        vat_value=Decimal("0.00"),
-        total_value=net,
+        vat_value=vat,
+        total_value=net + vat,
         description=f"{invoice.description} {tag(invoice.total_value)}",
         lines=lines,
     )

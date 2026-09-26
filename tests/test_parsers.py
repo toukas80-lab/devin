@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from softone_pilot.parsers.base import PdfParseError, parse_amount, parse_date
+from softone_pilot.parsers.carveco import CarvecoParser
 from softone_pilot.parsers.cognition import CognitionParser
 from softone_pilot.parsers.egnatia import EgnatiaOdosParser
 from softone_pilot.parsers.enartia import EnartiaParser
@@ -556,3 +557,57 @@ def test_prometal_rejects_credit_note() -> None:
     text = PROMETAL_TEXT.replace("ΤΙΜΟΛΟΓΙΟ ΠΩΛΗΣΗΣ - ΔΕΛΤΙΟ ΑΠΟΣΤΟΛΗΣ", "ΠΙΣΤΩΤΙΚΟ ΤΙΜΟΛΟΓΙΟ")
     with pytest.raises(PdfParseError, match="Πιστωτικό"):
         PrometalParser().parse_text(Path("prometal.pdf"), text)
+
+
+CARVECO_TEXT = """Carveco Ltd | The American Barns, Banbury Road | Ashorne | Coventry | CV35 0LB
+| United Kingdom
+Our Terms and Conditions can be found at https://carveco.com/software-terms-and-conditions/
+1
+Total USD$21.70
+Payment Made (-) 21.70
+Balance Due USD$0.00
+Invoice Date : 15 Jul 2026
+Due Date : 16 Jul 2026
+Carveco Ltd
+The American Barns, Banbury Road
+Ashorne, Coventry, CV35 0LB
+United Kingdom
+GB 307946483
+PAID Invoice
+Inv# 077540
+info@crazysouvle.gr
+Makedonikou Ag
+thessaloniki  570 13
+Greece
+# Description Qty Amount (USD$)
+1 Maker Subscription, renewed monthly renewal for 13139. 1 17.50
+2 Tax rate: 24%
+Jurisdictions: EU OSS - 24%
+Tax Category: Digital goods, Subscription.
+1 4.20
+Thanks for your business.
+"""
+
+
+def test_parse_carveco_usd_with_oss_vat() -> None:
+    parser = CarvecoParser()
+    assert parser.matches(CARVECO_TEXT.replace(" ", "").upper())
+    invoice = parser.parse_text(Path("077540.pdf"), CARVECO_TEXT)
+    assert invoice.currency == "USD"
+    assert invoice.document_number == "077540"
+    assert invoice.document_date == date(2026, 7, 15)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("17.50"),
+        Decimal("4.20"),
+        Decimal("21.70"),
+    )
+    assert invoice.vat_pct == 24
+    assert [line.description for line in invoice.lines] == ["MAKER SUBSCRIPTION (13139)"]
+    assert invoice.lines[0].vat_pct == 24
+    assert invoice.description == "CARVECO MAKER SUBSCRIPTION (13139)"
+
+
+def test_carveco_rejects_tax_not_matching_rate() -> None:
+    text = CARVECO_TEXT.replace("1 4.20", "1 3.20").replace("Total USD$21.70", "Total USD$20.70")
+    with pytest.raises(PdfParseError):
+        CarvecoParser().parse_text(Path("077540.pdf"), text)

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from softone_pilot.models import InvoiceData
 from softone_pilot.parsers.base import PdfParseError, SupplierParser, extract_pdf_text
+from softone_pilot.parsers.carveco import CarvecoParser
 from softone_pilot.parsers.cognition import CognitionParser
 from softone_pilot.parsers.egnatia import EgnatiaOdosParser
 from softone_pilot.parsers.enartia import EnartiaParser
@@ -20,6 +21,7 @@ PARSERS: tuple[SupplierParser, ...] = (
     FedexParser(),
     KarasoulisParser(),
     CognitionParser(),
+    CarvecoParser(),
     FinloupLeasing1Parser(),
     FinloupLeasing2Parser(),
     PrometalParser(),

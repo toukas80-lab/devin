@@ -96,7 +96,26 @@ def test_convert_usd_invoice_to_eur_keeps_audit_trail() -> None:
     assert eur.lines[0].description == "OVERAGE CREDITS $20,00 X 0,8585"
 
 
-def test_convert_rejects_usd_with_tax_and_bad_rate() -> None:
+def test_convert_usd_invoice_with_vat_converts_every_amount() -> None:
+    taxed = replace(
+        usd_invoice(),
+        net_value=Decimal("17.50"),
+        vat_value=Decimal("4.20"),
+        total_value=Decimal("21.70"),
+        vat_pct=Decimal("24"),
+        lines=(replace(usd_invoice().lines[0], value=Decimal("17.50"), vat_pct=Decimal("24")),),
+    )
+    eur = convert_to_eur(taxed, parse_rate("0.8309"))
+    assert (eur.net_value, eur.vat_value, eur.total_value) == (
+        Decimal("14.54"),
+        Decimal("3.49"),
+        Decimal("18.03"),
+    )
+    assert eur.vat_pct == 24
+    assert eur.description == "DEVIN OVERAGE CREDITS $21,70 X 0,8309"
+
+
+def test_convert_rejects_inconsistent_totals_and_bad_rate() -> None:
     with pytest.raises(FxError):
         convert_to_eur(replace(usd_invoice(), vat_value=Decimal("1.00")), Decimal("0.9"))
     with pytest.raises(FxError):

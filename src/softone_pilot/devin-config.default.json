@@ -72,6 +72,15 @@
       "payment_method": "1006",
       "settlement": false
     },
+    "CARVECO": {
+      "name": "CARVECO LTD",
+      "kind": "expense",
+      "trdr_code": "0190",
+      "series_code": "ΤΔΕΕ",
+      "line_code": "81013",
+      "payment_method": "1007",
+      "settlement": false
+    },
     "802285336": {
       "name": "FINLOUP LEASING I Α.Ε.",
       "kind": "expense",
