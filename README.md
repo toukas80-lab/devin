@@ -53,6 +53,16 @@ Dry-run με read-only SQL:
 softone-pilot dry-run "C:\Invoices" --config config\local.json
 ```
 
+Αποτίμηση εταιρίας (read-only, 6 χρήσεις από `MTRLFINDATA`/`TRDFINDATA`/`ACNFINDATA`):
+
+```powershell
+softone-pilot valuation --config config\local.json --years 6
+softone-pilot valuation --config config\local.json --multiples 3,4,5 --opex-ratio 0.22 --json
+```
+
+Χωρίς Γενική Λογιστική (λογαριασμοί 6x) το EBITDA ισούται με το μικτό κέρδος —
+δώσε `--opex-ratio` (λειτουργικά έξοδα / πωλήσεις) από τους ισολογισμούς.
+
 Γραφικό περιβάλλον:
 
 ```powershell

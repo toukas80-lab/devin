@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from softone_pilot.config import SqlSettings
 from softone_pilot.models import DuplicateRecord, SqlSupplier
+from softone_pilot.valuation import BalanceSnapshot, YearFigures
 
 if TYPE_CHECKING:
     import pyodbc
@@ -122,6 +123,119 @@ class SoftOneReadOnlyRepository(AbstractContextManager):
             fincode=str(row[2] or ""),
             series_number=str(row[3] or ""),
             total=Decimal(str(row[4])).quantize(Decimal("0.01")),
+        )
+
+    def fiscal_years(self, count: int, include_current: bool = False) -> list[int]:
+        cursor = self._connection().execute(
+            """
+            SELECT DISTINCT TOP (?) FISCPRD FROM dbo.MTRLFINDATA
+            WHERE ? = 1 OR FISCPRD < YEAR(GETDATE())
+            ORDER BY FISCPRD DESC
+            """,
+            count,
+            1 if include_current else 0,
+        )
+        return sorted(int(row[0]) for row in cursor.fetchall())
+
+    def yearly_figures(self, years: list[int]) -> list[YearFigures]:
+        if not years:
+            return []
+        placeholders = ",".join("?" for _ in years)
+        trading = (
+            self._connection()
+            .execute(
+                f"""
+            SELECT y.FISCPRD,
+                   COALESCE(SUM(y.SALVAL), 0),
+                   COALESCE(SUM(CASE WHEN c.IMPQTY > 0
+                                     THEN y.SALQTY1 * c.IMPVAL / c.IMPQTY ELSE 0 END), 0)
+            FROM dbo.MTRLFINDATA AS y
+            OUTER APPLY (
+                SELECT SUM(h.IMPVAL) AS IMPVAL, SUM(h.IMPQTY1) AS IMPQTY
+                FROM dbo.MTRLFINDATA AS h
+                WHERE h.MTRL = y.MTRL AND h.FISCPRD <= y.FISCPRD
+            ) AS c
+            WHERE y.FISCPRD IN ({placeholders})
+            GROUP BY y.FISCPRD
+            """,
+                *years,
+            )
+            .fetchall()
+        )
+        expenses = {
+            int(row[0]): Decimal(str(row[1]))
+            for row in self._connection()
+            .execute(
+                f"""
+                SELECT d.FISCPRD, COALESCE(SUM(d.DEBIT - d.CREDIT), 0)
+                FROM dbo.ACNFINDATA AS d
+                INNER JOIN dbo.ACN AS a ON a.ACN = d.ACN
+                WHERE d.FISCPRD IN ({placeholders}) AND a.CODE LIKE '6%'
+                GROUP BY d.FISCPRD
+                HAVING SUM(ABS(d.DEBIT) + ABS(d.CREDIT)) > 0
+                """,
+                *years,
+            )
+            .fetchall()
+        }
+        return [
+            YearFigures(
+                fiscal_year=int(row[0]),
+                revenue=Decimal(str(row[1])),
+                cost_of_goods=Decimal(str(row[2])),
+                operating_expenses=expenses.get(int(row[0])),
+            )
+            for row in trading
+        ]
+
+    def balance_snapshot(self, fiscal_year: int) -> BalanceSnapshot:
+        connection = self._connection()
+
+        def scope(table: str, alias: str) -> str:
+            has_opening = connection.execute(
+                f"SELECT COUNT(*) FROM dbo.{table} WHERE FISCPRD = ? AND PERIOD = 0",
+                fiscal_year,
+            ).fetchone()[0]
+            operator = "=" if has_opening else "<="
+            return f"{alias}.FISCPRD {operator} ?"
+
+        inventory = connection.execute(
+            f"""
+            SELECT COALESCE(SUM(m.IMPVAL - m.EXPVAL), 0) FROM dbo.MTRLFINDATA AS m
+            WHERE {scope("MTRLFINDATA", "m")}
+            """,
+            fiscal_year,
+        ).fetchone()[0]
+        trader_scope = scope("TRDFINDATA", "d")
+        receivables = connection.execute(
+            f"""
+            SELECT COALESCE(SUM(d.DEBIT - d.CREDIT), 0)
+            FROM dbo.TRDFINDATA AS d INNER JOIN dbo.TRDR AS t ON t.TRDR = d.TRDR
+            WHERE {trader_scope} AND t.SODTYPE = 13
+            """,
+            fiscal_year,
+        ).fetchone()[0]
+        payables = connection.execute(
+            f"""
+            SELECT COALESCE(SUM(d.CREDIT - d.DEBIT), 0)
+            FROM dbo.TRDFINDATA AS d INNER JOIN dbo.TRDR AS t ON t.TRDR = d.TRDR
+            WHERE {trader_scope} AND t.SODTYPE = 12
+            """,
+            fiscal_year,
+        ).fetchone()[0]
+        cash = connection.execute(
+            f"""
+            SELECT COALESCE(SUM(d.DEBIT - d.CREDIT), 0)
+            FROM dbo.ACNFINDATA AS d INNER JOIN dbo.ACN AS a ON a.ACN = d.ACN
+            WHERE {scope("ACNFINDATA", "d")} AND a.CODE LIKE '38%'
+            """,
+            fiscal_year,
+        ).fetchone()[0]
+        return BalanceSnapshot(
+            inventory_value=Decimal(str(inventory)),
+            receivables=Decimal(str(receivables)),
+            payables=Decimal(str(payables)),
+            cash=Decimal(str(cash)),
         )
 
     def _connection(self):
