@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from softone_pilot.config import SqlSettings
 from softone_pilot.models import DuplicateRecord, SqlSupplier
+from softone_pilot.valuation import BalanceSnapshot, YearFigures
 
 if TYPE_CHECKING:
     import pyodbc
@@ -122,6 +123,96 @@ class SoftOneReadOnlyRepository(AbstractContextManager):
             fincode=str(row[2] or ""),
             series_number=str(row[3] or ""),
             total=Decimal(str(row[4])).quantize(Decimal("0.01")),
+        )
+
+    def fiscal_years(self, count: int) -> list[int]:
+        cursor = self._connection().execute(
+            "SELECT DISTINCT TOP (?) FISCPRD FROM dbo.MTRLFINDATA ORDER BY FISCPRD DESC",
+            count,
+        )
+        return sorted(int(row[0]) for row in cursor.fetchall())
+
+    def yearly_figures(self, years: list[int]) -> list[YearFigures]:
+        if not years:
+            return []
+        placeholders = ",".join("?" for _ in years)
+        trading = (
+            self._connection()
+            .execute(
+                f"""
+            SELECT FISCPRD,
+                   COALESCE(SUM(SALVAL), 0),
+                   COALESCE(SUM(CASE WHEN IMPQTY1 > 0
+                                     THEN SALQTY1 * IMPVAL / IMPQTY1 ELSE 0 END), 0)
+            FROM dbo.MTRLFINDATA
+            WHERE FISCPRD IN ({placeholders})
+            GROUP BY FISCPRD
+            """,
+                *years,
+            )
+            .fetchall()
+        )
+        expenses = {
+            int(row[0]): Decimal(str(row[1]))
+            for row in self._connection()
+            .execute(
+                f"""
+                SELECT d.FISCPRD, COALESCE(SUM(d.DEBIT - d.CREDIT), 0)
+                FROM dbo.ACNFINDATA AS d
+                INNER JOIN dbo.ACN AS a ON a.ACN = d.ACN
+                WHERE d.FISCPRD IN ({placeholders}) AND a.CODE LIKE '6%'
+                GROUP BY d.FISCPRD
+                HAVING SUM(ABS(d.DEBIT) + ABS(d.CREDIT)) > 0
+                """,
+                *years,
+            )
+            .fetchall()
+        }
+        return [
+            YearFigures(
+                fiscal_year=int(row[0]),
+                revenue=Decimal(str(row[1])),
+                cost_of_goods=Decimal(str(row[2])),
+                operating_expenses=expenses.get(int(row[0])),
+            )
+            for row in trading
+        ]
+
+    def balance_snapshot(self, fiscal_year: int) -> BalanceSnapshot:
+        connection = self._connection()
+        inventory = connection.execute(
+            "SELECT COALESCE(SUM(IMPVAL - EXPVAL), 0) FROM dbo.MTRLFINDATA WHERE FISCPRD = ?",
+            fiscal_year,
+        ).fetchone()[0]
+        receivables = connection.execute(
+            """
+            SELECT COALESCE(SUM(d.DEBIT - d.CREDIT), 0)
+            FROM dbo.TRDFINDATA AS d INNER JOIN dbo.TRDR AS t ON t.TRDR = d.TRDR
+            WHERE d.FISCPRD = ? AND t.SODTYPE = 13
+            """,
+            fiscal_year,
+        ).fetchone()[0]
+        payables = connection.execute(
+            """
+            SELECT COALESCE(SUM(d.CREDIT - d.DEBIT), 0)
+            FROM dbo.TRDFINDATA AS d INNER JOIN dbo.TRDR AS t ON t.TRDR = d.TRDR
+            WHERE d.FISCPRD = ? AND t.SODTYPE = 12
+            """,
+            fiscal_year,
+        ).fetchone()[0]
+        cash = connection.execute(
+            """
+            SELECT COALESCE(SUM(d.DEBIT - d.CREDIT), 0)
+            FROM dbo.ACNFINDATA AS d INNER JOIN dbo.ACN AS a ON a.ACN = d.ACN
+            WHERE d.FISCPRD = ? AND a.CODE LIKE '38%'
+            """,
+            fiscal_year,
+        ).fetchone()[0]
+        return BalanceSnapshot(
+            inventory_value=Decimal(str(inventory)),
+            receivables=Decimal(str(receivables)),
+            payables=Decimal(str(payables)),
+            cash=Decimal(str(cash)),
         )
 
     def _connection(self):

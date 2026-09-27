@@ -3,12 +3,15 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from decimal import Decimal
 
 from softone_pilot.automation import SoftOneAutomationError, inspect_softone_controls
 from softone_pilot.config import default_config, load_config
 from softone_pilot.parsers import parse_pdf
 from softone_pilot.parsers.base import PdfParseError
 from softone_pilot.planner import collect_pdfs, dry_run_steps, prepare_batch
+from softone_pilot.sql_readonly import SoftOneReadOnlyRepository, SqlReadOnlyError
+from softone_pilot.valuation import ValuationAssumptions, compute_valuation, format_report
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,6 +34,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     inspect.add_argument("--workflow", required=True)
     inspect.add_argument("--output", default="softone_controls.txt")
+
+    valuation = commands.add_parser(
+        "valuation",
+        help="Read-only αποτίμηση εταιρίας από ιστορικό SoftOne",
+    )
+    valuation.add_argument("--config", required=True)
+    valuation.add_argument("--years", type=int, default=6)
+    valuation.add_argument("--multiples", default="3,4,5", help="EBITDA low,mid,high")
+    valuation.add_argument("--discount-rate", type=Decimal, default=Decimal("0.12"))
+    valuation.add_argument("--longevity-premium", type=Decimal, default=Decimal("0.10"))
+    valuation.add_argument(
+        "--opex-ratio",
+        type=Decimal,
+        help="Λειτουργικά έξοδα ως ποσοστό πωλήσεων όταν δεν υπάρχει Γενική Λογιστική",
+    )
+    valuation.add_argument("--json", action="store_true")
     return parser
 
 
@@ -42,6 +61,8 @@ def main() -> None:
         _dry_run(args)
     elif args.command == "inspect-softone":
         _inspect(args)
+    elif args.command == "valuation":
+        _valuation(args)
 
 
 def _parse(args) -> None:
@@ -94,6 +115,40 @@ def _inspect(args) -> None:
         print(f"ERROR: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
     print(output.resolve())
+
+
+def _valuation(args) -> None:
+    config = load_config(args.config)
+    try:
+        low, mid, high = (Decimal(part) for part in args.multiples.split(","))
+    except ValueError as exc:
+        print("ERROR: --multiples πρέπει να είναι low,mid,high", file=sys.stderr)
+        raise SystemExit(1) from exc
+    assumptions = ValuationAssumptions(
+        multiple_low=low,
+        multiple_mid=mid,
+        multiple_high=high,
+        discount_rate=args.discount_rate,
+        longevity_premium=args.longevity_premium,
+        opex_ratio=args.opex_ratio,
+    )
+    try:
+        with SoftOneReadOnlyRepository(config.sql) as repo:
+            years = repo.fiscal_years(args.years)
+            if not years:
+                print("ERROR: Δεν βρέθηκαν οικονομικές χρήσεις", file=sys.stderr)
+                raise SystemExit(1)
+            figures = repo.yearly_figures(years)
+            balance = repo.balance_snapshot(years[-1])
+    except SqlReadOnlyError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+
+    result = compute_valuation(figures, balance, assumptions)
+    if args.json:
+        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+    else:
+        print(format_report(result))
 
 
 if __name__ == "__main__":
