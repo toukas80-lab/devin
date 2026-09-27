@@ -41,6 +41,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     valuation.add_argument("--config", required=True)
     valuation.add_argument("--years", type=int, default=6)
+    valuation.add_argument(
+        "--include-current-year",
+        action="store_true",
+        help="Συμπερίληψη της ανοικτής (μισής) χρήσης",
+    )
     valuation.add_argument("--multiples", default="3,4,5", help="EBITDA low,mid,high")
     valuation.add_argument("--discount-rate", type=Decimal, default=Decimal("0.12"))
     valuation.add_argument("--longevity-premium", type=Decimal, default=Decimal("0.10"))
@@ -134,7 +139,7 @@ def _valuation(args) -> None:
     )
     try:
         with SoftOneReadOnlyRepository(config.sql) as repo:
-            years = repo.fiscal_years(args.years)
+            years = repo.fiscal_years(args.years, include_current=args.include_current_year)
             if not years:
                 print("ERROR: Δεν βρέθηκαν οικονομικές χρήσεις", file=sys.stderr)
                 raise SystemExit(1)
