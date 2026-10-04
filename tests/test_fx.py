@@ -142,5 +142,5 @@ def test_vat_ids_map_zero_percent_to_softone_id() -> None:
     assert result.errors == ()
     assert result.expense_rows == (
         "09/05/2026;ΤΔΕΕ;0238;ZZCYINBS-107;81013;17,17;ID:1430;"
-        "OVERAGE CREDITS $20,00 X 0,8585 (ZZCYINBS-107)",
+        "OVERAGE CREDITS $20,00 X 0,8585 (ZZCYINBS-107);0",
     )

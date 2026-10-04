@@ -102,6 +102,7 @@ function DevinGroup(rows) {
             docs.push(byKey[k]);
         }
         byKey[k].lines.push(r);
+        if (r.docvat != null) byKey[k].docvat = r.docvat;
     }
     return docs;
 }
@@ -308,13 +309,16 @@ function DevinProbeExp(sosource) {
 // EXPENSES  (Ειδικές πιστωτών: object LINCREDOC, SOSOURCE 1653, lines table LINLINES -> SQL MTRLINES)
 //
 // Same hybrid flow, separate files so purchases and expenses never mix:
-//   C:\Soft1\DEVIN-EXP.txt     : date;series;creditor;docnum;account;netvalue[;vat][;comment]
+//   C:\Soft1\DEVIN-EXP.txt     : date;series;creditor;docnum;account;netvalue[;vat][;comment][;docvat]
 //     series   : code 'ΤΙΜΔ' (SOSOURCE 1653)            | 'ID:1001'
 //     creditor : creditor code '0113' | 'AFM:...' (TRDR SODTYPE 16) | 'ID:121627'
 //     account  : expense account code as shown in the line "Κωδικός" (MTRL SODTYPE 53) | 'ID:118218'
 //     netvalue : line net value (Αξία), e.g. '1127,90'  (qty is always 1, no price)
 //     vat      : percentage, default 24 | 'ID:1410'
-//     comment  : optional line "Αιτιολογία"
+//     comment  : optional line "Αιτιολογία" (never contains ';')
+//     docvat   : optional, the invoice's total VAT e.g. '24,58'. SoftOne rounds VAT per line, suppliers
+//                per VAT rate, so a multi-line document can differ by a cent: AddLines moves the
+//                difference onto the last line with VAT so the document equals the invoice.
 //   DevinExpMakeHead  -> C:\Soft1\DEVIN-EXPHEAD.txt : date;series;trdr;fincode;mtrl;netvalue;vat;comment;year;month (ISO-8859-7)
 //   ASCII Import wizard on list "Ειδικές πιστωτών", definition mapping:
 //     LINCREDOC.TRNDATE=imp(1)  LINCREDOC.SERIES=imp(2)  LINCREDOC.TRDR=imp(3)  LINCREDOC.FINCODE=imp(4)
@@ -323,6 +327,8 @@ function DevinProbeExp(sosource) {
 //                        into the empty header "Αιτιολογία" (the wizard fills only the line); SKIP when complete.
 //                        Also re-applies the file's VAT to lines the wizard got wrong: with VAT id 0 (0%) in
 //                        the HEAD row, series ΕΞΕΝ falls back to the account's default 24% (ΤΔΕΕ does not).
+//                        With docvat in the row it also moves a rounding cent onto the last VAT line so the
+//                        document's VAT equals the invoice (SoftOne rounds per line, e.g. FEDEX 24.59 vs 24.58).
 // ============================================================================
 
 function DevinExpSeries(s) {
@@ -359,7 +365,8 @@ function DevinExpReadRows(fileName) {
                 docnum: p[3].replace(/^\s+|\s+$/g, ''),
                 sosource: 1653, mtrl: DevinExpAcct(p[4]), val: DevinNum(p[5]),
                 vat: DevinVat(p.length > 6 ? p[6] : ''),
-                comment: p.length > 7 ? p.slice(7).join(';') : ''
+                comment: p.length > 7 ? p[7] : '',
+                docvat: p.length > 8 && p[8].replace(/\s/g, '') != '' ? DevinNum(p[8]) : null
             });
         }
     }
@@ -421,13 +428,22 @@ function DevinExpAddLines(fileName) {
             var setComment = wantComment && !headComment.replace(/^\s+|\s+$/g, '');
             var addLines = have < d.lines.length;
             var fixVat = DevinExpVatFixes(id, d.lines);
-            if (!addLines && !setComment && fixVat.length == 0) { out.push('SKIP ' + fincode + ' -> FINDOC ' + id + ' (already ' + have + ' lines, header comment set, vat ok)'); continue; }
+            var rnd = (!addLines && fixVat.length == 0) ? DevinExpVatRound(id, d) : null;
+            if (!addLines && !setComment && fixVat.length == 0 && !rnd) {
+                var docVat = DevinNum(X.SQL('SELECT VATAMNT FROM FINDOC WHERE FINDOC=:1', id));
+                if (d.docvat != null && Math.abs(docVat - d.docvat) >= 0.005)
+                    out.push('WARN ' + fincode + ' -> FINDOC ' + id + ' (complete, but VAT ' + docVat.toFixed(2) + ' <> invoice ' + d.docvat.toFixed(2) + ' - fix the VAT amount in the form)');
+                else
+                    out.push('SKIP ' + fincode + ' -> FINDOC ' + id + ' (already ' + have + ' lines, header comment set, vat ok)');
+                continue;
+            }
             if (addLines && have != 1) { out.push('ERR  ' + fincode + ' -> FINDOC ' + id + ': has ' + have + ' lines, expected 1 - check manually'); continue; }
             var firstMtrl = parseInt(X.SQL('SELECT TOP 1 MTRL FROM MTRLINES WHERE FINDOC=:1 ORDER BY LINENUM', id), 10);
             if (firstMtrl != d.lines[0].mtrl) { out.push('ERR  ' + fincode + ' -> FINDOC ' + id + ': first line account ' + firstMtrl + ' <> file ' + d.lines[0].mtrl); continue; }
 
-            var obj = X.CREATEOBJFORM('LINCREDOC'), posted = false;
-            try {
+            var edit = addLines || setComment || fixVat.length > 0;
+            var obj = X.CREATEOBJFORM('LINCREDOC'), posted = !edit;
+            if (edit) try {
                 obj.DBLOCATE(id);
                 if (setComment) {
                     var hdr = obj.FindTable('FINDOC');
@@ -466,19 +482,27 @@ function DevinExpAddLines(fileName) {
                 if (!posted) { try { obj.DBCANCEL; } catch (e0) { } }
                 obj.FREE;
             }
+            if (edit) {
+                var mid = String(X.SQL('SELECT FINCODE FROM FINDOC WHERE FINDOC=:1', id));
+                if (mid != fincode) { out.push('ERR  ' + fincode + ' -> FINDOC ' + id + ': edited but the number changed to "' + mid + '" - fix it in the form'); continue; }
+                // rounding cents can only be judged once every line is in with the right VAT id
+                rnd = DevinExpVatFixes(id, d.lines).length == 0 ? DevinExpVatRound(id, d) : null;
+            }
+            if (rnd) DevinExpApplyRound(id, rnd);
             var now = X.GETSQLDATASET(
                 "SELECT FINCODE, ISNULL(COMMENTS,'') AS COMMENTS, (SELECT COUNT(*) FROM MTRLINES M WHERE M.FINDOC=F.FINDOC) AS LINES, NETAMNT, VATAMNT, SUMAMNT FROM FINDOC F WHERE FINDOC=:1", id);
             var parts = [];
             if (addLines) parts.push('added ' + (d.lines.length - 1) + ' line(s)');
             if (setComment) parts.push('set header comment');
             for (var v = 0; v < fixVat.length; v++) parts.push('line ' + fixVat[v].linenum + ' VAT ' + fixVat[v].was + ' -> ' + fixVat[v].vat);
+            if (rnd) parts.push('line ' + rnd.linenum + ' VAT amount ' + rnd.was.toFixed(2) + ' -> ' + rnd.vat.toFixed(2) + ' (invoice VAT ' + d.docvat.toFixed(2) + ')');
             var did = parts.join(', ');
             if (String(now.FINCODE) != fincode) { out.push('ERR  ' + fincode + ' -> FINDOC ' + id + ': ' + did + ' but the number changed to "' + now.FINCODE + '" - fix it in the form'); continue; }
             var left = DevinExpVatFixes(id, d.lines);
-            var expVat = DevinExpExpectedVat(d.lines);
-            var vatOk = left.length == 0 && Math.abs(DevinNum(now.VATAMNT) - expVat) < 0.015;
+            var expVat = d.docvat != null ? d.docvat : DevinExpExpectedVat(d.lines);
+            var vatOk = left.length == 0 && Math.abs(DevinNum(now.VATAMNT) - expVat) < 0.005;
             out.push((vatOk ? 'OK   ' : 'WARN ') + fincode + ' -> FINDOC ' + id + ': ' + did + ', now ' + now.JSON +
-                (vatOk ? '' : ' - VAT expected ' + expVat.toFixed(2) + (left.length ? ', ' + left.length + ' line(s) still wrong - fix in the form' : '')));
+                (vatOk ? '' : ' - VAT expected ' + expVat.toFixed(2) + (left.length ? ', ' + left.length + ' line(s) still wrong - fix in the form' : ' - fix the VAT amount in the form')));
         }
         catch (e) {
             out.push('ERR  ' + fincode + ': ' + e.message);
@@ -501,6 +525,46 @@ function DevinExpVatFixes(findoc, lines) {
         lq.NEXT;
     }
     return fixes;
+}
+
+// Cent difference between the document's VAT and the invoice's (docvat), to be moved onto the last
+// line that carries VAT: {linenum, was, vat} or null (no docvat, already equal, no VAT line, or a
+// difference too large to be rounding - that one is reported as WARN instead).
+function DevinExpVatRound(findoc, d) {
+    if (d.docvat == null) return null;
+    var now = DevinNum(X.SQL('SELECT VATAMNT FROM FINDOC WHERE FINDOC=:1', findoc));
+    var diff = Math.round((d.docvat - now) * 100) / 100;
+    if (Math.abs(diff) < 0.005 || Math.abs(diff) > 0.01 * d.lines.length + 0.005) return null;
+    var lq = X.GETSQLDATASET('SELECT LINENUM, VATAMNT FROM MTRLINES WHERE FINDOC=:1 AND VATAMNT<>0 ORDER BY LINENUM DESC', findoc);
+    if (lq.RECORDCOUNT == 0) return null;
+    var was = DevinNum(lq.VATAMNT);
+    return { linenum: parseInt(lq.LINENUM, 10), was: was, vat: Math.round((was + diff) * 100) / 100 };
+}
+
+function DevinExpApplyRound(findoc, rnd) {
+    var obj = X.CREATEOBJFORM('LINCREDOC'), posted = false;
+    try {
+        obj.DBLOCATE(findoc);
+        var lns = obj.FindTable('LINLINES'), hit = false;
+        lns.FIRST;
+        while (!lns.EOF) {
+            if (parseInt(lns.LINENUM, 10) == rnd.linenum) {
+                try { lns.EDIT; } catch (eV) { }
+                lns.VATAMNT = rnd.vat;
+                lns.Post;
+                hit = true;
+            }
+            lns.NEXT;
+        }
+        if (!hit) throw new Error('line ' + rnd.linenum + ' not found in LINLINES');
+        var r = obj.DBPOST;
+        if (!r) throw new Error(String(obj.GETLASTERROR));
+        posted = true;
+    }
+    finally {
+        if (!posted) { try { obj.DBCANCEL; } catch (e0) { } }
+        obj.FREE;
+    }
 }
 
 // Σ line value x VAT % of the file's VAT ids (id 0 / unknown id = 0%), rounded per line

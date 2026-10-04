@@ -102,7 +102,7 @@ def test_expense_and_purchase_rows() -> None:
     result = build_txt([expense_invoice(), purchase_invoice()], config({"130-CST220": "03762"}))
     assert result.errors == ()
     assert result.expense_rows == (
-        "21/09/2026;ΤΙΜΔ;0077;E1L-324247;81013;53,71;24;ΑΝΑΝΕΩΣΗ cbdcs.gr (ΑΠΥ-E1L-324247)",
+        "21/09/2026;ΤΙΜΔ;0077;E1L-324247;81013;53,71;24;ΑΝΑΝΕΩΣΗ cbdcs.gr (ΑΠΥ-E1L-324247);12,89",
     )
     assert result.purchase_rows == ("18/09/2026;ΤΔΑ;0237;017838;03762;7;25,5;24;25",)
 
@@ -178,8 +178,8 @@ def test_expense_lines_produce_one_row_each() -> None:
     )
     result = build_txt([invoice], config({}))
     assert result.expense_rows == (
-        "21/09/2026;ΤΙΜΔ;0077;E1L-324247;81013;60;24;ΑΠΟΣΤΟΛΗ Α (ΑΠΥ-E1L-324247)",
-        "21/09/2026;ΤΙΜΔ;0077;E1L-324247;81013;40;24;ΑΠΟΣΤΟΛΗ Β (ΑΠΥ-E1L-324247)",
+        "21/09/2026;ΤΙΜΔ;0077;E1L-324247;81013;60;24;ΑΠΟΣΤΟΛΗ Α (ΑΠΥ-E1L-324247);24",
+        "21/09/2026;ΤΙΜΔ;0077;E1L-324247;81013;40;24;ΑΠΟΣΤΟΛΗ Β (ΑΠΥ-E1L-324247);24",
     )
 
 

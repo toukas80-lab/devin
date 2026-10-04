@@ -47,7 +47,7 @@ def test_run_writes_txt_moves_done_and_keeps_failed(
 
     assert (tmp_path / "devin-config.json").exists()
     rows = (tmp_path / "DEVIN-EXP.txt").read_text(encoding="utf-8").splitlines()
-    assert rows == ["21/09/2026;ΤΙΜΔ;0077;E1L-1;81013;53,71;24;ΑΝΑΝΕΩΣΗ (ΑΠΥ-E1L-1)"]
+    assert rows == ["21/09/2026;ΤΙΜΔ;0077;E1L-1;81013;53,71;24;ΑΝΑΝΕΩΣΗ (ΑΠΥ-E1L-1);12,89"]
     assert not (pdf_dir / "E1L-1.pdf").exists()
     assert (pdf_dir / "bad.pdf").exists()
     assert list((pdf_dir / dropfolder.DONE_DIR).rglob("*.pdf"))[0].name == "E1L-1.pdf"

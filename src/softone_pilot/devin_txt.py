@@ -1,6 +1,8 @@
 """Build the DEVIN-EXP.txt / DEVIN-IMPORT.txt rows consumed by the SoftOne DImport script.
 
-Expense (Ειδικές πιστωτών)  : date;series;creditor;docnum;account;netvalue;vat;comment
+Expense (Ειδικές πιστωτών)  : date;series;creditor;docnum;account;netvalue;vat;comment;docvat
+  docvat = the invoice's total VAT: DevinExpAddLines moves rounding cents onto the last VAT line
+  so the document matches the supplier (SoftOne rounds VAT per line, many suppliers per rate).
 Purchase (Αγορές ειδών)     : date;series;supplier;docnum;item;qty;price;vat;disc
 """
 
@@ -87,6 +89,7 @@ def build_rows(
         return "purchase", rows
 
     head = (date_text, settings.series_code, settings.trdr_code, number)
+    doc_vat = fmt(invoice.vat_value)
     if invoice.lines:
         rows = [
             ";".join(
@@ -96,6 +99,7 @@ def build_rows(
                     fmt(line.value),
                     fmt_vat(line.vat_pct, vat_ids),
                     clean(f"{line.description} ({invoice.document_number})"),
+                    doc_vat,
                 )
             )
             for line in invoice.lines
@@ -112,6 +116,7 @@ def build_rows(
             fmt(invoice.net_value),
             fmt_vat(invoice.vat_pct, vat_ids),
             comment,
+            doc_vat,
         )
     )
     return "expense", [row]
