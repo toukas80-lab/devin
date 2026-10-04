@@ -85,7 +85,7 @@ class GoldairCargoParser(SupplierParser):
             source_path=source_path,
             supplier_name=self.name,
             supplier_vat=self.vat,
-            document_number=head["number"],
+            document_number=f"{head['series']}{head['number']}",
             document_date=parse_date(head["date"]),
             net_value=net,
             vat_value=vat,

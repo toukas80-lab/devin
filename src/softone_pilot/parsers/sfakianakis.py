@@ -11,7 +11,6 @@ from softone_pilot.parsers.base import (
     parse_amount,
     parse_date,
 )
-from softone_pilot.parsers.elta import MONTH_GENITIVE
 
 HEAD_RE = re.compile(
     r"ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ (?P<series>[Α-Ω]+) (?P<number>\d+) (?P<date>\d{2}/\d{2}/\d{4})"
@@ -46,9 +45,7 @@ class SfakianakisParser(SupplierParser):
         if parse_amount(rent["net"]) != net:
             raise PdfParseError(f"Μίσθωμα {rent['net']} != καθαρή αξία {net:.2f} ΣΦΑΚΙΑΝΑΚΗΣ")
 
-        period_start = parse_date(rent["from"])
-        month = MONTH_GENITIVE[period_start.month - 1]
-        description = f"ΜΙΣΘΩΜΑ {rent['plate']} {month} {period_start.year}"
+        description = f"ΕΝΟΙΚΙΑΣΗ {rent['plate']} {rent['from']} - {rent['to']}"
         return InvoiceData(
             source_path=source_path,
             supplier_name=self.name,

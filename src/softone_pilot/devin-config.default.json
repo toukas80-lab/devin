@@ -108,6 +108,33 @@
       "payment_method": "1006",
       "settlement": false
     },
+    "802175958": {
+      "name": "ΚΑΠΕΤΑΝΑΚΗ ΚΑΜΠΟΥΡΗΣ Ε.Ε. (DIGITAL SUPPORT)",
+      "kind": "expense",
+      "trdr_code": "0113",
+      "series_code": "ΤΙΜΔ",
+      "line_code": "81009",
+      "payment_method": "1003",
+      "settlement": false
+    },
+    "094240542": {
+      "name": "ΓΚΟΛΝΤΑΙΡ ΚΑΡΓΚΟ ΕΤΑΙΡΙΑ ΔΙΕΘΝΩΝ ΜΕΤΑΦΟΡΩΝ Α.Ε.",
+      "kind": "expense",
+      "trdr_code": "0003",
+      "series_code": "ΤΙΜΔ",
+      "line_code": "10002",
+      "payment_method": "1007",
+      "settlement": false
+    },
+    "094010226": {
+      "name": "ΣΦΑΚΙΑΝΑΚΗΣ ΑΕΒΕ",
+      "kind": "expense",
+      "trdr_code": "0203",
+      "series_code": "ΤΙΜΔ",
+      "line_code": "81010",
+      "payment_method": "1008",
+      "settlement": false
+    },
     "802285336": {
       "name": "FINLOUP LEASING I Α.Ε.",
       "kind": "expense",

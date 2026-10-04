@@ -68,7 +68,7 @@ class DigitalSupportParser(SupplierParser):
             source_path=source_path,
             supplier_name=self.name,
             supplier_vat=self.vat,
-            document_number=number.lstrip("0"),
+            document_number=number.lstrip("0").zfill(5),
             document_date=parse_date(date_text),
             net_value=net,
             vat_value=vat,

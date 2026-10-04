@@ -889,7 +889,7 @@ DIGITAL_SUPPORT_TEXT = """ΚΑΠΕΤΑΝΑΚΗ  ΚΑΜΠΟΥΡΗΣ  ΕΤΕΡΟΡ
 
 def test_parse_digital_support_hours_summarised() -> None:
     invoice = DigitalSupportParser().parse_text(Path("ds.pdf"), DIGITAL_SUPPORT_TEXT)
-    assert invoice.document_number == "865"
+    assert invoice.document_number == "00865"
     assert invoice.document_date == date(2026, 9, 29)
     assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
         Decimal("140.00"),
@@ -923,7 +923,7 @@ def test_parse_goldair_road_freight() -> None:
     parser = GoldairCargoParser()
     assert parser.layout is True
     invoice = parser.parse_text(Path("goldair.pdf"), GOLDAIR_TEXT)
-    assert invoice.document_number == "261941"
+    assert invoice.document_number == "Θ261941"
     assert invoice.document_date == date(2026, 7, 27)
     assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
         Decimal("220.00"),
@@ -965,7 +965,7 @@ def test_parse_sfakianakis_vehicle_rent() -> None:
         Decimal("518.32"),
     )
     assert invoice.vat_pct == Decimal("24")
-    assert invoice.description == "ΜΙΣΘΩΜΑ XPM8586 ΟΚΤΩΒΡΙΟΥ 2026"
+    assert invoice.description == "ΕΝΟΙΚΙΑΣΗ XPM8586 01/10/2026 - 31/10/2026"
 
 
 def test_sfakianakis_rejects_rent_not_matching_net() -> None:
