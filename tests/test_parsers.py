@@ -848,10 +848,10 @@ def test_parse_cargobook_mixed_vat_lines() -> None:
         Decimal("787.22"),
     )
     assert [(line.value, line.vat_pct, line.category) for line in invoice.lines] == [
-        (Decimal("268.98"), Decimal("24"), "charges24"),
-        (Decimal("112.07"), Decimal("24"), "charges24"),
-        (Decimal("213.56"), Decimal("0"), "freight0"),
-        (Decimal("101.15"), Decimal("0"), "freight0"),
+        (Decimal("268.98"), Decimal("24"), "60-19"),
+        (Decimal("112.07"), Decimal("24"), "1116-19"),
+        (Decimal("213.56"), Decimal("0"), "10207-0"),
+        (Decimal("101.15"), Decimal("0"), "10219-0"),
     ]
     assert invoice.lines[0].description == "ΕΡΓΑΤΙΚΑ ΛΙΜΕΝΟΣ FREE OUT FUJIAN ONE BAMBOO CO. LTD"
     assert invoice.description == "ΔΙΑΜΕΤΑΦΟΡΑ FUJIAN ONE BAMBOO CO. LTD"

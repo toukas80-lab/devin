@@ -19,7 +19,7 @@ HEAD_RE = re.compile(
 # "ΕΡΓΑΤΙΚΑ ΛΙΜΕΝΟΣ FREE OUT60-19 268,98 268,98 24 333,54 EUR"
 # "CISF-EX WORKS10207-0 236,62 213,56 0 213,56 USD"  (unit in USD, net/total in EUR)
 CHARGE_RE = re.compile(
-    r"^(?P<desc>[^\n]*?[^\d\n])(?P<code>\d+)-\d+ (?P<unit>[\d.]+,\d{2}) (?P<net>[\d.]+,\d{2}) "
+    r"^(?P<desc>[^\n]*?[^\d\n])(?P<code>\d+-\d+) (?P<unit>[\d.]+,\d{2}) (?P<net>[\d.]+,\d{2}) "
     r"(?P<vat>\d{1,2}) (?P<total>[\d.]+,\d{2}) (?P<currency>EUR|USD)$",
     re.MULTILINE,
 )
@@ -33,8 +33,9 @@ class CargoBookParser(SupplierParser):
     """ΚΑΡΓΚΟ ΜΠΟΥΚ ΝΑΥΤΙΛΙΑΚΗ ΜΕΤΑΦΟΡΙΚΗ Α.Ε. (CARGO BOOK) sea-freight forwarder invoice.
 
     Port/agency charges carry 24% VAT; the ocean freight lines are USD, VAT-exempt (άρθρο 27
-    Ν.5144/24) and already converted to EUR in the net column. Each line keeps its own VAT so the
-    expense account is chosen per category (``charges24`` / ``freight0``)."""
+    Ν.5144/24) and already converted to EUR in the net column. Each line keeps its own VAT and its
+    CARGO BOOK charge code (``60-19``, ``10207-0``...) as category, so ``line_codes`` maps every
+    charge to its own expense account (the ``-19`` suffix is 24%, ``-0`` is exempt)."""
 
     vat = "094475355"
     name = "ΚΑΡΓΚΟ ΜΠΟΥΚ ΝΑΥΤΙΛΙΑΚΗ ΜΕΤΑΦΟΡΙΚΗ Α.Ε."
@@ -70,7 +71,7 @@ class CargoBookParser(SupplierParser):
                     discount_pct=Decimal("0"),
                     value=net,
                     vat_pct=pct,
-                    category="freight0" if pct == 0 else f"charges{pct}",
+                    category=match["code"],
                 )
             )
         if not lines:

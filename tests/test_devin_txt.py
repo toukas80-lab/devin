@@ -3,7 +3,9 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from softone_pilot.config import AppConfig, default_config
+from test_parsers import CARGOBOOK_TEXT
+
+from softone_pilot.config import AppConfig, default_config, load_config
 from softone_pilot.devin_txt import (
     EXPENSE_FILE,
     HEAD_FILES,
@@ -13,7 +15,9 @@ from softone_pilot.devin_txt import (
     fmt,
     write_txt,
 )
+from softone_pilot.dropfolder import DEFAULT_CONFIG
 from softone_pilot.models import InvoiceData, InvoiceLine, SupplierSettings
+from softone_pilot.parsers.cargobook import CargoBookParser
 
 
 def expense_invoice() -> InvoiceData:
@@ -276,3 +280,17 @@ def test_expense_line_category_selects_account() -> None:
     result = build_txt([invoice], missing)
     assert result.expense_rows == ()
     assert "import24" in result.errors[0]
+
+
+def test_cargobook_lines_map_charge_codes_to_accounts() -> None:
+    invoice = CargoBookParser().parse_text(Path("cargobook.pdf"), CARGOBOOK_TEXT)
+    cfg = load_config(DEFAULT_CONFIG)
+    assert cfg.suppliers["094475355"].is_complete
+    result = build_txt([invoice], cfg)
+    assert result.errors == ()
+    assert [row.split(";")[2:7:2] for row in result.expense_rows] == [
+        ["0260", "10055", "24"],
+        ["0260", "10059", "24"],
+        ["0260", "10033", "ID:0"],
+        ["0260", "10063", "ID:0"],
+    ]
