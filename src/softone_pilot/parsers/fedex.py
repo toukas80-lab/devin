@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 
@@ -14,6 +15,8 @@ from softone_pilot.parsers.base import (
 )
 
 # Freight: "62.7102/09/2026876620512035 0.00 62.71FedEx Intl Priority 1 6.70 kg"
+# Freight lines get "awb1 / awb2 / ..." (all shipments of the invoice) as Αιτιολογία, like the
+# documents entered by hand; duty receipts keep service + awb + date + ΔΑΣΜΟΙ.
 # Duty:    "10/06/2026872826082908 39.23 53.04Economy Service 13.81 0.00 0.00"
 # The shipment total is the amount glued to the service name.
 SHIPMENT_RE = re.compile(
@@ -80,6 +83,9 @@ class FedexParser(SupplierParser):
         lines = self._parse_shipments(text, duty)
         if not lines:
             raise PdfParseError("Δεν βρέθηκαν αποστολές FEDEX")
+        if not duty:
+            awbs = " / ".join(line.code for line in lines)
+            lines = [replace(line, description=awbs) for line in lines]
         lines_net = sum((line.value for line in lines), Decimal("0"))
         lines_vat = sum(
             ((line.value * line.vat_pct / 100).quantize(Decimal("0.01")) for line in lines),
@@ -123,7 +129,7 @@ class FedexParser(SupplierParser):
                 pct_match = VAT_PCT_RE.search(block)
                 vat_pct = Decimal(pct_match.group(1)).normalize() if pct_match else Decimal("0")
                 category = shipment_category(block, vat_pct)
-                description = f"{service} {match['awb']} {match['date']}"
+                description = match["awb"]
             lines.append(
                 InvoiceLine(
                     code=match["awb"],

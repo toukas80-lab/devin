@@ -183,7 +183,9 @@ def test_parse_fedex_shipments() -> None:
         Decimal("31.75"),
     ]
     assert invoice.lines[0].code == "876620512035"
-    assert invoice.lines[0].description == "FEDEX INTL PRIORITY 876620512035 02/09/2026"
+    assert {line.description for line in invoice.lines} == {
+        "876620512035 / 876495715856 / 876497693791"
+    }
     assert [line.category for line in invoice.lines] == ["export24", "import24", "import24"]
 
 
@@ -244,7 +246,7 @@ def test_parse_fedex_export_with_exempt_shipment() -> None:
         (Decimal("12.03"), Decimal("24"), "export24"),
         (Decimal("40.17"), Decimal("0"), "export0"),
     ]
-    assert invoice.lines[1].description == "ECONOMY SERVICE 875403298141 06/08/2026"
+    assert invoice.lines[1].description == "875343928958 / 875403298141"
 
 
 def test_parse_fedex_duty_receipt() -> None:
@@ -260,6 +262,7 @@ def test_parse_fedex_duty_receipt() -> None:
         (Decimal("53.04"), Decimal("0"), "duty")
     ]
     assert invoice.description == "ΔΑΣΜΟΙ FEDEX 1 ΑΠΟΣΤΟΛΕΣ"
+    assert invoice.lines[0].description == "ECONOMY SERVICE 872826082908 10/06/2026 ΔΑΣΜΟΙ"
 
 
 def test_fedex_duty_receipt_with_vat_is_rejected() -> None:
