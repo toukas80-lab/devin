@@ -166,6 +166,19 @@
         "ΑΝΟΞ. ΑΞΟΝΕΣ EN 1.4301 CDR Φ4*3000": "00645",
         "ΑΝΟΞ. ΑΞΟΝΕΣ EN 1.4301 CDR Φ3*3000": "00644"
       }
+    },
+    "DE129226311": {
+      "name": "ALBERT KERBL GMBH",
+      "kind": "purchase",
+      "trdr_code": "0266",
+      "series_code": "ΤΔΑΕ",
+      "line_code": "",
+      "payment_method": "1007",
+      "settlement": false,
+      "item_map": {
+        "21208": "02371",
+        "21206": "02556"
+      }
     }
   }
 }

@@ -16,6 +16,7 @@ from softone_pilot.parsers.fedex import FedexParser
 from softone_pilot.parsers.finloup import FinloupLeasing1Parser, FinloupLeasing2Parser
 from softone_pilot.parsers.goldair import GoldairCargoParser
 from softone_pilot.parsers.karasoulis import KarasoulisParser
+from softone_pilot.parsers.kerbl import KerblParser
 from softone_pilot.parsers.prometal import PrometalParser
 from softone_pilot.parsers.samson import GrSamsonParser
 from softone_pilot.parsers.sfakianakis import SfakianakisParser
@@ -39,6 +40,7 @@ PARSERS: tuple[SupplierParser, ...] = (
     FinloupLeasing1Parser(),
     FinloupLeasing2Parser(),
     PrometalParser(),
+    KerblParser(),
 )
 
 

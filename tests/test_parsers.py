@@ -17,6 +17,7 @@ from softone_pilot.parsers.fedex import FedexParser
 from softone_pilot.parsers.finloup import FinloupLeasing1Parser, FinloupLeasing2Parser
 from softone_pilot.parsers.goldair import GoldairCargoParser
 from softone_pilot.parsers.karasoulis import KarasoulisParser
+from softone_pilot.parsers.kerbl import KerblParser
 from softone_pilot.parsers.prometal import PrometalParser
 from softone_pilot.parsers.samson import GrSamsonParser
 from softone_pilot.parsers.sfakianakis import SfakianakisParser
@@ -976,3 +977,64 @@ def test_sfakianakis_rejects_rent_not_matching_net() -> None:
         SfakianakisParser().parse_text(
             Path("sfak.pdf"), SFAKIANAKIS_TEXT.replace("31/10/2026 418,00", "31/10/2026 400,00")
         )
+
+
+KERBL_TEXT = """\
+Albert Kerbl GmbH - Felizenzell 9 - DE-84428 Buchbach      Invoice
+FOUNTOUKAS THEODOROS                                        Invoice No.          VR-3206489
+Makedonikou Agona 19                                        Our VAT Reg. No.     DE129226311
+                                                            Date 09/09/26        Page 1
+
+Position        No.                          Quantity      Measure     Price        Amount
+                Description                                                          VAT %
+
+10              21208                             100   package       13.50      1,350.00
+                Cartridges 9x17mm, red, MAXXTech
+                50 pcs/box
+                Tariff No.: 9306 3090, Country/Region of Origin: DRITT
+
+20              21206                              10   package       13.50        135.00
+                Cartridges 9x17mm, MAXXTech
+                yellow, 50 pcs/box
+                Tariff No.: 9306 3090, Country/Region of Origin: DRITT
+
+                                                  Total EUR Excl. VAT            1,485.00
+                                                  Tax Amount                         0.00
+                                                  Total EUR Incl. VAT            1,485.00
+
+VAT Identifier                                                                 VAT Amount
+19%                      tax free intracommunity delivery                            0.00
+"""
+
+
+def test_parse_kerbl_boxes_become_pieces() -> None:
+    parser = KerblParser()
+    assert parser.matches(KERBL_TEXT.replace(" ", "").upper())
+    invoice = parser.parse_text(Path("kerbl.pdf"), KERBL_TEXT)
+    assert invoice.document_number == "VR-3206489"
+    assert invoice.document_date == date(2026, 9, 9)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value, invoice.vat_pct) == (
+        Decimal("1485.00"),
+        Decimal("0.00"),
+        Decimal("1485.00"),
+        Decimal("0"),
+    )
+    assert [(ln.code, ln.quantity, ln.unit_price, ln.value) for ln in invoice.lines] == [
+        ("21208", Decimal("5000"), Decimal("0.27"), Decimal("1350.00")),
+        ("21206", Decimal("500"), Decimal("0.27"), Decimal("135.00")),
+    ]
+    assert invoice.lines[0].description == "Cartridges 9x17mm, red, MAXXTech 50 pcs/box"
+    assert {line.vat_pct for line in invoice.lines} == {Decimal("0")}
+
+
+def test_kerbl_rejects_vat_charged() -> None:
+    text = KERBL_TEXT.replace("Tax Amount                         0.00", "Tax Amount   282.15")
+    text = text.replace("Total EUR Incl. VAT            1,485.00", "Total EUR Incl. VAT 1,767.15")
+    with pytest.raises(PdfParseError, match="ενδοκοινοτικό"):
+        KerblParser().parse_text(Path("kerbl.pdf"), text)
+
+
+def test_kerbl_rejects_lines_not_matching_net() -> None:
+    text = KERBL_TEXT.replace("13.50        135.00", "13.60        136.00")
+    with pytest.raises(PdfParseError, match="Άθροισμα γραμμών"):
+        KerblParser().parse_text(Path("kerbl.pdf"), text)
