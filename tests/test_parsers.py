@@ -22,6 +22,7 @@ from softone_pilot.parsers.prometal import PrometalParser
 from softone_pilot.parsers.samson import GrSamsonParser
 from softone_pilot.parsers.sfakianakis import SfakianakisParser
 from softone_pilot.parsers.technomatic import TechnomaticParser
+from softone_pilot.parsers.vn import VnParser
 
 
 def test_parse_greek_amounts() -> None:
@@ -1038,3 +1039,69 @@ def test_kerbl_rejects_lines_not_matching_net() -> None:
     text = KERBL_TEXT.replace("13.50        135.00", "13.60        136.00")
     with pytest.raises(PdfParseError, match="Άθροισμα γραμμών"):
         KerblParser().parse_text(Path("kerbl.pdf"), text)
+
+
+VN_TEXT = """\
+                    VN FOOD PROCESSING
+                    ww.vnsrl.com
+Fattura / Invoice
+Cod. Cli. / Code Cust.Numero / Number   Data / Date    Pag.
+        1024            000306              30/09/2026     1
+Condizione pagamento / Payment Terms
+                   Bonifico a vista Fattura
+  Articolo / Item  Descrizione / Description  Quantità /  UM /  Prz. Unit.  %Sc./  Imponibile/  IVA/
+                      DDT Nr. 000285 del 21/09/2026
+    1800  SM 7000-PLUS SKEWERING MACHINE WITH GUIDE   1,00  N   154.800,000   50   77.400,000   NI41
+                      RAIL
+                      SERIAL NUMBER 260356
+      0282  WOOD BOX FOR PACKAGING MACHINE SM 7000     1,00  N.    1.060,000   10     954,000   NI41
+      1265-SCI   CUBE COVER ORANGE FORMAT 27 INTERNALL      2,00  N     477,00010     858,600   NI41
+                      UNLOADED
+           0311KIT SKEWER LENGTH VARIATING          1,00  N.    1.060,000   10        954,000   NI41
+          0743-20   THICKNESS FOR CUBE 20mm          5,00  N.       45,00010          202,500   NI41
+ MANUALE SM7000       OPERATION  MANUAL IN ENGLISH        1,00  N       500,000100       0,000  NI41
+ IVA /     Descrizione / Description     Imponibile / Amount     IVA / VAT    Imponibile + Imposta /
+                  CE  CE CERTIFICATE                 1,00  N       200,000100            0,000  NI41
+                       Scadenze:
+                       EUR 80.369,100 al 30/09/2026
+                          Codice Fiscale e Partita  iva 01844150688
+NI41    Cessioni CEE non imponib. Art.41             80.369,100            0,000          80.369,100
+"""
+
+
+def test_parse_vn_discount_lines() -> None:
+    parser = VnParser()
+    assert parser.matches(VN_TEXT.replace(" ", "").upper())
+    invoice = parser.parse_text(Path("vn.pdf"), VN_TEXT)
+    assert invoice.document_number == "01024"
+    assert invoice.document_date == date(2026, 9, 30)
+    assert (invoice.net_value, invoice.vat_value, invoice.vat_pct) == (
+        Decimal("80369.10"),
+        Decimal("0.00"),
+        Decimal("0"),
+    )
+    assert [
+        (ln.code, ln.quantity, ln.unit_price, ln.discount_pct, ln.value) for ln in invoice.lines
+    ] == [
+        ("1800", Decimal("1.00"), Decimal("154800.00"), Decimal("50"), Decimal("77400.00")),
+        ("0282", Decimal("1.00"), Decimal("1060.00"), Decimal("10"), Decimal("954.00")),
+        ("1265-SCI", Decimal("2.00"), Decimal("477.00"), Decimal("10"), Decimal("858.60")),
+        ("0311", Decimal("1.00"), Decimal("1060.00"), Decimal("10"), Decimal("954.00")),
+        ("0743-20", Decimal("5.00"), Decimal("45.00"), Decimal("10"), Decimal("202.50")),
+    ]
+    assert invoice.lines[0].description == (
+        "SM 7000-PLUS SKEWERING MACHINE WITH GUIDE RAIL SERIAL NUMBER 260356"
+    )
+    assert invoice.lines[3].description == "KIT SKEWER LENGTH VARIATING"
+
+
+def test_vn_rejects_non_ni41_vat() -> None:
+    text = VN_TEXT.replace("NI41    Cessioni", "22    Cessioni")
+    with pytest.raises(PdfParseError, match="NI41"):
+        VnParser().parse_text(Path("vn.pdf"), text)
+
+
+def test_vn_rejects_lines_not_matching_net() -> None:
+    text = VN_TEXT.replace("45,00010", "46,00010").replace("202,500", "207,000")
+    with pytest.raises(PdfParseError, match="Άθροισμα γραμμών"):
+        VnParser().parse_text(Path("vn.pdf"), text)

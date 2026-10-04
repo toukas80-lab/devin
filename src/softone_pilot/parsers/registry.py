@@ -21,6 +21,7 @@ from softone_pilot.parsers.prometal import PrometalParser
 from softone_pilot.parsers.samson import GrSamsonParser
 from softone_pilot.parsers.sfakianakis import SfakianakisParser
 from softone_pilot.parsers.technomatic import TechnomaticParser
+from softone_pilot.parsers.vn import VnParser
 
 PARSERS: tuple[SupplierParser, ...] = (
     EnartiaParser(),
@@ -41,6 +42,7 @@ PARSERS: tuple[SupplierParser, ...] = (
     FinloupLeasing2Parser(),
     PrometalParser(),
     KerblParser(),
+    VnParser(),
 )
 
 
