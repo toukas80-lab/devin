@@ -5,16 +5,20 @@ from pathlib import Path
 from softone_pilot.models import InvoiceData
 from softone_pilot.parsers.base import PdfParseError, SupplierParser, extract_pdf_text
 from softone_pilot.parsers.brevo import BrevoParser
+from softone_pilot.parsers.cargobook import CargoBookParser
 from softone_pilot.parsers.carveco import CarvecoParser
 from softone_pilot.parsers.cognition import CognitionParser
+from softone_pilot.parsers.digitalsupport import DigitalSupportParser
 from softone_pilot.parsers.egnatia import EgnatiaOdosParser
 from softone_pilot.parsers.elta import EltaCourierParser
 from softone_pilot.parsers.enartia import EnartiaParser
 from softone_pilot.parsers.fedex import FedexParser
 from softone_pilot.parsers.finloup import FinloupLeasing1Parser, FinloupLeasing2Parser
+from softone_pilot.parsers.goldair import GoldairCargoParser
 from softone_pilot.parsers.karasoulis import KarasoulisParser
 from softone_pilot.parsers.prometal import PrometalParser
 from softone_pilot.parsers.samson import GrSamsonParser
+from softone_pilot.parsers.sfakianakis import SfakianakisParser
 from softone_pilot.parsers.technomatic import TechnomaticParser
 
 PARSERS: tuple[SupplierParser, ...] = (
@@ -28,6 +32,10 @@ PARSERS: tuple[SupplierParser, ...] = (
     BrevoParser(),
     GrSamsonParser(),
     EltaCourierParser(),
+    CargoBookParser(),
+    DigitalSupportParser(),
+    GoldairCargoParser(),
+    SfakianakisParser(),
     FinloupLeasing1Parser(),
     FinloupLeasing2Parser(),
     PrometalParser(),

@@ -6,16 +6,20 @@ import pytest
 
 from softone_pilot.parsers.base import PdfParseError, parse_amount, parse_date
 from softone_pilot.parsers.brevo import BrevoParser
+from softone_pilot.parsers.cargobook import CargoBookParser
 from softone_pilot.parsers.carveco import CarvecoParser
 from softone_pilot.parsers.cognition import CognitionParser
+from softone_pilot.parsers.digitalsupport import DigitalSupportParser
 from softone_pilot.parsers.egnatia import EgnatiaOdosParser
 from softone_pilot.parsers.elta import EltaCourierParser
 from softone_pilot.parsers.enartia import EnartiaParser
 from softone_pilot.parsers.fedex import FedexParser
 from softone_pilot.parsers.finloup import FinloupLeasing1Parser, FinloupLeasing2Parser
+from softone_pilot.parsers.goldair import GoldairCargoParser
 from softone_pilot.parsers.karasoulis import KarasoulisParser
 from softone_pilot.parsers.prometal import PrometalParser
 from softone_pilot.parsers.samson import GrSamsonParser
+from softone_pilot.parsers.sfakianakis import SfakianakisParser
 from softone_pilot.parsers.technomatic import TechnomaticParser
 
 
@@ -790,4 +794,182 @@ def test_elta_rejects_total_mismatch_and_credit_note() -> None:
         EltaCourierParser().parse_text(
             Path("elta.pdf"),
             ELTA_TEXT.replace("ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ", "ΠΙΣΤΩΤΙΚΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ"),
+        )
+
+
+def test_fedex_net_rows_with_eur_prefix() -> None:
+    text = FEDEX_EXEMPT_TEXT.replace(
+        "Έκπτωση Καθαρή Αξία\n-46.39 12.03\n-160.24 40.17\n",
+        "Έκπτωση Καθαρή Αξία\nEUR -46.39 EUR 12.03\nEUR -160.24 EUR 40.17\n",
+    )
+    invoice = FedexParser().parse_text(Path("fedex.pdf"), text)
+    assert (invoice.net_value, invoice.vat_value) == (Decimal("52.20"), Decimal("2.89"))
+
+
+CARGOBOOK_TEXT = """6947806591
+ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ/INVOICE 7790 28/09/2026
+ΚΑΡΓΚΟ ΜΠΟΥΚ
+ΝΑΥΤΙΛΙΑΚΗ ΜΕΤΑΦΟΡΙΚΗ Α.Ε.
+Α.Φ.Μ.:094475355  Δ.Ο.Υ.:ΚΕΦΟΔΕ ΑΤΤΙΚΗΣ
+CSCL URANUS
+XIAMEN
+PIRAEUS
+XMEU26074172
+FUJIAN ONE BAMBOO CO. LTD
+21/09/2026
+E-Mail : info@cargobook.gr
+ΕΙΔΟΣ 
+ΕΡΓΑΤΙΚΑ ΛΙΜΕΝΟΣ FREE OUT60-19 268,98 268,98 24 333,54 EUR
+ERS1116-19 112,07 112,07 24 138,97 EUR
+CISF-EX WORKS10207-0 236,62 213,56 0 213,56 USD
+ΑΡΘΡΟ 27 Ν.5144/24
+PCS EX WORKS10219-0 112,07 101,15 0 101,15 USD
+381,05 ΚΑΘ.ΑΞΙΑ
+91,46
+ΣΥΝΟΛΑ
+ΠΛΗΡΩΤΕΟ EUR
+787,22
+400015444366532
+"""
+
+
+def test_parse_cargobook_mixed_vat_lines() -> None:
+    invoice = CargoBookParser().parse_text(Path("cargobook.pdf"), CARGOBOOK_TEXT)
+    assert invoice.document_number == "7790"
+    assert invoice.document_date == date(2026, 9, 28)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("695.76"),
+        Decimal("91.46"),
+        Decimal("787.22"),
+    )
+    assert [(line.value, line.vat_pct, line.category) for line in invoice.lines] == [
+        (Decimal("268.98"), Decimal("24"), "charges24"),
+        (Decimal("112.07"), Decimal("24"), "charges24"),
+        (Decimal("213.56"), Decimal("0"), "freight0"),
+        (Decimal("101.15"), Decimal("0"), "freight0"),
+    ]
+    assert invoice.lines[0].description == "ΕΡΓΑΤΙΚΑ ΛΙΜΕΝΟΣ FREE OUT FUJIAN ONE BAMBOO CO. LTD"
+    assert invoice.description == "ΔΙΑΜΕΤΑΦΟΡΑ FUJIAN ONE BAMBOO CO. LTD"
+
+
+def test_cargobook_rejects_credit_note_and_vat_mismatch() -> None:
+    with pytest.raises(PdfParseError, match="Πιστωτικό"):
+        CargoBookParser().parse_text(
+            Path("cargobook.pdf"),
+            CARGOBOOK_TEXT.replace(
+                "ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ/INVOICE", "ΠΙΣΤΩΤΙΚΟ ΤΙΜΟΛΟΓΙΟ/CREDIT NOTE"
+            ),
+        )
+    with pytest.raises(PdfParseError, match="ΦΠΑ γραμμών"):
+        CargoBookParser().parse_text(
+            Path("cargobook.pdf"), CARGOBOOK_TEXT.replace("91,46\nΣΥΝΟΛΑ", "95,00\nΣΥΝΟΛΑ")
+        )
+
+
+DIGITAL_SUPPORT_TEXT = """ΚΑΠΕΤΑΝΑΚΗ  ΚΑΜΠΟΥΡΗΣ  ΕΤΕΡΟΡΡΥΘΜΗ  ΕΤΑΙΡΙΑ  ΑΦΜEL802175958
+Είδος  Παραστατικού
+Τιμολόγιο  Παροχής  Υπηρεσιών
+Αριθμός
+ΤΠΥ 0000865
+Ημερομηνία  Έκδοσης
+29/09/2026 3:28 μ . μ .
+400.006Υπηρεσίες  Υλοποίησης
+Έργου
+3,00ΏρεςLH 40,00 0,00 0,00 120,00 0,00 24 28,80148,80
+Σχόλια  ΕΝΤΧ 002948
+400.006Υπηρεσίες  ΥλοποίησηςΈργου 0,25ΏρεςLH 40,00 0,00 0,00 10,00 0,00 24 2,40 12,40
+Σχόλια  ΕΝΤΧ 003127
+400.006Υπηρεσίες  ΥλοποίησηςΈργου 0,25ΏρεςLH 40,00 0,00 0,00 10,00 0,00 24 2,40 12,40
+Σχόλια  ΕΝΤΧ 003243
+Σύνολο  Καθαρού  Ποσού 140,00
+Σύνολο  Φ . Π . Α 33,60
+Συνολική  Αξία 173,60
+"""
+
+
+def test_parse_digital_support_hours_summarised() -> None:
+    invoice = DigitalSupportParser().parse_text(Path("ds.pdf"), DIGITAL_SUPPORT_TEXT)
+    assert invoice.document_number == "865"
+    assert invoice.document_date == date(2026, 9, 29)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("140.00"),
+        Decimal("33.60"),
+        Decimal("173.60"),
+    )
+    assert invoice.vat_pct == Decimal("24")
+    assert invoice.lines == ()
+    assert (
+        invoice.description == "ΤΕΧΝΙΚΗ ΥΠΟΣΤΗΡΙΞΗ 3,5 ΩΡΕΣ - ΕΝΤΧ 002948, ΕΝΤΧ 003127, ΕΝΤΧ 003243"
+    )
+
+
+def test_digital_support_rejects_lines_not_matching_net() -> None:
+    with pytest.raises(PdfParseError, match="σύνολο γραμμών"):
+        DigitalSupportParser().parse_text(
+            Path("ds.pdf"), DIGITAL_SUPPORT_TEXT.replace("0,00 120,00 0,00", "0,00 100,00 0,00")
+        )
+
+
+GOLDAIR_TEXT = """  SINDOS WAREHOUSE        ΓΚΟΛΝΤΑΙΡ ΚΑΡΓΚΟ        ΑΦΜ/VAT: EL094240542
+      ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ             Θ          261941          27/07/2026
+     Αποστολέας : C/O IVO CUTELARIAS LDA
+     Από : MILANO την : 24/07/2026 εις : THESSALONIKI την : 27/07/2026        MI
+       704 ΟΔΙΚΟΣ ΝΑΥΛΟΣ                 24          220,00          52,80          272,80
+ΠΑΓΚΡΗΤΙΑ ΣΥΝΕΤΑΙΡΙΣΤΙΚΗ ΤΡΑΠΕΖΑ : IBAN GR33          Πληρωτέα Αξία      EUR          272,80
+"""
+
+
+def test_parse_goldair_road_freight() -> None:
+    parser = GoldairCargoParser()
+    assert parser.layout is True
+    invoice = parser.parse_text(Path("goldair.pdf"), GOLDAIR_TEXT)
+    assert invoice.document_number == "261941"
+    assert invoice.document_date == date(2026, 7, 27)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("220.00"),
+        Decimal("52.80"),
+        Decimal("272.80"),
+    )
+    assert len(invoice.lines) == 1
+    assert invoice.description == "ΟΔΙΚΟΣ ΝΑΥΛΟΣ MILANO IVO CUTELARIAS LDA"
+
+
+def test_goldair_rejects_total_mismatch() -> None:
+    with pytest.raises(PdfParseError, match="Ασυμφωνία"):
+        GoldairCargoParser().parse_text(
+            Path("goldair.pdf"), GOLDAIR_TEXT.replace("EUR          272,80", "EUR          300,00")
+        )
+
+
+SFAKIANAKIS_TEXT = """ΣΦΑΚΙΑΝΑΚΗΣ  ΑΕΒΕ
+Α.Φ . Μ .: 094010226, Δ . Ο . Υ .: ΚΕΦΟΔΕ  ΑΤΤΙΚΗΣ
+ΤΥΠΟΣ  ΠΑΡΑΣΤΑΤΙΚΟΥ ΣΕΙΡΑ ΑΡΙΘΜΟΣ ΗΜΕΡΟΜΗΝΙΑ
+ΤΙΜΟΛΟΓΙΟ  ΠΑΡΟΧΗΣ  ΥΠΗΡΕΣΙΩΝ Β 403986 01/10/2026 7:50 μ . μ .
+ΑΙΤΙΟΛΟΓΙΑ ΑΞΙΑ
+Μίσθωμα  του  υπ ` αριθμ . XPM8586 οχήματος  από  01/10/2026 έως  31/10/2026 418,00
+ΚΩΔΙΚΟΣ  ΗΛΕΚΤΡΟΝΙΚΗΣ  ΠΛΗΡΩΜΗΣ : RF65901758100000802313849
+ΣΥΝΟΛΟ 418,00
+Φ. Π . Α . 24.00% 100,32
+Ο ΕΚΔΟΤΗΣ
+ Ο ΠΑΡΑΛΑΒΩΝ ΣΥΝΟΛΟ 518,32ΠΛΗΡΩΤΕΟ
+"""
+
+
+def test_parse_sfakianakis_vehicle_rent() -> None:
+    invoice = SfakianakisParser().parse_text(Path("sfak.pdf"), SFAKIANAKIS_TEXT)
+    assert invoice.document_number == "Β403986"
+    assert invoice.document_date == date(2026, 10, 1)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("418.00"),
+        Decimal("100.32"),
+        Decimal("518.32"),
+    )
+    assert invoice.vat_pct == Decimal("24")
+    assert invoice.description == "ΜΙΣΘΩΜΑ XPM8586 ΟΚΤΩΒΡΙΟΥ 2026"
+
+
+def test_sfakianakis_rejects_rent_not_matching_net() -> None:
+    with pytest.raises(PdfParseError, match="Μίσθωμα"):
+        SfakianakisParser().parse_text(
+            Path("sfak.pdf"), SFAKIANAKIS_TEXT.replace("31/10/2026 418,00", "31/10/2026 400,00")
         )
