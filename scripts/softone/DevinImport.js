@@ -159,35 +159,60 @@ function DevinAddLines(fileName) {
             if (ds.RECORDCOUNT > 1) { out.push('ERR  ' + fincode + ': ' + ds.RECORDCOUNT + ' documents with this code for the supplier - check manually'); continue; }
             var id = parseInt(ds.FINDOC, 10);
             var have = parseInt(X.SQL('SELECT COUNT(*) FROM MTRLINES WHERE FINDOC=:1', id), 10);
-            if (have >= d.lines.length) { out.push('SKIP ' + fincode + ' -> FINDOC ' + id + ' (already ' + have + ' lines)'); continue; }
-            if (have != 1) { out.push('ERR  ' + fincode + ' -> FINDOC ' + id + ': has ' + have + ' lines, expected 1 - check manually'); continue; }
-            var firstMtrl = parseInt(X.SQL('SELECT MTRL FROM MTRLINES WHERE FINDOC=:1', id), 10);
+            var addLines = have < d.lines.length;
+            var fixVat = DevinExpVatFixes(id, d.lines);
+            if (!addLines && fixVat.length == 0) { out.push('SKIP ' + fincode + ' -> FINDOC ' + id + ' (already ' + have + ' lines)'); continue; }
+            if (addLines && have != 1) { out.push('ERR  ' + fincode + ' -> FINDOC ' + id + ': has ' + have + ' lines, expected 1 - check manually'); continue; }
+            var firstMtrl = parseInt(X.SQL('SELECT TOP 1 MTRL FROM MTRLINES WHERE FINDOC=:1 ORDER BY LINENUM', id), 10);
             if (firstMtrl != d.lines[0].mtrl) { out.push('ERR  ' + fincode + ' -> FINDOC ' + id + ': first line MTRL ' + firstMtrl + ' <> file ' + d.lines[0].mtrl); continue; }
 
-            var obj = X.CREATEOBJFORM('PURDOC');
+            var obj = X.CREATEOBJFORM('PURDOC'), posted = false;
             try {
                 obj.DBLOCATE(id);
                 var lns = obj.FindTable('ITELINES');
-                for (var j = 1; j < d.lines.length; j++) {
-                    var L = d.lines[j];
-                    lns.Append;
-                    lns.MTRL = L.mtrl;
-                    lns.QTY1 = L.qty;
-                    lns.PRICE = L.price;
-                    lns.VAT = L.vat;
-                    if (L.disc) lns.DISC1PRC = L.disc;
-                    lns.WHOUSE = 1000;
-                    lns.Post;
+                if (fixVat.length) {
+                    lns.FIRST;
+                    while (!lns.EOF) {
+                        for (var q = 0; q < fixVat.length; q++) {
+                            if (parseInt(lns.LINENUM, 10) != fixVat[q].linenum) continue;
+                            try { lns.EDIT; } catch (eV) { }
+                            lns.VAT = fixVat[q].vat;
+                            lns.Post;
+                        }
+                        lns.NEXT;
+                    }
+                }
+                if (addLines) {
+                    for (var j = 1; j < d.lines.length; j++) {
+                        var L = d.lines[j];
+                        lns.Append;
+                        lns.MTRL = L.mtrl;
+                        lns.QTY1 = L.qty;
+                        lns.PRICE = L.price;
+                        lns.VAT = L.vat;
+                        if (L.disc) lns.DISC1PRC = L.disc;
+                        lns.WHOUSE = 1000;
+                        lns.Post;
+                    }
                 }
                 var r = obj.DBPOST;
                 if (!r) throw new Error(String(obj.GETLASTERROR));
+                posted = true;
             }
             finally {
+                if (!posted) { try { obj.DBCANCEL; } catch (e0) { } }
                 obj.FREE;
             }
             var now = X.GETSQLDATASET(
                 'SELECT FINCODE, (SELECT COUNT(*) FROM MTRLINES M WHERE M.FINDOC=F.FINDOC) AS LINES, NETAMNT, VATAMNT, SUMAMNT FROM FINDOC F WHERE FINDOC=:1', id);
-            out.push('OK   ' + fincode + ' -> FINDOC ' + id + ': added ' + (d.lines.length - 1) + ' line(s), now ' + now.JSON);
+            var parts = [];
+            if (addLines) parts.push('added ' + (d.lines.length - 1) + ' line(s)');
+            for (var v = 0; v < fixVat.length; v++) parts.push('line ' + fixVat[v].linenum + ' VAT ' + fixVat[v].was + ' -> ' + fixVat[v].vat);
+            var did = parts.join(', ');
+            if (String(now.FINCODE) != fincode) { out.push('ERR  ' + fincode + ' -> FINDOC ' + id + ': ' + did + ' but the number changed to "' + now.FINCODE + '" - fix it in the form'); continue; }
+            var left = DevinExpVatFixes(id, d.lines);
+            out.push((left.length ? 'WARN ' : 'OK   ') + fincode + ' -> FINDOC ' + id + ': ' + did + ', now ' + now.JSON +
+                (left.length ? ' - ' + left.length + ' line(s) still with wrong VAT - fix in the form' : ''));
         }
         catch (e) {
             out.push('ERR  ' + fincode + ': ' + e.message);
