@@ -2,9 +2,27 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from softone_pilot.parsers.base import parse_amount, parse_date
+import pytest
+
+from softone_pilot.parsers.base import PdfParseError, parse_amount, parse_date
+from softone_pilot.parsers.brevo import BrevoParser
+from softone_pilot.parsers.cargobook import CargoBookParser
+from softone_pilot.parsers.carveco import CarvecoParser
+from softone_pilot.parsers.cognition import CognitionParser
+from softone_pilot.parsers.digitalsupport import DigitalSupportParser
 from softone_pilot.parsers.egnatia import EgnatiaOdosParser
+from softone_pilot.parsers.elta import EltaCourierParser
 from softone_pilot.parsers.enartia import EnartiaParser
+from softone_pilot.parsers.fedex import FedexParser
+from softone_pilot.parsers.finloup import FinloupLeasing1Parser, FinloupLeasing2Parser
+from softone_pilot.parsers.goldair import GoldairCargoParser
+from softone_pilot.parsers.karasoulis import KarasoulisParser
+from softone_pilot.parsers.kerbl import KerblParser
+from softone_pilot.parsers.prometal import PrometalParser
+from softone_pilot.parsers.samson import GrSamsonParser
+from softone_pilot.parsers.sfakianakis import SfakianakisParser
+from softone_pilot.parsers.technomatic import TechnomaticParser
+from softone_pilot.parsers.vn import VnParser
 
 
 def test_parse_greek_amounts() -> None:
@@ -44,3 +62,1046 @@ def test_parse_egnatia_text_and_previous_month_description() -> None:
     assert invoice.document_number == "INV-9328198"
     assert invoice.document_date == date(2026, 4, 1)
     assert invoice.description == "ΔΙΟΔΙΑ ΜΑΡΤΙΟΥ 2026"
+
+
+def test_parse_enartia_apy_receipt() -> None:
+    text = """
+    ENARTIA ΜΟΝΟΠΡΟΣΩΠΗ ΑΝΩΝΥΜΗ ΕΤΑΙΡΕΙΑ
+    ΑΦΜ: 999082935 ΔΟΥ: ΗΡΑΚΛΕΙΟΥ
+    ΤΥΠΟΣ ΠΑΡΑΣΤΑΤΙΚΟΥ ΑΡΙΘΜΟΣ ΗΜΕΡΟΜΗΝΙΑ
+    Απόδειξη Παροχής Υπηρεσιών ΑΠΥ-E1L-324247 21/9/2026
+    002.002 Ανανέωση Ονόματος Χώρου GR 1 53,71 0,00 0,00 53,71 24,00 12,89 66,60
+    Ανανέωση του cbdcs.gr για 4 χρόνια
+     ΚΑΘΑΡΗ ΑΞΙΑ 53,71
+     ΑΞΙΑ Φ.Π.Α. 12,89
+    ΤΕΛΙΚΗ ΑΞΙΑ 66,60
+    """
+    invoice = EnartiaParser().parse_text(Path("enartia.pdf"), text)
+    assert invoice.document_number == "ΑΠΥ-E1L-324247"
+    assert invoice.document_date == date(2026, 9, 21)
+    assert invoice.net_value == Decimal("53.71")
+    assert invoice.description == (
+        "ΑΝΑΝΕΩΣΗ ΟΝΟΜΑΤΟΣ ΧΩΡΟΥ GR - ΑΝΑΝΕΩΣΗ ΤΟΥ CBDCS.GR ΓΙΑ 4 ΧΡΟΝΙΑ"
+    )
+
+
+TECHNOMATIC_TEXT = """
+            TECHNOMATIC GROUP IKE
+            ΑΦΜ 800745478 ΔΟΥ ΚΕΦΟΔΕ
+            Αρ. Παραστατικού       Κ-ΤΙΟ             017838
+   ΕΠΩΝΥΜΙΑ :           ΦΟΥΝΤΟΥΚΑΣ ΘΕΟΔΩΡΟΣ            18/09/2026
+            ΚΩΔΙΚΟΣ                ΠΕΡΙΓΡΑΦΗ                  ΠΟΣΟΤΗΤΑ    ΤΙΜΗ ΜΟΝ.   %ΕΚΠΤ    ΑΞΙΑ
+   130-CST220     ΜΑΓΝΗΤΙΚΟΣ ΔΙΑΚΟΠΤΗΣ CST220     Τμχ      7      25,50      25     133,87
+   200-ABC               ΚΑΛΩΔΙΟ 2Μ            Τμχ      2      10,00       0      20,00
+Σύνολο Ποσότητας:         9
+            Άθροισμα            153,87
+            ΦΠΑ            36,93
+            ΣΥΝΟΛΟ            190,80  €
+"""
+
+
+def test_parse_technomatic_lines() -> None:
+    invoice = TechnomaticParser().parse_text(Path("technomatic.pdf"), TECHNOMATIC_TEXT)
+    assert invoice.document_number == "017838"
+    assert invoice.document_date == date(2026, 9, 18)
+    assert invoice.net_value == Decimal("153.87")
+    assert invoice.vat_pct == Decimal("24")
+    assert [line.code for line in invoice.lines] == ["130-CST220", "200-ABC"]
+    first = invoice.lines[0]
+    assert (first.quantity, first.unit_price, first.discount_pct, first.value) == (
+        Decimal("7"),
+        Decimal("25.50"),
+        Decimal("25"),
+        Decimal("133.87"),
+    )
+    assert {line.vat_pct for line in invoice.lines} == {Decimal("24")}
+
+
+def test_technomatic_mixed_vat_is_rejected() -> None:
+    text = TECHNOMATIC_TEXT.replace("36,93", "34,53").replace("190,80", "188,40")
+    with pytest.raises(PdfParseError, match="ενιαίο συντελεστή"):
+        TechnomaticParser().parse_text(Path("technomatic.pdf"), text)
+
+
+def test_enartia_credit_note_is_rejected() -> None:
+    text = """
+    ENARTIA ΜΟΝΟΠΡΟΣΩΠΗ ΑΝΩΝΥΜΗ ΕΤΑΙΡΕΙΑ ΑΦΜ 999082935
+    ΠΙΣΤΩΤΙΚΟ ΠΤΠΥ-E1-734390
+    Ημερομηνία Έκδοσης: 06/04/2026
+    ΚΑΘΑΡΗ ΑΞΙΑ 100,00
+    ΑΞΙΑ Φ.Π.Α. 24,00
+    ΤΕΛΙΚΗ ΑΞΙΑ 124,00
+    """
+    with pytest.raises(PdfParseError, match="ΠΤΠΥ"):
+        EnartiaParser().parse_text(Path("enartia.pdf"), text)
+
+
+FEDEX_TEXT = """FedEx Express Greece Μονοπρόσωπη
+ΑΦΜ: GR095283423
+Αριθμός τιμολογίου:
+685277532
+08/09/2026
+08/10/2026
+163.98 EUR
+ΥπηρεσίαΑρ. Αποστολής Ημερομηνία
+ΦΠΑ Απαλ/μενη ΦΠΑ
+62.7102/09/2026876620512035 0.00 62.71FedEx Intl Priority 1 6.70 kg
+268.07Αποστολέας Παραλήπτης Χρέωση Μεταφορικών
+-225.63FOUNTOUKAS THEODOROS STOCKHOLM COUNTY, SWEDEN Εκπτωση
+Υποσύνολο EURG.MICHAEL 03/09/2026 15:05Υπογραφή: 62.71
+Ισχύον ΦΠΑ 24.00%
+ΥπηρεσίαΑρ. Αποστολής Ημερομηνία
+ΦΠΑ Απαλ/μενη ΦΠΑ
+37.7831/08/2026876495715856 0.00 37.78FedEx Regional Economy 2 31.00 kg 882922841073
+154.17Αποστολέας Παραλήπτης Χρέωση Μεταφορικών
+-125.11SABAN ERYASAR ORAIOKASTRO, GREECE Εκπτωση
+Ισχύον ΦΠΑ 24.00%
+ΥπηρεσίαΑρ. Αποστολής Ημερομηνία
+ΦΠΑ Απαλ/μενη ΦΠΑ
+31.7531/08/2026876497693791 0.00 31.75FedEx Regional Economy 2 29.00 kg 882923158514
+135.69Αποστολέας Παραλήπτης Χρέωση Μεταφορικών
+-111.27EMI PATRIZIO ORAIOKASTRO, GREECE Εκπτωση
+Ισχύον ΦΠΑ 24.00%
+Ποσοστό\xa0ΦΠΑ Χρεώσεις ΦΠΑ Αξία
+594.25 31.74 163.9824.00 %
+Συνολική\xa0Αξία EUR 163.98
+Έκπτωση Καθαρή\xa0Αξία
+-462.01 132.24
+"""
+
+
+def test_parse_fedex_shipments() -> None:
+    invoice = FedexParser().parse_text(Path("fedex.pdf"), FEDEX_TEXT)
+    assert invoice.document_number == "685277532"
+    assert invoice.document_date == date(2026, 9, 8)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("132.24"),
+        Decimal("31.74"),
+        Decimal("163.98"),
+    )
+    assert [line.value for line in invoice.lines] == [
+        Decimal("62.71"),
+        Decimal("37.78"),
+        Decimal("31.75"),
+    ]
+    assert invoice.lines[0].code == "876620512035"
+    assert {line.description for line in invoice.lines} == {
+        "876620512035 / 876495715856 / 876497693791"
+    }
+    assert [line.category for line in invoice.lines] == ["export24", "import24", "import24"]
+
+
+FEDEX_EXEMPT_TEXT = """FedEx Express Greece Μονοπρόσωπη
+ΑΦΜ: GR095283423
+685269238
+25/08/2026
+24/09/2026
+55.09 EUR
+Απόδειξη Ναύλων ­ Λεπτομερείς
+ΥπηρεσίαΑρ. Αποστολής Ημερομηνία
+12.0305/08/2026875343928958 0.00 12.03Economy Service 1 3.20 kg 882868182063
+54.66Αποστολέας Παραλήπτης Χρέωση Μεταφορικών
+-46.39FOUNTOUKAS THEODOROS MEGAM EMPORIKI LTD Εκπτωση
+Υποσύνολο EURA.NDREAS GEORGIOU 18/08/2026 12:31Υπογραφή: 12.03
+Ισχύον ΦΠΑ 24.00%
+ΥπηρεσίαΑρ. Αποστολής Ημερομηνία
+0.0006/08/2026875403298141 40.17 40.17Economy Service 1 8.94 kg
+2.40Αποστολέας Παραλήπτης Χρέωση διαχείρισης εκτελωνισμού εισαγωγών
+186.20FOUNTOUKAS THEODOROS JORDAN LAUDANO Χρέωση Μεταφορικών
+Υποσύνολο EURM.Metchin 20/08/2026 10:45Υπογραφή: 40.17
+Ποσοστό ΦΠΑ Χρεώσεις ΦΠΑ Αξία
+58.42 2.89 14.9224.00 %
+0,00% 200.41 0.00 40.17
+Συνολική Αξία EUR 55.09
+Έκπτωση Καθαρή Αξία
+-46.39 12.03
+-160.24 40.17
+Κάθε αποστολή
+"""
+
+FEDEX_DUTY_TEXT = """FedEx Express Greece Μονοπρόσωπη
+ΑΦΜ: GR095283423
+685275826
+03/09/2026
+Πληρωμή με απόδειξη
+53.04 EUR
+Απόδειξη Δασμών & Φόρων ­ Λεπτομερείς
+ΥπηρεσίαΑρ. Αποστολής Ημερομηνία
+10/06/2026872826082908 39.23 53.04Economy Service 13.81 0.00 0.00
+13.3715.00Αποστολέας Παραλήπτης Χρέωση δαπανών
+13.8115.49FOUNTOUKAS THEODOROS WASHINGTON, UNITED STATES Επαναχρέωση Δασμών
+Υποσύνολο EUR25/06/2026Υπογραφή: 53.04
+Άλλες χρεώσεις με τιμή 0,00% 25.86
+ΦΠΑ σε 0.00 % 0.00
+EUR 53.04Συνολική Αξία
+"""
+
+
+def test_parse_fedex_export_with_exempt_shipment() -> None:
+    invoice = FedexParser().parse_text(Path("fedex.pdf"), FEDEX_EXEMPT_TEXT)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("52.20"),
+        Decimal("2.89"),
+        Decimal("55.09"),
+    )
+    assert [(line.value, line.vat_pct, line.category) for line in invoice.lines] == [
+        (Decimal("12.03"), Decimal("24"), "export24"),
+        (Decimal("40.17"), Decimal("0"), "export0"),
+    ]
+    assert invoice.lines[1].description == "875343928958 / 875403298141"
+
+
+def test_parse_fedex_duty_receipt() -> None:
+    invoice = FedexParser().parse_text(Path("fedex.pdf"), FEDEX_DUTY_TEXT)
+    assert invoice.document_number == "685275826"
+    assert invoice.document_date == date(2026, 9, 3)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("53.04"),
+        Decimal("0"),
+        Decimal("53.04"),
+    )
+    assert [(line.value, line.vat_pct, line.category) for line in invoice.lines] == [
+        (Decimal("53.04"), Decimal("0"), "duty")
+    ]
+    assert invoice.description == "ΔΑΣΜΟΙ FEDEX 1 ΑΠΟΣΤΟΛΕΣ"
+    assert invoice.lines[0].description == "ECONOMY SERVICE 872826082908 10/06/2026 ΔΑΣΜΟΙ"
+
+
+def test_fedex_duty_receipt_with_vat_is_rejected() -> None:
+    text = FEDEX_DUTY_TEXT.replace("ΦΠΑ σε 0.00 % 0.00", "ΦΠΑ σε 24.00 % 3.21")
+    with pytest.raises(PdfParseError, match="δασμών FEDEX με ΦΠΑ"):
+        FedexParser().parse_text(Path("fedex.pdf"), text)
+
+
+def test_fedex_line_mismatch_is_rejected() -> None:
+    text = FEDEX_TEXT.replace("-462.01 132.24", "-462.01 140.00")
+    with pytest.raises(PdfParseError, match="Άθροισμα αποστολών"):
+        FedexParser().parse_text(Path("fedex.pdf"), text)
+
+
+KARASOULIS_TEXT = """ΑΦΜ/VAT.NO.:094453479 ΔΟΥ:ΦΑΕ ΘΕΣΣΑΛΟΝΙΚΗΣ
+Τιμολόγιο Παροχής Υπηρεσιών 3/8/2026
+ΤΠΥ-0000019455
+56429
+ΕΛΛΑΔΑ
+VN FOOD PROCESSING EQUIPMENT SNC
+COLLECORVINO
+ITALY
+ΦΟΥΝΤΟΥΚΑΣ ΘΕΟΔΩΡΟΣ Μ.Ι.Κ.Ε
+24380,00 471,20ΝΑΥΛΟΣ / FREIGHT 91,20
+24380,00 91,20
+380,00
+91,20
+DDT 221 471,20
+471,20
+"""
+
+
+def test_parse_karasoulis_freight() -> None:
+    invoice = KarasoulisParser().parse_text(Path("karasoulis.pdf"), KARASOULIS_TEXT)
+    assert invoice.document_number == "19455"
+    assert invoice.document_date == date(2026, 8, 3)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("380.00"),
+        Decimal("91.20"),
+        Decimal("471.20"),
+    )
+    assert invoice.description == "ΝΑΥΛΟΣ VN FOOD PROCESSING EQUIPMENT SNC (ITALY)"
+    assert invoice.lines[0].vat_pct == Decimal("24")
+
+
+def test_karasoulis_mixed_vat_lines() -> None:
+    text = KARASOULIS_TEXT.replace(
+        "24380,00 471,20ΝΑΥΛΟΣ / FREIGHT 91,20",
+        "24380,00 471,20ΝΑΥΛΟΣ / FREIGHT 91,20\n020,00 20,00ΕΞΟΔΑ / FEES 0,00",
+    ).replace("\n471,20\n", "\n491,20\n")
+    invoice = KarasoulisParser().parse_text(Path("karasoulis.pdf"), text)
+    assert [(line.value, line.vat_pct) for line in invoice.lines] == [
+        (Decimal("380.00"), Decimal("24")),
+        (Decimal("20.00"), Decimal("0")),
+    ]
+    assert invoice.total_value == Decimal("491.20")
+
+
+COGNITION_TEXT = """\xa0
+Invoice
+Invoice number ZZCYINBS\x000107
+Date of issue September 21, 2026
+Cognition AI Inc.
+Bill to
+FOUNTOUKAS THEODOROS MON.IKE
+GR VAT EL802313849
+$20.00 USD due September 21, 2026
+Description Qty Unit price Tax Amount
+Overage credits 1 $20.00 0% $20.00
+Subtotal $20.00
+Total $20.00
+Amount due $20.00\xa0USD
+\x001\x00 Tax to be paid on reverse charge basis
+"""
+
+
+def test_parse_cognition_usd_reverse_charge() -> None:
+    parser = CognitionParser()
+    assert parser.matches(COGNITION_TEXT.replace(" ", "").upper())
+    invoice = parser.parse_text(Path("cognition.pdf"), COGNITION_TEXT)
+    assert invoice.currency == "USD"
+    assert invoice.document_number == "ZZCYINBS-107"
+    assert invoice.document_date == date(2026, 9, 21)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("20.00"),
+        Decimal("0.00"),
+        Decimal("20.00"),
+    )
+    assert invoice.lines[0].vat_pct == 0
+
+
+def test_parse_cognition_subscription_line_with_period() -> None:
+    text = COGNITION_TEXT.replace(
+        "Overage credits 1 $20.00 0% $20.00",
+        "Pro\nMay 30 Jun 30, 2026\n1 $20.00 0% $20.00",
+    )
+    invoice = CognitionParser().parse_text(Path("cognition.pdf"), text)
+    assert [line.description for line in invoice.lines] == ["PRO (MAY 30 JUN 30, 2026)"]
+    assert invoice.description == "DEVIN PRO (MAY 30 JUN 30, 2026)"
+    assert invoice.net_value == Decimal("20.00")
+
+
+def test_cognition_rejects_taxed_invoice() -> None:
+    text = COGNITION_TEXT.replace("Total $20.00", "Total $24.80").replace(
+        "Amount due $20.00", "Amount due $24.80"
+    )
+    with pytest.raises(PdfParseError, match="φόρο"):
+        CognitionParser().parse_text(Path("cognition.pdf"), text)
+
+
+FINLOUP_EINVOICE_TEXT = """FINLOUP LEASING II ΜΟΝΟΠΡΟΣΩΠΗ  Α  Ε  Αρ . Εγκατάστασης  Εδρα
+ΓΡΑΦΕΙΟΥ  ΚΑΙ  ΑΦΜ  EL803183981 Δ. Ο . Υ . ΚΕΦΟΔΕ  ΑΤΤΙΚΗΣ  Αριθμός  ΓΕΜΗ
+Είδος  Παραστατικού
+Τιμολόγιο  Παροχής  Υπηρεσιών
+Αριθμός
+ΤΠΥ 0000988
+Ημερομηνία  Έκδοσης
+09/07/2026 3:54 μ . μ .
+Στοιχεία  Πελάτη
+ΑΦΜ802313849
+Ανάλυση
+ΚωδικόςΠεριγραφή ΠοσότηταM.M.
+Φ . Π . ΑΤελικό
+P01946 2447 - Fixed 24 - 1 x Lenovo ThinkPad L16 Gen2 CoreUltra5 32GB | 1TB (at
+€54.16 / month)
+1,00Τεμάχια 54,16 0,00 0,00 54,16 24 13,00 67,16
+Εκπτώσεις / Χρεώσεις
+Ανάλυση  ΦΠΑ
+24,00% 54,16 13,00
+Νόμισμα EUR
+Σύνολο  Καθαρού  Ποσού 54,16
+Σύνολο  Φ . Π . Α 13,00
+Συνολική  Αξία 67,16
+Σχόλια  FINCO2-0988
+"""
+
+FINLOUP_STRIPE_TEXT = """\xa0
+Τɩμολόγɩο
+Αρɩθμός τɩμολογίου FINCO1\x0016086
+Ημερομηνία έκδοσης 6 Ιουλίου 2026
+Finloup Leasing I
+GR VAT EL802285336
+Χρέωση σε
+GR VAT EL802313849
+36,51\xa0€ πληρωτέο στɩς 6 Ιουλίου 2026
+Περɩγραφή Ποσότητα
+Samsung Galaxy S25
+6 Ιουλ 2026\x006 Αυγ 2026
+1 29,44\xa0€ 24% 29,44\xa0€
+\xa0
+Μερɩκό σύνολο 29,44\xa0€
+Σύνολο χωρίς φόρο 29,44\xa0€
+VAT - Greece \x0024% επί του ποσού 29,44\xa0€\x00 7,07\xa0€
+Σύνολο 36,51\xa0€
+Πληρωτέο ποσό 36,51\xa0€
+"""
+
+
+def test_parse_finloup_einvoice_leasing2() -> None:
+    parser = FinloupLeasing2Parser()
+    normalized = FINLOUP_EINVOICE_TEXT.replace(" ", "").upper()
+    assert parser.matches(normalized)
+    assert not FinloupLeasing1Parser().matches(normalized)
+    invoice = parser.parse_text(Path("finloup.pdf"), FINLOUP_EINVOICE_TEXT)
+    assert invoice.supplier_vat == "803183981"
+    assert invoice.document_number == "988"
+    assert invoice.document_date == date(2026, 7, 9)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("54.16"),
+        Decimal("13.00"),
+        Decimal("67.16"),
+    )
+    assert invoice.vat_pct == Decimal("24")
+    assert [(line.code, line.value, line.vat_pct) for line in invoice.lines] == [
+        ("P01946", Decimal("54.16"), Decimal("24"))
+    ]
+    assert invoice.description == "ΜΙΣΘΩΜΑ LENOVO THINKPAD L16 GEN2 COREULTRA5 32GB | 1TB"
+
+
+def test_parse_finloup_stripe_leasing1() -> None:
+    parser = FinloupLeasing1Parser()
+    normalized = FINLOUP_STRIPE_TEXT.replace(" ", "").upper()
+    assert parser.matches(normalized)
+    assert not FinloupLeasing2Parser().matches(normalized)
+    invoice = parser.parse_text(Path("finloup.pdf"), FINLOUP_STRIPE_TEXT)
+    assert invoice.supplier_vat == "802285336"
+    assert invoice.document_number == "16086"
+    assert invoice.document_date == date(2026, 7, 6)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("29.44"),
+        Decimal("7.07"),
+        Decimal("36.51"),
+    )
+    assert invoice.vat_pct == Decimal("24")
+    assert [line.value for line in invoice.lines] == [Decimal("29.44")]
+    assert invoice.description == "ΜΙΣΘΩΜΑ SAMSUNG GALAXY S25 (6 ΙΟΥΛ 2026 - 6 ΑΥΓ 2026)"
+
+
+def test_finloup_rejects_total_mismatch() -> None:
+    text = FINLOUP_EINVOICE_TEXT.replace("Συνολική  Αξία 67,16", "Συνολική  Αξία 68,16")
+    with pytest.raises(PdfParseError):
+        FinloupLeasing2Parser().parse_text(Path("finloup.pdf"), text)
+
+
+def test_finloup_rejects_lines_not_matching_net() -> None:
+    text = FINLOUP_STRIPE_TEXT.replace("1 29,44\xa0€ 24% 29,44\xa0€", "1 29,44\xa0€ 24% 19,44\xa0€")
+    with pytest.raises(PdfParseError, match="γραμμές"):
+        FinloupLeasing1Parser().parse_text(Path("finloup.pdf"), text)
+
+
+def test_finloup_rejects_non_invoice_kind() -> None:
+    text = FINLOUP_EINVOICE_TEXT.replace(
+        "Τιμολόγιο  Παροχής  Υπηρεσιών", "Πιστωτικό  Τιμολόγιο  Παροχής  Υπηρεσιών"
+    )
+    with pytest.raises(PdfParseError, match="Πιστωτικό"):
+        FinloupLeasing2Parser().parse_text(Path("finloup.pdf"), text)
+
+
+def test_parse_finloup_einvoice_pypdf57_glued_tokens() -> None:
+    """pypdf 5.7 (the Windows build) glues code/description/amounts on one line."""
+    text = FINLOUP_EINVOICE_TEXT.replace(
+        "P01946 2447 - Fixed 24 - 1 x Lenovo ThinkPad L16 Gen2 CoreUltra5 32GB | 1TB (at\n"
+        "€54.16 / month)\n1,00Τεμάχια 54,16 0,00 0,00 54,16 24 13,00 67,16",
+        "P019462447 - Fixed 24 - 1 x Lenovo ThinkPad L16 Gen2 CoreUltra5 32GB | 1TB "
+        "(at€54.16 / month) 1,00Τεμάχια 54,16 0,00 0,00 54,16 24 13,0067,16",
+    ).replace("Σύνολο  Φ . Π . Α 13,00", "Σύνολο  Φ. Π . Α 13,00")
+    invoice = FinloupLeasing2Parser().parse_text(Path("finloup.pdf"), text)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("54.16"),
+        Decimal("13.00"),
+        Decimal("67.16"),
+    )
+    assert [(line.code, line.value) for line in invoice.lines] == [("P01946", Decimal("54.16"))]
+    assert invoice.description == "ΜΙΣΘΩΜΑ LENOVO THINKPAD L16 GEN2 COREULTRA5 32GB | 1TB"
+
+
+PROMETAL_TEXT = """\
+   Πάροχος:   ENTERSOFTONE Α.Ε.
+   M.A.R.K.:   400015369735293
+
+   ΤΙΜΟΛΟΓΙΟ ΠΩΛΗΣΗΣ - ΔΕΛΤΙΟ ΑΠΟΣΤΟΛΗΣ
+   ΣΕΛ.:   1/2
+ ΠΕΛΑΤΗΣ   ΣΕΙΡΑ - ΑΡΙΘΜΟΣ   Β 1838
+35298   ΗΜΕΡΟΜΗΝΙΑ   22/09/2026
+ΦΟΥΝΤΟΥΚΑΣ ΘΕΟΔΩΡΟΣ ΜΟΝ. Ι.Κ.Ε
+Α.Φ.Μ.: 802313849 - Δ.Ο.Υ.: ΑΜΠΕΛΟΚΗΠΩΝ ΘΕΣ/ΚΗΣ
+ ΣΧΕΤΙΚΑ ΕΓΓΡΑΦΑ
+   ΠΕΡΙΓΡΑΦΗ   Μ.Μ   ΠΟΣΟΤΗΣ   ΤΙΜΗ   ΚΑΘΑΡΗ ΑΞΙΑ
+  0  ΑΝΟΞ. ΑΞΟΝΕΣ EN 1.4301  CDR Φ6*3000   ΚΙΛ   24,00   3,82   91,68
+   ΠΛΗΘΟΣ ΣΥΣΚΕΥΑΣΙΩΝ : 1
+
+
+   ΑΞΙΑ   % ΦΠΑ   ΑΞΙΑ ΦΠΑ   ΠΡΟΗΓ. ΥΠΟΛΟΙΠΟ   ΚΑΘΑΡΗ ΑΞΙΑ   91,68
+   91,68   24   22,00   ΝΕΟ ΥΠΟΛΟΙΠΟ   ΣΥΝΟΛΟ ΦΠΑ   22,00
+   0,00   0,00   ΤΕΛΙΚΗ ΑΞΙΑ (€)   113,68
+
+της εταιρείας: www.prometalbakli.gr
+"""
+
+
+def test_parse_prometal() -> None:
+    parser = PrometalParser()
+    assert parser.matches(PROMETAL_TEXT.replace(" ", "").upper())
+    invoice = parser.parse_text(Path("prometal.pdf"), PROMETAL_TEXT)
+    assert invoice.supplier_vat == "094012139"
+    assert invoice.document_number == "001838"
+    assert invoice.document_date == date(2026, 9, 22)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("91.68"),
+        Decimal("22.00"),
+        Decimal("113.68"),
+    )
+    assert invoice.vat_pct == Decimal("24")
+    assert [
+        (line.code, line.quantity, line.unit_price, line.value, line.vat_pct)
+        for line in invoice.lines
+    ] == [
+        (
+            "ΑΝΟΞ. ΑΞΟΝΕΣ EN 1.4301 CDR Φ6*3000",
+            Decimal("24.00"),
+            Decimal("3.82"),
+            Decimal("91.68"),
+            Decimal("24"),
+        )
+    ]
+    assert invoice.description == "ΤΠ-ΔΑ Β 1838"
+
+
+def test_prometal_rejects_total_mismatch() -> None:
+    text = PROMETAL_TEXT.replace("ΤΕΛΙΚΗ ΑΞΙΑ (€)   113,68", "ΤΕΛΙΚΗ ΑΞΙΑ (€)   114,68")
+    with pytest.raises(PdfParseError):
+        PrometalParser().parse_text(Path("prometal.pdf"), text)
+
+
+def test_prometal_rejects_lines_not_matching_net() -> None:
+    text = PROMETAL_TEXT.replace("3,82   91,68", "3,82   81,68")
+    with pytest.raises(PdfParseError, match="γραμμών"):
+        PrometalParser().parse_text(Path("prometal.pdf"), text)
+
+
+def test_prometal_rejects_credit_note() -> None:
+    text = PROMETAL_TEXT.replace("ΤΙΜΟΛΟΓΙΟ ΠΩΛΗΣΗΣ - ΔΕΛΤΙΟ ΑΠΟΣΤΟΛΗΣ", "ΠΙΣΤΩΤΙΚΟ ΤΙΜΟΛΟΓΙΟ")
+    with pytest.raises(PdfParseError, match="Πιστωτικό"):
+        PrometalParser().parse_text(Path("prometal.pdf"), text)
+
+
+CARVECO_TEXT = """Carveco Ltd | The American Barns, Banbury Road | Ashorne | Coventry | CV35 0LB
+| United Kingdom
+Our Terms and Conditions can be found at https://carveco.com/software-terms-and-conditions/
+1
+Total USD$21.70
+Payment Made (-) 21.70
+Balance Due USD$0.00
+Invoice Date : 15 Jul 2026
+Due Date : 16 Jul 2026
+Carveco Ltd
+The American Barns, Banbury Road
+Ashorne, Coventry, CV35 0LB
+United Kingdom
+GB 307946483
+PAID Invoice
+Inv# 077540
+info@crazysouvle.gr
+Makedonikou Ag
+thessaloniki  570 13
+Greece
+# Description Qty Amount (USD$)
+1 Maker Subscription, renewed monthly renewal for 13139. 1 17.50
+2 Tax rate: 24%
+Jurisdictions: EU OSS - 24%
+Tax Category: Digital goods, Subscription.
+1 4.20
+Thanks for your business.
+"""
+
+
+def test_parse_carveco_usd_with_oss_vat() -> None:
+    parser = CarvecoParser()
+    assert parser.matches(CARVECO_TEXT.replace(" ", "").upper())
+    invoice = parser.parse_text(Path("077540.pdf"), CARVECO_TEXT)
+    assert invoice.currency == "USD"
+    assert invoice.document_number == "077540"
+    assert invoice.document_date == date(2026, 7, 15)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("17.50"),
+        Decimal("4.20"),
+        Decimal("21.70"),
+    )
+    assert invoice.vat_pct == 24
+    assert [line.description for line in invoice.lines] == ["MAKER SUBSCRIPTION (13139)"]
+    assert invoice.lines[0].vat_pct == 24
+    assert invoice.description == "CARVECO MAKER SUBSCRIPTION (13139)"
+
+
+def test_carveco_rejects_tax_not_matching_rate() -> None:
+    text = CARVECO_TEXT.replace("1 4.20", "1 3.20").replace("Total USD$21.70", "Total USD$20.70")
+    with pytest.raises(PdfParseError):
+        CarvecoParser().parse_text(Path("077540.pdf"), text)
+
+
+BREVO_TEXT = """Sendinblue
+17 rue Salneuve
+75017 Paris
+France
+FR80498019298
+VAT Reg # : FR80498019298
+INVOICE
+Invoice #—SIB-5637019
+Invoice Date—Aug 10, 2026
+Invoice Amount—€25.00 (EUR)
+Customer ID—8218689
+PAID
+BILLED TO
+Theodoros Fountoukas Mon. Ike
+VAT Reg # : EL802313849
+SUBSCRIPTION
+Billing Period—Aug 10 to Sep 10, 2026
+ 
+DESCRIPTION UNITS UNIT PRICEVAT %AMOUNT (EUR)
+ 
+Starter plan - Monthly
+Starter plan - Monthly
+1 €7.000 % €7.00
+Recurring emails monthly 20000 - 0 % €18.00
+ 
+Total €25.00
+Payments(€25.00)
+Amount Due (EUR) €0.00
+VAT EXEMPTION NOTE
+VAT is not applicable to this invoice because a valid VAT registration number has been
+provided, and the reverse charge
+mechanism has been applied.
+"""
+
+
+def test_parse_brevo_reverse_charge() -> None:
+    parser = BrevoParser()
+    assert parser.matches(BREVO_TEXT.replace(" ", "").upper())
+    invoice = parser.parse_text(Path("Invoice-SIB-5637019.pdf"), BREVO_TEXT)
+    assert invoice.document_number == "SIB-5637019"
+    assert invoice.document_date == date(2026, 8, 10)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("25.00"),
+        Decimal("0.00"),
+        Decimal("25.00"),
+    )
+    assert [(line.description, line.value) for line in invoice.lines] == [
+        ("STARTER PLAN - MONTHLY", Decimal("7.00")),
+        ("RECURRING EMAILS MONTHLY 20000", Decimal("18.00")),
+    ]
+    assert invoice.description == "BREVO STARTER PLAN - MONTHLY"
+
+
+def test_brevo_single_line_layout_and_rejects_without_reverse_charge() -> None:
+    text = BREVO_TEXT.replace(
+        "Starter plan - Monthly\nStarter plan - Monthly\n1 €7.000 % €7.00",
+        "Starter plan monthly 1 €7.000 % €7.00",
+    )
+    invoice = BrevoParser().parse_text(Path("brevo.pdf"), text)
+    assert invoice.lines[0].description == "STARTER PLAN MONTHLY"
+    with pytest.raises(PdfParseError, match="reverse charge"):
+        BrevoParser().parse_text(Path("brevo.pdf"), text.replace("reverse charge", "charge"))
+
+
+SAMSON_TEXT = """ΠΡΩΤΟΤΥΠΟ - ORIGINAL
+ΗΜΕΡΟΜΗΝΙΑ / DATEΑΡΙΘΜΟΣ / ΝUMBER5.1 e-ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ ΣΕΙΡΑ Ε /
+e-INVOICE SERIES E 23/09/2026 76976
+ΠΕΛΑΤΗΣ / CUSTOMER
+ΦΟΥΝΤΟΥΚΑΣ ΘΕΟΔΩΡΟΣ ΜΟΝΟΠΡΟΣΩΠΗ ΙΔΙΩΤΙΚΗ ΚΕΦΑΛΑΙΟΥΧΙΚΗ ΕΤΑΙΡΕΙΑ
+Α.Φ.Μ. / VAT: 802313849
+ΑΠΟΣΤΟΛΕΑΣ / CONSIGNOR
+ALBERT KERBL GMBH
+84428  BUCHBACH
+GERMANY
+ΕΞΟΔΑ / CHARGES CURRENC
+01  24,000,00ΝΑΥΛΟΣ ΓΕΡΜΑΝΙΑ - ΣΙΝΔΟΣ 155,00155,00
+ΣΥΝΟΛΑ / TOTALS :  155,00  155,00 0,00
+ΣΥΝΟΛΟ / TOTAL:
+Φ.Π.Α / VAT:
+ΣΥΝΟΛΙΚΗ ΑΞΙΑ / TOTAL AMOUNT:
+ 155,00
+ 37,20
+AMOUNT
+ 155,00 24,00  37,20
+ΑΝΑΛΥΣΗ
+Φ.Π.Α./
+V.A.T.
+ANALYSIS
+ 192,20
+ΤΡΑΠΕΖΕΣ - BANKS:
+ALPHA BANK: GR2801407220722002002000077 - SWIFT: CRBAGRAA
+https://einvoice.impact.gr
+ΣΥΝΑΛΛΑΣΟΜΑΣΤΕ ΜΟΝΟ ΜΕ ΤΟΥΣ ΓΕΝΙΚΟΥΣ ΟΡΟΥΣ ΔΙΑΜΕΤΑΦΟΡΑΣ
+"""
+
+
+def test_parse_gr_samson_freight() -> None:
+    parser = GrSamsonParser()
+    assert parser.matches(SAMSON_TEXT.replace(" ", "").upper())
+    invoice = parser.parse_text(Path("samson.pdf"), SAMSON_TEXT)
+    assert invoice.supplier_vat == "999716715"
+    assert invoice.document_number == "76976"
+    assert invoice.document_date == date(2026, 9, 23)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("155.00"),
+        Decimal("37.20"),
+        Decimal("192.20"),
+    )
+    assert invoice.vat_pct == 24
+    assert [(line.description, line.value, line.vat_pct) for line in invoice.lines] == [
+        ("ΝΑΥΛΟΣ ΓΕΡΜΑΝΙΑ - ΣΙΝΔΟΣ", Decimal("155.00"), Decimal("24")),
+    ]
+    assert invoice.description == "ALBERT KERBL GMBH ΝΑΥΛΟΣ ΓΕΡΜΑΝΙΑ - ΣΙΝΔΟΣ"
+
+
+def test_gr_samson_rejects_total_mismatch_and_credit_note() -> None:
+    with pytest.raises(PdfParseError):
+        GrSamsonParser().parse_text(Path("samson.pdf"), SAMSON_TEXT.replace(" 192,20", " 193,20"))
+    with pytest.raises(PdfParseError, match="Πιστωτικό"):
+        GrSamsonParser().parse_text(
+            Path("samson.pdf"), SAMSON_TEXT.replace("ORIGINAL", "ΠΙΣΤΩΤΙΚΟ")
+        )
+
+
+ELTA_TEXT = """ΣΤΟΙΧΕΙΑ ΠΕΛΑΤΗ ΣΤΟΙΧΕΙΑ ΠΑΡΑΛΗΠΤΗ
+Ανάλυση Φ.Π.Α Καθαρή Αξία
+Καθαρή Αξία ΦΠΑ % Αξία ΦΠΑ
+ΕΞΟΦΛΗΣΗ ΤΗΛ. ΕΠΙΚΟΙΝΩΝΙΑΣ ΤΜΗΜΑΤΟΣ ΤΙΜΟΛΟΓΗΣΗΣ : 210 6073030ΚΩΔΙΚΟΣ ΗΛΕΚΤΡΟΝΙΚΗΣ ΠΛΗΡΩΜΗΣ
+Είδος Παραστατικού(021)   Σειρά   Αριθμός   Ημερομηνία
+ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ (Επι Πιστώσει)   ECΘ   195940   31/08/2026
+Επωνυμία : ΚΡΕ-ΖΥ-ΣΟΥΒΛ - ΦΟΥΝΤΟΥΚΑΣ ΘΕΟΔΩΡΟΣ ΜΟΝ.
+Τηλέφωνο : 2310227642   Κωδικός  : 312861
+ΑΦΜ/ΔΟΥ  : GR802313849   ΑΜΠΕΛΟΚΗΠΩΝ   Τρόπος Πληρωμής : Πίστωση
+Περιγραφή   |Ποσότητα|Αξία Προ Έκπτωσης|Έκπτωση(%)|   Αξία|   ΦΠΑ(%)
+101 ΕΝΤΟΣ ΠΟΛΗΣ - ΠΠ   1   3.50   3.50   24.00
+201 ΠΟΛΗ ΠΟΛΗ - ΠΠ   9   53.70   53.70   24.00
+202 ΠΟΛΗ ΠΟΛΗ - ΘΠ   2   7.00   7.00   24.00
+211 ΠΟΛΗ ΠΟΛΗ -ΠΠ- ΝΗΣΙ   1   5.30   5.30   24.00
+231 ΠΟΛΗ ΠΟΛΗ -ΠΠ- ΔΥΣΠΡΟΣΙΤΟ   3   11.70   10.00   10.53   24.00
+450 ΕΠΙΣΤΡΟΦΕΣ   1   1.80   1.80   24.00
+81.83
+19.6424.0081.83 19.64
+101.47
+*RF37918009312861802313849*RF37918009312861802313849
+ΠΡΩΤΟΤΥΠΟ
+"""
+
+
+def test_parse_elta_courier_monthly_invoice() -> None:
+    parser = EltaCourierParser()
+    assert parser.matches(ELTA_TEXT.replace(" ", "").upper())
+    invoice = parser.parse_text(Path("elta.pdf"), ELTA_TEXT)
+    assert invoice.supplier_vat == "099759170"
+    assert invoice.document_number == "195940"
+    assert invoice.document_date == date(2026, 8, 31)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("81.83"),
+        Decimal("19.64"),
+        Decimal("101.47"),
+    )
+    assert invoice.vat_pct == 24
+    assert invoice.lines == ()
+    assert invoice.description == "ΜΕΤΑΦΟΡΙΚΑ ΑΥΓΟΥΣΤΟΥ 2026 - 17 ΑΠΟΣΤΟΛΕΣ ΕΛΤΑ"
+
+
+def test_elta_rejects_total_mismatch_and_credit_note() -> None:
+    with pytest.raises(PdfParseError, match="ΦΠΑ"):
+        EltaCourierParser().parse_text(
+            Path("elta.pdf"), ELTA_TEXT.replace("\n101.47\n", "\n102.47\n")
+        )
+    with pytest.raises(PdfParseError, match="Πιστωτικό"):
+        EltaCourierParser().parse_text(
+            Path("elta.pdf"),
+            ELTA_TEXT.replace("ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ", "ΠΙΣΤΩΤΙΚΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ"),
+        )
+
+
+def test_fedex_net_rows_with_eur_prefix() -> None:
+    text = FEDEX_EXEMPT_TEXT.replace(
+        "Έκπτωση Καθαρή Αξία\n-46.39 12.03\n-160.24 40.17\n",
+        "Έκπτωση Καθαρή Αξία\nEUR -46.39 EUR 12.03\nEUR -160.24 EUR 40.17\n",
+    )
+    invoice = FedexParser().parse_text(Path("fedex.pdf"), text)
+    assert (invoice.net_value, invoice.vat_value) == (Decimal("52.20"), Decimal("2.89"))
+
+
+CARGOBOOK_TEXT = """6947806591
+ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ/INVOICE 7790 28/09/2026
+ΚΑΡΓΚΟ ΜΠΟΥΚ
+ΝΑΥΤΙΛΙΑΚΗ ΜΕΤΑΦΟΡΙΚΗ Α.Ε.
+Α.Φ.Μ.:094475355  Δ.Ο.Υ.:ΚΕΦΟΔΕ ΑΤΤΙΚΗΣ
+CSCL URANUS
+XIAMEN
+PIRAEUS
+XMEU26074172
+FUJIAN ONE BAMBOO CO. LTD
+21/09/2026
+E-Mail : info@cargobook.gr
+ΕΙΔΟΣ 
+ΕΡΓΑΤΙΚΑ ΛΙΜΕΝΟΣ FREE OUT60-19 268,98 268,98 24 333,54 EUR
+ERS1116-19 112,07 112,07 24 138,97 EUR
+CISF-EX WORKS10207-0 236,62 213,56 0 213,56 USD
+ΑΡΘΡΟ 27 Ν.5144/24
+PCS EX WORKS10219-0 112,07 101,15 0 101,15 USD
+381,05 ΚΑΘ.ΑΞΙΑ
+91,46
+ΣΥΝΟΛΑ
+ΠΛΗΡΩΤΕΟ EUR
+787,22
+400015444366532
+"""
+
+
+def test_parse_cargobook_mixed_vat_lines() -> None:
+    invoice = CargoBookParser().parse_text(Path("cargobook.pdf"), CARGOBOOK_TEXT)
+    assert invoice.document_number == "7790"
+    assert invoice.document_date == date(2026, 9, 28)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("695.76"),
+        Decimal("91.46"),
+        Decimal("787.22"),
+    )
+    assert [(line.value, line.vat_pct, line.category) for line in invoice.lines] == [
+        (Decimal("268.98"), Decimal("24"), "60-19"),
+        (Decimal("112.07"), Decimal("24"), "1116-19"),
+        (Decimal("213.56"), Decimal("0"), "10207-0"),
+        (Decimal("101.15"), Decimal("0"), "10219-0"),
+    ]
+    assert invoice.lines[0].description == "ΕΡΓΑΤΙΚΑ ΛΙΜΕΝΟΣ FREE OUT FUJIAN ONE BAMBOO CO. LTD"
+    assert invoice.description == "ΔΙΑΜΕΤΑΦΟΡΑ FUJIAN ONE BAMBOO CO. LTD"
+
+
+def test_cargobook_rejects_credit_note_and_vat_mismatch() -> None:
+    with pytest.raises(PdfParseError, match="Πιστωτικό"):
+        CargoBookParser().parse_text(
+            Path("cargobook.pdf"),
+            CARGOBOOK_TEXT.replace(
+                "ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ/INVOICE", "ΠΙΣΤΩΤΙΚΟ ΤΙΜΟΛΟΓΙΟ/CREDIT NOTE"
+            ),
+        )
+    with pytest.raises(PdfParseError, match="ΦΠΑ γραμμών"):
+        CargoBookParser().parse_text(
+            Path("cargobook.pdf"), CARGOBOOK_TEXT.replace("91,46\nΣΥΝΟΛΑ", "95,00\nΣΥΝΟΛΑ")
+        )
+
+
+DIGITAL_SUPPORT_TEXT = """ΚΑΠΕΤΑΝΑΚΗ  ΚΑΜΠΟΥΡΗΣ  ΕΤΕΡΟΡΡΥΘΜΗ  ΕΤΑΙΡΙΑ  ΑΦΜEL802175958
+Είδος  Παραστατικού
+Τιμολόγιο  Παροχής  Υπηρεσιών
+Αριθμός
+ΤΠΥ 0000865
+Ημερομηνία  Έκδοσης
+29/09/2026 3:28 μ . μ .
+400.006Υπηρεσίες  Υλοποίησης
+Έργου
+3,00ΏρεςLH 40,00 0,00 0,00 120,00 0,00 24 28,80148,80
+Σχόλια  ΕΝΤΧ 002948
+400.006Υπηρεσίες  ΥλοποίησηςΈργου 0,25ΏρεςLH 40,00 0,00 0,00 10,00 0,00 24 2,40 12,40
+Σχόλια  ΕΝΤΧ 003127
+400.006Υπηρεσίες  ΥλοποίησηςΈργου 0,25ΏρεςLH 40,00 0,00 0,00 10,00 0,00 24 2,40 12,40
+Σχόλια  ΕΝΤΧ 003243
+Σύνολο  Καθαρού  Ποσού 140,00
+Σύνολο  Φ . Π . Α 33,60
+Συνολική  Αξία 173,60
+"""
+
+
+def test_parse_digital_support_hours_summarised() -> None:
+    invoice = DigitalSupportParser().parse_text(Path("ds.pdf"), DIGITAL_SUPPORT_TEXT)
+    assert invoice.document_number == "00865"
+    assert invoice.document_date == date(2026, 9, 29)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("140.00"),
+        Decimal("33.60"),
+        Decimal("173.60"),
+    )
+    assert invoice.vat_pct == Decimal("24")
+    assert invoice.lines == ()
+    assert (
+        invoice.description == "ΤΕΧΝΙΚΗ ΥΠΟΣΤΗΡΙΞΗ 3,5 ΩΡΕΣ - ΕΝΤΧ 002948, ΕΝΤΧ 003127, ΕΝΤΧ 003243"
+    )
+
+
+def test_digital_support_rejects_lines_not_matching_net() -> None:
+    with pytest.raises(PdfParseError, match="σύνολο γραμμών"):
+        DigitalSupportParser().parse_text(
+            Path("ds.pdf"), DIGITAL_SUPPORT_TEXT.replace("0,00 120,00 0,00", "0,00 100,00 0,00")
+        )
+
+
+GOLDAIR_TEXT = """  SINDOS WAREHOUSE        ΓΚΟΛΝΤΑΙΡ ΚΑΡΓΚΟ        ΑΦΜ/VAT: EL094240542
+      ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ             Θ          261941          27/07/2026
+     Αποστολέας : C/O IVO CUTELARIAS LDA
+     Από : MILANO την : 24/07/2026 εις : THESSALONIKI την : 27/07/2026        MI
+       704 ΟΔΙΚΟΣ ΝΑΥΛΟΣ                 24          220,00          52,80          272,80
+ΠΑΓΚΡΗΤΙΑ ΣΥΝΕΤΑΙΡΙΣΤΙΚΗ ΤΡΑΠΕΖΑ : IBAN GR33          Πληρωτέα Αξία      EUR          272,80
+"""
+
+
+def test_parse_goldair_road_freight() -> None:
+    parser = GoldairCargoParser()
+    assert parser.layout is True
+    invoice = parser.parse_text(Path("goldair.pdf"), GOLDAIR_TEXT)
+    assert invoice.document_number == "Θ261941"
+    assert invoice.document_date == date(2026, 7, 27)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("220.00"),
+        Decimal("52.80"),
+        Decimal("272.80"),
+    )
+    assert len(invoice.lines) == 1
+    assert invoice.description == "ΟΔΙΚΟΣ ΝΑΥΛΟΣ MILANO IVO CUTELARIAS LDA"
+
+
+def test_goldair_rejects_total_mismatch() -> None:
+    with pytest.raises(PdfParseError, match="Ασυμφωνία"):
+        GoldairCargoParser().parse_text(
+            Path("goldair.pdf"), GOLDAIR_TEXT.replace("EUR          272,80", "EUR          300,00")
+        )
+
+
+SFAKIANAKIS_TEXT = """ΣΦΑΚΙΑΝΑΚΗΣ  ΑΕΒΕ
+Α.Φ . Μ .: 094010226, Δ . Ο . Υ .: ΚΕΦΟΔΕ  ΑΤΤΙΚΗΣ
+ΤΥΠΟΣ  ΠΑΡΑΣΤΑΤΙΚΟΥ ΣΕΙΡΑ ΑΡΙΘΜΟΣ ΗΜΕΡΟΜΗΝΙΑ
+ΤΙΜΟΛΟΓΙΟ  ΠΑΡΟΧΗΣ  ΥΠΗΡΕΣΙΩΝ Β 403986 01/10/2026 7:50 μ . μ .
+ΑΙΤΙΟΛΟΓΙΑ ΑΞΙΑ
+Μίσθωμα  του  υπ ` αριθμ . XPM8586 οχήματος  από  01/10/2026 έως  31/10/2026 418,00
+ΚΩΔΙΚΟΣ  ΗΛΕΚΤΡΟΝΙΚΗΣ  ΠΛΗΡΩΜΗΣ : RF65901758100000802313849
+ΣΥΝΟΛΟ 418,00
+Φ. Π . Α . 24.00% 100,32
+Ο ΕΚΔΟΤΗΣ
+ Ο ΠΑΡΑΛΑΒΩΝ ΣΥΝΟΛΟ 518,32ΠΛΗΡΩΤΕΟ
+"""
+
+
+def test_parse_sfakianakis_vehicle_rent() -> None:
+    invoice = SfakianakisParser().parse_text(Path("sfak.pdf"), SFAKIANAKIS_TEXT)
+    assert invoice.document_number == "Β403986"
+    assert invoice.document_date == date(2026, 10, 1)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("418.00"),
+        Decimal("100.32"),
+        Decimal("518.32"),
+    )
+    assert invoice.vat_pct == Decimal("24")
+    assert invoice.description == "ΕΝΟΙΚΙΑΣΗ XPM8586 01/10/2026 - 31/10/2026"
+
+
+def test_sfakianakis_rejects_rent_not_matching_net() -> None:
+    with pytest.raises(PdfParseError, match="Μίσθωμα"):
+        SfakianakisParser().parse_text(
+            Path("sfak.pdf"), SFAKIANAKIS_TEXT.replace("31/10/2026 418,00", "31/10/2026 400,00")
+        )
+
+
+KERBL_TEXT = """\
+Albert Kerbl GmbH - Felizenzell 9 - DE-84428 Buchbach      Invoice
+FOUNTOUKAS THEODOROS                                        Invoice No.          VR-3206489
+Makedonikou Agona 19                                        Our VAT Reg. No.     DE129226311
+                                                            Date 09/09/26        Page 1
+
+Position        No.                          Quantity      Measure     Price        Amount
+                Description                                                          VAT %
+
+10              21208                             100   package       13.50      1,350.00
+                Cartridges 9x17mm, red, MAXXTech
+                50 pcs/box
+                Tariff No.: 9306 3090, Country/Region of Origin: DRITT
+
+20              21206                              10   package       13.50        135.00
+                Cartridges 9x17mm, MAXXTech
+                yellow, 50 pcs/box
+                Tariff No.: 9306 3090, Country/Region of Origin: DRITT
+
+                                                  Total EUR Excl. VAT            1,485.00
+                                                  Tax Amount                         0.00
+                                                  Total EUR Incl. VAT            1,485.00
+
+VAT Identifier                                                                 VAT Amount
+19%                      tax free intracommunity delivery                            0.00
+"""
+
+
+def test_parse_kerbl_boxes_become_pieces() -> None:
+    parser = KerblParser()
+    assert parser.matches(KERBL_TEXT.replace(" ", "").upper())
+    invoice = parser.parse_text(Path("kerbl.pdf"), KERBL_TEXT)
+    assert invoice.document_number == "VR-3206489"
+    assert invoice.document_date == date(2026, 9, 9)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value, invoice.vat_pct) == (
+        Decimal("1485.00"),
+        Decimal("0.00"),
+        Decimal("1485.00"),
+        Decimal("0"),
+    )
+    assert [(ln.code, ln.quantity, ln.unit_price, ln.value) for ln in invoice.lines] == [
+        ("21208", Decimal("5000"), Decimal("0.27"), Decimal("1350.00")),
+        ("21206", Decimal("500"), Decimal("0.27"), Decimal("135.00")),
+    ]
+    assert invoice.lines[0].description == "Cartridges 9x17mm, red, MAXXTech 50 pcs/box"
+    assert {line.vat_pct for line in invoice.lines} == {Decimal("0")}
+
+
+def test_kerbl_rejects_vat_charged() -> None:
+    text = KERBL_TEXT.replace("Tax Amount                         0.00", "Tax Amount   282.15")
+    text = text.replace("Total EUR Incl. VAT            1,485.00", "Total EUR Incl. VAT 1,767.15")
+    with pytest.raises(PdfParseError, match="ενδοκοινοτικό"):
+        KerblParser().parse_text(Path("kerbl.pdf"), text)
+
+
+def test_kerbl_rejects_lines_not_matching_net() -> None:
+    text = KERBL_TEXT.replace("13.50        135.00", "13.60        136.00")
+    with pytest.raises(PdfParseError, match="Άθροισμα γραμμών"):
+        KerblParser().parse_text(Path("kerbl.pdf"), text)
+
+
+VN_TEXT = """\
+                    VN FOOD PROCESSING
+                    ww.vnsrl.com
+Fattura / Invoice
+Cod. Cli. / Code Cust.Numero / Number   Data / Date    Pag.
+        1024            000306              30/09/2026     1
+Condizione pagamento / Payment Terms
+                   Bonifico a vista Fattura
+  Articolo / Item  Descrizione / Description  Quantità /  UM /  Prz. Unit.  %Sc./  Imponibile/  IVA/
+                      DDT Nr. 000285 del 21/09/2026
+    1800  SM 7000-PLUS SKEWERING MACHINE WITH GUIDE   1,00  N   154.800,000   50   77.400,000   NI41
+                      RAIL
+                      SERIAL NUMBER 260356
+      0282  WOOD BOX FOR PACKAGING MACHINE SM 7000     1,00  N.    1.060,000   10     954,000   NI41
+      1265-SCI   CUBE COVER ORANGE FORMAT 27 INTERNALL      2,00  N     477,00010     858,600   NI41
+                      UNLOADED
+           0311KIT SKEWER LENGTH VARIATING          1,00  N.    1.060,000   10        954,000   NI41
+          0743-20   THICKNESS FOR CUBE 20mm          5,00  N.       45,00010          202,500   NI41
+ MANUALE SM7000       OPERATION  MANUAL IN ENGLISH        1,00  N       500,000100       0,000  NI41
+ IVA /     Descrizione / Description     Imponibile / Amount     IVA / VAT    Imponibile + Imposta /
+                  CE  CE CERTIFICATE                 1,00  N       200,000100            0,000  NI41
+                       Scadenze:
+                       EUR 80.369,100 al 30/09/2026
+                          Codice Fiscale e Partita  iva 01844150688
+NI41    Cessioni CEE non imponib. Art.41             80.369,100            0,000          80.369,100
+"""
+
+
+def test_parse_vn_discount_lines() -> None:
+    parser = VnParser()
+    assert parser.matches(VN_TEXT.replace(" ", "").upper())
+    invoice = parser.parse_text(Path("vn.pdf"), VN_TEXT)
+    assert invoice.document_number == "01024"
+    assert invoice.document_date == date(2026, 9, 30)
+    assert (invoice.net_value, invoice.vat_value, invoice.vat_pct) == (
+        Decimal("80369.10"),
+        Decimal("0.00"),
+        Decimal("0"),
+    )
+    assert [
+        (ln.code, ln.quantity, ln.unit_price, ln.discount_pct, ln.value) for ln in invoice.lines
+    ] == [
+        ("1800", Decimal("1.00"), Decimal("154800.00"), Decimal("50"), Decimal("77400.00")),
+        ("0282", Decimal("1.00"), Decimal("1060.00"), Decimal("10"), Decimal("954.00")),
+        ("1265-SCI", Decimal("2.00"), Decimal("477.00"), Decimal("10"), Decimal("858.60")),
+        ("0311", Decimal("1.00"), Decimal("1060.00"), Decimal("10"), Decimal("954.00")),
+        ("0743-20", Decimal("5.00"), Decimal("45.00"), Decimal("10"), Decimal("202.50")),
+    ]
+    assert invoice.lines[0].description == (
+        "SM 7000-PLUS SKEWERING MACHINE WITH GUIDE RAIL SERIAL NUMBER 260356"
+    )
+    assert invoice.lines[3].description == "KIT SKEWER LENGTH VARIATING"
+
+
+def test_vn_rejects_non_ni41_vat() -> None:
+    text = VN_TEXT.replace("NI41    Cessioni", "22    Cessioni")
+    with pytest.raises(PdfParseError, match="NI41"):
+        VnParser().parse_text(Path("vn.pdf"), text)
+
+
+def test_vn_rejects_lines_not_matching_net() -> None:
+    text = VN_TEXT.replace("45,00010", "46,00010").replace("202,500", "207,000")
+    with pytest.raises(PdfParseError, match="Άθροισμα γραμμών"):
+        VnParser().parse_text(Path("vn.pdf"), text)
