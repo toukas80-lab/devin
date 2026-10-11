@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS items (
   code     VARCHAR(50)   NOT NULL,
   name     VARCHAR(255)  NOT NULL,
   group_id INT           NULL,
+  chapter  VARCHAR(100)  NOT NULL DEFAULT '',
   unit     VARCHAR(32)   NULL,
   vat_pct  DECIMAL(6,2)  NOT NULL DEFAULT 0,
   price_w  DECIMAL(12,4) NOT NULL DEFAULT 0,

@@ -21,6 +21,14 @@ CATALOG_CODES = (
      if ln.strip()}
     if CATALOG_FILE.exists() else set()
 )
+CHAPTERS_FILE = Path(__file__).resolve().parent / "catalog_chapters.tsv"
+CATALOG_CHAPTERS = (
+    {p[0].strip(): p[1].strip()
+     for ln in CHAPTERS_FILE.read_text(encoding="utf-8").splitlines()
+     if ln.strip()
+     for p in [ln.split("\t", 1)] if len(p) == 2}
+    if CHAPTERS_FILE.exists() else {}
+)
 CUTOFF36 = "DATEADD(month,-36,CAST(GETDATE() AS date))"
 CUTOFF12 = "DATEADD(month,-12,CAST(GETDATE() AS date))"
 
@@ -210,6 +218,7 @@ def main():
     items = [it for it in items if str(it["code"]).strip() in CATALOG_CODES]
     for it in items:
         it["photo"] = drive_id(it.pop("webpage"))
+        it["chapter"] = CATALOG_CHAPTERS.get(str(it["code"]).strip(), "")
     manfs = {it["manufacturer"] for it in items if it["manufacturer"]}
     print(f"items: {len(items)} | manufacturers: {len(manfs)} | "
           f"no manufacturer: {len(items) - sum(1 for i in items if i['manufacturer'])}")

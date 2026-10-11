@@ -239,6 +239,7 @@ function page_catalog(): void
     $cid = $u['customer_id'];
     $q   = trim((string)($_GET['q'] ?? ''));
     $g   = (int)($_GET['g'] ?? 0);
+    $c   = trim((string)($_GET['c'] ?? ''));
     $pg  = max(1, (int)($_GET['p'] ?? 1));
     $s   = (string)($_GET['s'] ?? '');
     $s   = in_array($s, ['code', 'name', 'price'], true) ? $s : 'code';
@@ -266,7 +267,7 @@ function page_catalog(): void
                 flash('Προστέθηκε στο καλάθι.');
             }
         }
-        redirect('/catalog?' . http_build_query(['q' => $q, 'g' => $g, 'p' => $pg, 's' => $s, 'd' => $d]));
+        redirect('/catalog?' . http_build_query(['q' => $q, 'g' => $g, 'c' => $c, 'p' => $pg, 's' => $s, 'd' => $d]));
     }
 
     $where = '1=1';
@@ -279,6 +280,10 @@ function page_catalog(): void
     if ($g > 0) {
         $where .= ' AND i.group_id = ?';
         $par[] = $g;
+    }
+    if ($c !== '') {
+        $where .= ' AND i.chapter = ?';
+        $par[] = $c;
     }
     $st = $db->prepare("SELECT COUNT(*) FROM items i WHERE $where");
     $st->execute($par);
@@ -311,15 +316,16 @@ function page_catalog(): void
     $st->execute(array_merge([$cid, $cid], $par));
     $items = $st->fetchAll();
 
-    $sl = static function (string $col, string $label) use ($q, $g, $s, $d): string {
+    $sl = static function (string $col, string $label) use ($q, $g, $c, $s, $d): string {
         $nd    = $s === $col ? ($d === 'asc' ? 'desc' : 'asc') : 'asc';
         $arrow = $s === $col ? ($d === 'asc' ? ' ▲' : ' ▼') : '';
         return '<a class="sort" href="/catalog?' . e(http_build_query(
-                ['q' => $q, 'g' => $g, 's' => $col, 'd' => $nd, 'p' => 1]))
+                ['q' => $q, 'g' => $g, 'c' => $c, 's' => $col, 'd' => $nd, 'p' => 1]))
             . '">' . e($label) . $arrow . '</a>';
     };
 
-    $groups = $db->query('SELECT id, name FROM item_groups ORDER BY name')->fetchAll();
+    $groups   = $db->query('SELECT id, name FROM item_groups ORDER BY name')->fetchAll();
+    $chapters = $db->query("SELECT DISTINCT chapter FROM items WHERE chapter <> '' ORDER BY chapter")->fetchAll(PDO::FETCH_COLUMN);
 
     page_top('Κατάλογος');
     ?>
@@ -328,6 +334,12 @@ function page_catalog(): void
   <input type="hidden" name="s" value="<?= e($s) ?>">
   <input type="hidden" name="d" value="<?= e($d) ?>">
   <input type="search" name="q" value="<?= e($q) ?>" placeholder="Αναζήτηση κωδικού ή περιγραφής">
+  <select name="c" onchange="this.form.submit()">
+    <option value="">Όλα τα κεφάλαια</option>
+    <?php foreach ($chapters as $ch): ?>
+    <option value="<?= e($ch) ?>" <?= $c === $ch ? 'selected' : '' ?>><?= e($ch) ?></option>
+    <?php endforeach; ?>
+  </select>
   <select name="g" onchange="this.form.submit()">
     <option value="0">Όλες οι ομάδες</option>
     <?php foreach ($groups as $gr): ?>
@@ -386,7 +398,7 @@ function page_catalog(): void
     </td>
     <td class="r">
       <?php if ($eff > 0): ?>
-      <form method="post" action="/catalog?<?= e(http_build_query(['q' => $q, 'g' => $g, 'p' => $pg, 's' => $s, 'd' => $d])) ?>" class="inline">
+      <form method="post" action="/catalog?<?= e(http_build_query(['q' => $q, 'g' => $g, 'c' => $c, 'p' => $pg, 's' => $s, 'd' => $d])) ?>" class="inline">
         <?= csrf_field() ?>
         <input type="hidden" name="item_id" value="<?= (int)$it['id'] ?>">
         <input class="qty" type="number" name="qty" value="1" min="0.001" step="any">
@@ -395,7 +407,7 @@ function page_catalog(): void
       <?php endif; ?>
     </td>
     <td class="r">
-      <form method="post" action="/fav" class="inline"><?= csrf_field() ?><input type="hidden" name="item_id" value="<?= (int)$it['id'] ?>"><input type="hidden" name="back" value="<?= e('/catalog?' . http_build_query(['q' => $q, 'g' => $g, 'p' => $pg, 's' => $s, 'd' => $d])) ?>"><button type="submit" class="fav" title="Αγαπημένο"><?= $it['fav'] ? '★' : '☆' ?></button></form>
+      <form method="post" action="/fav" class="inline"><?= csrf_field() ?><input type="hidden" name="item_id" value="<?= (int)$it['id'] ?>"><input type="hidden" name="back" value="<?= e('/catalog?' . http_build_query(['q' => $q, 'g' => $g, 'c' => $c, 'p' => $pg, 's' => $s, 'd' => $d])) ?>"><button type="submit" class="fav" title="Αγαπημένο"><?= $it['fav'] ? '★' : '☆' ?></button></form>
     </td>
   </tr>
   <?php endforeach; ?>
@@ -407,7 +419,7 @@ function page_catalog(): void
     <?php if ($i === $pg): ?>
       <strong><?= $i ?></strong>
     <?php else: ?>
-      <a href="/catalog?<?= e(http_build_query(['q' => $q, 'g' => $g, 'p' => $i, 's' => $s, 'd' => $d])) ?>"><?= $i ?></a>
+      <a href="/catalog?<?= e(http_build_query(['q' => $q, 'g' => $g, 'c' => $c, 'p' => $i, 's' => $s, 'd' => $d])) ?>"><?= $i ?></a>
     <?php endif; ?>
   <?php endfor; ?>
 </nav>
