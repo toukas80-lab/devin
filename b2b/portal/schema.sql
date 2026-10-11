@@ -120,3 +120,5 @@ CREATE TABLE IF NOT EXISTS login_attempts (
   attempted_at DATETIME     NOT NULL,
   KEY idx_attempts (email, attempted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS favorites (customer_id INT NOT NULL, item_id INT NOT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (customer_id, item_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

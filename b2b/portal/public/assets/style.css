@@ -85,3 +85,4 @@ nav.pages a { background: #fff; border: 1px solid var(--line); color: var(--red)
 nav.pages strong { background: var(--red); color: #fff; }
 .foot { color: #a8a29e; font-size: 12px; padding: 20px 16px; }
 .thumb{width:64px;height:64px;object-fit:contain}
+.fav{background:none;border:0;font-size:1.2em;cursor:pointer;color:#d4a000;padding:0 .2em}

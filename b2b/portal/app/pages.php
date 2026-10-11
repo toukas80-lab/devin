@@ -283,15 +283,17 @@ function page_catalog(): void
 
     $st = $db->prepare(
         "SELECT i.id, i.code, i.name, i.unit, i.price_w, i.vat_pct, i.img_ver,
-                g.name AS gname, p.price AS special
+                g.name AS gname, p.price AS special,
+                (f.item_id IS NOT NULL) AS fav
          FROM items i
          LEFT JOIN item_groups g ON g.id = i.group_id
          LEFT JOIN prices p ON p.item_id = i.id AND p.customer_id = ?
+         LEFT JOIN favorites f ON f.item_id = i.id AND f.customer_id = ?
          WHERE $where
          ORDER BY i.code
          LIMIT $per OFFSET $off"
     );
-    $st->execute(array_merge([$cid], $par));
+    $st->execute(array_merge([$cid, $cid], $par));
     $items = $st->fetchAll();
 
     $groups = $db->query('SELECT id, name FROM item_groups ORDER BY name')->fetchAll();
@@ -311,7 +313,7 @@ function page_catalog(): void
 </form>
 <div class="scroll">
 <table>
-  <tr><th></th><th>Κωδικός</th><th>Είδος</th><th>Ομάδα</th><th>ΜΜ</th><th class="r">Τιμή</th><th></th></tr>
+  <tr><th></th><th>Κωδικός</th><th>Είδος</th><th>Ομάδα</th><th>ΜΜ</th><th class="r">Τιμή</th><th></th><th></th></tr>
   <?php foreach ($items as $it):
       $eff = $it['special'] !== null ? (float)$it['special'] : (float)$it['price_w'];
       $v   = (string)$it['img_ver']; ?>
@@ -341,6 +343,9 @@ function page_catalog(): void
         <button type="submit">+</button>
       </form>
       <?php endif; ?>
+    </td>
+    <td class="r">
+      <form method="post" action="/fav" class="inline"><?= csrf_field() ?><input type="hidden" name="item_id" value="<?= (int)$it['id'] ?>"><input type="hidden" name="back" value="<?= e('/catalog?' . http_build_query(['q' => $q, 'g' => $g, 'p' => $pg])) ?>"><button type="submit" class="fav" title="Αγαπημένο"><?= $it['fav'] ? '★' : '☆' ?></button></form>
     </td>
   </tr>
   <?php endforeach; ?>
@@ -736,6 +741,117 @@ function page_quick(): void
 </ul>
 <?php endif; ?>
 <form method="post" action="/quick"><?= csrf_field() ?><textarea name="lines" rows="15" cols="40"><?= e($keep) ?></textarea><br><button type="submit">Προσθήκη στο καλάθι</button></form>
+<?php
+    page_bottom();
+}
+
+function page_fav(): void
+{
+    $u = require_user();
+    if (!is_post()) {
+        redirect('/catalog');
+    }
+    csrf_check();
+    $db  = db();
+    $cid = $u['customer_id'];
+    $iid = (int)($_POST['item_id'] ?? 0);
+    if ($iid > 0) {
+        $st = $db->prepare(
+            'SELECT 1 FROM favorites WHERE customer_id = ? AND item_id = ?'
+        );
+        $st->execute([$cid, $iid]);
+        if ($st->fetch()) {
+            $db->prepare(
+                'DELETE FROM favorites WHERE customer_id = ? AND item_id = ?'
+            )->execute([$cid, $iid]);
+        } else {
+            $st = $db->prepare('SELECT 1 FROM items WHERE id = ?');
+            $st->execute([$iid]);
+            if ($st->fetch()) {
+                $db->prepare(
+                    'INSERT IGNORE INTO favorites (customer_id, item_id) VALUES (?,?)'
+                )->execute([$cid, $iid]);
+            }
+        }
+    }
+    $back = (string)($_POST['back'] ?? '');
+    if (!str_starts_with($back, '/catalog') && !str_starts_with($back, '/favorites')) {
+        $back = '/catalog';
+    }
+    redirect($back);
+}
+
+function page_favorites(): void
+{
+    $u   = require_user();
+    $db  = db();
+    $cid = $u['customer_id'];
+
+    if (is_post()) {
+        csrf_check();
+        $n = 0;
+        foreach ((array)($_POST['qty'] ?? []) as $iid => $qv) {
+            $iid = (int)$iid;
+            $qv  = (float)str_replace(',', '.', (string)$qv);
+            if ($iid > 0 && $qv > 0 && cust_price($db, $cid, $iid) > 0) {
+                $_SESSION['cart'][$iid] = ($_SESSION['cart'][$iid] ?? 0) + $qv;
+                $n++;
+            }
+        }
+        flash("Μπήκαν $n είδη στο καλάθι.");
+        redirect('/cart');
+    }
+
+    $st = $db->prepare(
+        'SELECT i.id, i.code, i.name, i.unit, i.price_w, p.price AS special
+         FROM favorites f
+         JOIN items i ON i.id = f.item_id
+         LEFT JOIN prices p ON p.item_id = i.id AND p.customer_id = ?
+         WHERE f.customer_id = ?
+         ORDER BY i.code'
+    );
+    $st->execute([$cid, $cid]);
+    $rows = $st->fetchAll();
+
+    page_top('Αγαπημένα');
+    ?>
+<h1>Αγαπημένα</h1>
+<?php if (!$rows): ?>
+<p>Δεν έχετε αγαπημένα. Πατήστε ☆ στον κατάλογο.</p>
+<?php else: ?>
+<form method="post" action="/favorites">
+  <?= csrf_field() ?>
+  <input type="hidden" name="back" value="/favorites">
+<div class="scroll">
+<table>
+  <tr><th>Κωδικός</th><th>Είδος</th><th>ΜΜ</th><th class="r">Τιμή</th><th class="r">Ποσότητα</th><th></th></tr>
+  <?php foreach ($rows as $r): $eff = $r['special'] !== null ? (float)$r['special'] : (float)$r['price_w']; ?>
+  <tr>
+    <td><?= e($r['code']) ?></td>
+    <td><?= e($r['name']) ?></td>
+    <td><?= e($r['unit'] ?? '') ?></td>
+    <td class="r">
+      <?php if ($eff > 0): ?>
+        <?= money($eff) ?> &euro;
+      <?php else: ?>
+        <span class="muted">Ρωτήστε τιμή</span>
+      <?php endif; ?>
+    </td>
+    <td class="r">
+      <?php if ($eff > 0): ?>
+      <input class="qty" type="number" name="qty[<?= (int)$r['id'] ?>]" value="" min="0" step="any">
+      <?php endif; ?>
+    </td>
+    <td class="r">
+      <button type="submit" formaction="/fav" name="item_id" value="<?= (int)$r['id'] ?>" class="fav" title="Αφαίρεση">★</button>
+    </td>
+  </tr>
+  <?php endforeach; ?>
+</table>
+</div>
+<p><button type="submit">Προσθήκη στο καλάθι</button></p>
+</form>
+<?php endif; ?>
 <?php
     page_bottom();
 }

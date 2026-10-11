@@ -27,6 +27,8 @@ if ($r === 'api/sync') {
         'logout'   => page_logout(),
         'catalog'  => page_catalog(),
         'quick'    => page_quick(),
+        'fav'      => page_fav(),
+        'favorites' => page_favorites(),
         'cart'     => page_cart(),
         'order'    => page_order(),
         'orders'   => page_orders(),

@@ -22,6 +22,7 @@ function page_top(string $title): void
     <nav>
       <a href="/catalog">Κατάλογος</a>
       <a href="/quick">Γρήγορη παραγγελία</a>
+      <a href="/favorites">Αγαπημένα</a>
       <a href="/cart">Καλάθι<?= empty($_SESSION['cart']) ? '' : ' (' . count($_SESSION['cart']) . ')' ?></a>
       <a href="/orders">Παραγγελίες</a>
       <a href="/ledger">Καρτέλα</a>
