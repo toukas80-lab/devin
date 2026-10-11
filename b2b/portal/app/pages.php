@@ -302,13 +302,13 @@ function page_catalog(): void
 <h1>Κατάλογος</h1>
 <form class="filters" method="get" action="/catalog">
   <input type="search" name="q" value="<?= e($q) ?>" placeholder="Αναζήτηση κωδικού ή περιγραφής">
-  <select name="g">
+  <select name="g" onchange="this.form.submit()">
     <option value="0">Όλες οι ομάδες</option>
     <?php foreach ($groups as $gr): ?>
     <option value="<?= (int)$gr['id'] ?>" <?= $g === (int)$gr['id'] ? 'selected' : '' ?>><?= e($gr['name']) ?></option>
     <?php endforeach; ?>
   </select>
-  <button type="submit">Φίλτρο</button>
+  <button type="submit">Αναζήτηση</button>
 </form>
 <div class="scroll">
 <table>
