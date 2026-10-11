@@ -1,0 +1,1 @@
+ALTER TABLE items ADD COLUMN img_ver VARCHAR(16) NOT NULL DEFAULT '' AFTER manufacturer;

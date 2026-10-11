@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS items (
   price_w  DECIMAL(12,4) NOT NULL DEFAULT 0,
   stock    DECIMAL(14,3) NOT NULL DEFAULT 0,
   manufacturer VARCHAR(100) NOT NULL DEFAULT '',
+  img_ver  VARCHAR(16)   NOT NULL DEFAULT '',
   KEY idx_items_group (group_id),
   KEY idx_items_code (code),
   KEY idx_items_manf (manufacturer)
