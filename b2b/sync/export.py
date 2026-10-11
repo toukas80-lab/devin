@@ -1,4 +1,5 @@
-"""B2B-25: SoftOne (FOUNTOUKAS, COMPANY=1001 — απόθεμα από STOCK_COMPANY κατά CODE είδους, read-only) -> b2b/out/*.json."""
+"""B2B-25: SoftOne (FOUNTOUKAS, COMPANY=1001 — απόθεμα από STOCK_COMPANY κατά CODE είδους, read-only) -> b2b/out/*.json.
+B2B-29: εξαιρούνται είδη με κατασκευαστή/ομάδα στις EXCLUDE_*."""
 import json
 import os
 import random
@@ -12,6 +13,8 @@ import pyodbc
 
 COMPANY = 1001
 STOCK_COMPANY = 3000
+EXCLUDE_MANUFACTURERS = ("SMO", "VNSRL")
+EXCLUDE_GROUPS = ("SCRAP",)
 OUT_DIR = Path(__file__).resolve().parent.parent / "out"
 CUTOFF36 = "DATEADD(month,-36,CAST(GETDATE() AS date))"
 CUTOFF12 = "DATEADD(month,-12,CAST(GETDATE() AS date))"
@@ -32,6 +35,14 @@ TP_JOIN = (
     " ON tp.TPRMS=t.TPRMS"
 )
 
+
+def _sql_list(vals):
+    return ", ".join("'" + str(v).replace("'", "''") + "'" for v in vals)
+
+
+_EXCL_MANF_SQL = _sql_list(EXCLUDE_MANUFACTURERS)
+_EXCL_GRP_SQL = _sql_list(EXCLUDE_GROUPS)
+
 Q_ITEMS = f"""
 SELECT m.MTRL AS id, m.CODE AS code, m.NAME AS name, m.MTRGROUP AS group_id,
        ISNULL(u.NAME,'') AS unit,
@@ -50,6 +61,10 @@ LEFT JOIN dbo.VAT v ON v.VAT=m.VAT
 LEFT JOIN dbo.MTRMANFCTR mf ON mf.MTRMANFCTR=m.MTRMANFCTR AND mf.COMPANY=m.COMPANY
 WHERE m.COMPANY={COMPANY} AND m.SODTYPE=51 AND m.ISACTIVE=1
   AND NULLIF(LTRIM(RTRIM(ISNULL(m.WEBPAGE,''))),'') IS NOT NULL
+  AND UPPER(LTRIM(RTRIM(ISNULL(mf.NAME,'')))) NOT IN ({_EXCL_MANF_SQL})
+  AND UPPER(LTRIM(RTRIM(ISNULL((SELECT g.NAME FROM dbo.MTRGROUP g
+              WHERE g.COMPANY=m.COMPANY AND g.MTRGROUP=m.MTRGROUP),''))))
+      NOT IN ({_EXCL_GRP_SQL})
 ORDER BY m.CODE
 """
 
@@ -192,7 +207,12 @@ def main():
     print(f"items: {len(items)} | manufacturers: {len(manfs)} | "
           f"no manufacturer: {len(items) - sum(1 for i in items if i['manufacturer'])}")
     out.append(dump("items", items))
-    out.append(dump("groups", rows(cur, Q_GROUPS)))
+    keep_gids = {it["group_id"] for it in items}
+    excl_g = {g.upper().strip() for g in EXCLUDE_GROUPS}
+    groups = [g for g in rows(cur, Q_GROUPS)
+              if g["id"] in keep_gids
+              and str(g["name"]).upper().strip() not in excl_g]
+    out.append(dump("groups", groups))
 
     raw = rows(cur, Q_CUSTOMERS)
     n_active = len(raw)
@@ -213,7 +233,9 @@ def main():
     out.append(dump("customers", customers))
     cust_ids = {c["id"] for c in customers}
 
-    prices = [r for r in rows(cur, Q_PRICES) if r["customer_id"] in cust_ids]
+    item_ids = {it["id"] for it in items}
+    prices = [r for r in rows(cur, Q_PRICES)
+              if r["customer_id"] in cust_ids and r["item_id"] in item_ids]
     for r in prices:
         r["price"] = round(r["price"], 4)
         r["date"] = r["date"].isoformat()
