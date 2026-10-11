@@ -175,7 +175,10 @@ function cust_price(PDO $db, int $cid, int $itemId): float
     if (!$r) {
         return 0.0;
     }
-    return $r['special'] !== null ? (float)$r['special'] : (float)$r['price_w'];
+    return price_info(
+        (float)$r['price_w'],
+        $r['special'] !== null ? (float)$r['special'] : null
+    )['eff'];
 }
 
 function page_home(): void
@@ -297,8 +300,8 @@ function page_catalog(): void
     if ($s === 'name') {
         $ord = "i.name $dir, i.code ASC";
     } elseif ($s === 'price') {
-        $ord = "(COALESCE(p.price, i.price_w) <= 0 OR COALESCE(p.price, i.price_w) IS NULL) ASC, "
-             . "COALESCE(p.price, i.price_w) $dir, i.code ASC";
+        $ord = "(CASE WHEN i.price_w>0 THEN i.price_w ELSE COALESCE(p.price,0) END <= 0) ASC, "
+             . "CASE WHEN i.price_w>0 THEN i.price_w ELSE COALESCE(p.price,0) END $dir, i.code ASC";
     } else {
         $ord = "i.code $dir";
     }
@@ -370,7 +373,9 @@ function page_catalog(): void
 <table>
   <tr><th></th><th><?= $sl('code', 'Κωδικός') ?></th><th><?= $sl('name', 'Είδος') ?></th><th>ΜΜ</th><th class="r"><?= $sl('price', 'Τιμή') ?></th><th></th><th></th></tr>
   <?php foreach ($items as $it):
-      $eff = $it['special'] !== null ? (float)$it['special'] : (float)$it['price_w'];
+      $pi  = price_info((float)$it['price_w'], $it['special'] !== null ? (float)$it['special'] : null);
+      $eff = $pi['eff'];
+      $prc = (float)$it['price_w'] > 0 ? (float)$it['price_w'] : $eff;
       $v   = (string)$it['img_ver']; ?>
   <tr>
     <td>
@@ -382,8 +387,8 @@ function page_catalog(): void
     <td><?= e($it['name']) ?></td>
     <td><?= e($it['unit'] ?? '') ?></td>
     <td class="r">
-      <?php if ($eff > 0): ?>
-        <?= money($eff) ?> &euro;
+      <?php if ($prc > 0): ?>
+        <?= money($prc) ?> &euro;
       <?php else: ?>
         <span class="muted">Ρωτήστε τιμή</span>
       <?php endif; ?>
@@ -458,12 +463,14 @@ function page_cart(): void
         );
         $st->execute(array_merge([$cid], array_map('intval', array_keys($cart))));
         foreach ($st->fetchAll() as $it) {
-            $eff = $it['special'] !== null ? (float)$it['special'] : (float)$it['price_w'];
+            $pi  = price_info((float)$it['price_w'], $it['special'] !== null ? (float)$it['special'] : null);
+            $eff = $pi['eff'];
             $qty = (float)$cart[$it['id']];
             $net = round($eff * $qty, 2);
             $vat = round($net * (float)$it['vat_pct'] / 100, 2);
             $lines[] = [
                 'it' => $it, 'qty' => $qty, 'price' => $eff,
+                'w' => $pi['w'], 'disc' => $pi['disc'],
                 'net' => $net, 'vat' => $vat, 'total' => $net + $vat,
             ];
         }
@@ -479,7 +486,7 @@ function page_cart(): void
   <?= csrf_field() ?>
 <div class="scroll">
 <table>
-  <tr><th>Κωδικός</th><th>Είδος</th><th class="r">Τιμή</th><th class="r">Ποσότητα</th><th class="r">Σύνολο</th></tr>
+  <tr><th>Κωδικός</th><th>Είδος</th><th class="r">Χονδρική</th><th class="r">Έκπτ. %</th><th class="r">Τιμή</th><th class="r">Ποσότητα</th><th class="r">Σύνολο</th></tr>
   <?php $tn = 0.0; $tv = 0.0; foreach ($lines as $l): $tn += $l['net']; $tv += $l['vat']; ?>
   <tr>
     <td><?= e($l['it']['code']) ?></td>
@@ -489,6 +496,8 @@ function page_cart(): void
         <div class="warn">Χαμηλό απόθεμα – μπορεί να υπάρξει καθυστέρηση</div>
       <?php endif; ?>
     </td>
+    <td class="r"><?= $l['w'] > 0 ? money($l['w']) . ' &euro;' : '' ?></td>
+    <td class="r"><?= $l['disc'] > 0 ? money($l['disc']) : '' ?></td>
     <td class="r"><?= money($l['price']) ?> &euro;</td>
     <td class="r">
       <input class="qty" type="number" name="qty[<?= (int)$l['it']['id'] ?>]"
@@ -544,7 +553,8 @@ function page_order(): void
         $lines = [];
         $tn = $tv = 0.0;
         foreach ($rows as $it) {
-            $eff = $it['special'] !== null ? (float)$it['special'] : (float)$it['price_w'];
+            $pi  = price_info((float)$it['price_w'], $it['special'] !== null ? (float)$it['special'] : null);
+            $eff = $pi['eff'];
             if ($eff <= 0) {
                 flash('Το είδος ' . $it['code'] . ' δεν έχει τιμή και αφαιρέθηκε.', 'err');
                 unset($_SESSION['cart'][$it['id']]);
@@ -555,7 +565,7 @@ function page_order(): void
             $vat = round($net * (float)$it['vat_pct'] / 100, 2);
             $tn += $net;
             $tv += $vat;
-            $lines[] = [$it, $qty, $eff, $net, $vat, $net + $vat];
+            $lines[] = [$it, $qty, $pi, $net, $vat, $net + $vat];
         }
 
         $orderNo = null;
@@ -573,12 +583,12 @@ function page_order(): void
                 $oid = (int)$db->lastInsertId();
                 $ins = $db->prepare(
                     'INSERT INTO order_lines
-                       (order_id, item_id, code, name, qty, price, net, vat_pct, vat, total)
-                     VALUES (?,?,?,?,?,?,?,?,?,?)'
+                       (order_id, item_id, code, name, qty, price_w, disc_pct, price, net, vat_pct, vat, total)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
                 );
-                foreach ($lines as [$it, $qty, $eff, $net, $vat, $tot]) {
+                foreach ($lines as [$it, $qty, $pi, $net, $vat, $tot]) {
                     $ins->execute([$oid, $it['id'], $it['code'], $it['name'],
-                                   $qty, $eff, $net, $it['vat_pct'], $vat, $tot]);
+                                   $qty, $pi['w'], $pi['disc'], $pi['eff'], $net, $it['vat_pct'], $vat, $tot]);
                 }
                 $db->commit();
             } catch (Throwable $ex) {
@@ -596,8 +606,12 @@ function page_order(): void
         $c = cfg();
         $body = "Νέα παραγγελία $orderNo\n"
               . 'Πελάτης: ' . $u['code'] . ' ' . $u['name'] . "\n\n";
-        foreach ($lines as [$it, $qty, $eff, $net, $vat, $tot]) {
-            $body .= $it['code'] . ' x' . qtyf($qty) . ' @ ' . money($eff) . " = " . money($tot) . "\n";
+        foreach ($lines as [$it, $qty, $pi, $net, $vat, $tot]) {
+            $body .= $it['code'] . ' x' . qtyf($qty) . ' @ '
+                   . ($pi['disc'] > 0
+                        ? money($pi['w']) . ' -' . money($pi['disc']) . '% = ' . money($pi['eff'])
+                        : money($pi['eff']))
+                   . ' → ' . money($tot) . "\n";
         }
         $body .= "\nΣύνολο: " . money($tn + $tv) . " ευρώ (με ΦΠΑ)\n";
         send_mail($c['notify_email'], "Παραγγελία $orderNo", $body);
@@ -627,12 +641,14 @@ function page_order(): void
 <p><?= e(dmy($o['created_at'])) ?> · Κατάσταση: <strong><?= e(status_label($o['status'])) ?></strong></p>
 <div class="scroll">
 <table>
-  <tr><th>Κωδικός</th><th>Είδος</th><th class="r">Ποσ.</th><th class="r">Τιμή</th><th class="r">Σύνολο</th></tr>
+  <tr><th>Κωδικός</th><th>Είδος</th><th class="r">Ποσ.</th><th class="r">Χονδρική</th><th class="r">Έκπτ. %</th><th class="r">Τιμή</th><th class="r">Σύνολο</th></tr>
   <?php foreach ($lines as $l): ?>
   <tr>
     <td><?= e($l['code']) ?></td>
     <td><?= e($l['name']) ?></td>
     <td class="r"><?= e(qtyf($l['qty'])) ?></td>
+    <td class="r"><?= (float)$l['price_w'] > 0 ? money($l['price_w']) . ' &euro;' : '' ?></td>
+    <td class="r"><?= (float)$l['price_w'] > 0 && (float)$l['disc_pct'] > 0 ? money($l['disc_pct']) : '' ?></td>
     <td class="r"><?= money($l['price']) ?> &euro;</td>
     <td class="r"><?= money($l['total']) ?> &euro;</td>
   </tr>
@@ -879,14 +895,17 @@ function page_favorites(): void
 <div class="scroll">
 <table>
   <tr><th>Κωδικός</th><th>Είδος</th><th>ΜΜ</th><th class="r">Τιμή</th><th class="r">Ποσότητα</th><th></th></tr>
-  <?php foreach ($rows as $r): $eff = $r['special'] !== null ? (float)$r['special'] : (float)$r['price_w']; ?>
+  <?php foreach ($rows as $r):
+      $pi  = price_info((float)$r['price_w'], $r['special'] !== null ? (float)$r['special'] : null);
+      $eff = $pi['eff'];
+      $prc = (float)$r['price_w'] > 0 ? (float)$r['price_w'] : $eff; ?>
   <tr>
     <td><?= e($r['code']) ?></td>
     <td><?= e($r['name']) ?></td>
     <td><?= e($r['unit'] ?? '') ?></td>
     <td class="r">
-      <?php if ($eff > 0): ?>
-        <?= money($eff) ?> &euro;
+      <?php if ($prc > 0): ?>
+        <?= money($prc) ?> &euro;
       <?php else: ?>
         <span class="muted">Ρωτήστε τιμή</span>
       <?php endif; ?>

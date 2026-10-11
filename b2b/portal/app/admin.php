@@ -195,15 +195,15 @@ function admin_order_csv(): void
         page_not_found();
         return;
     }
-    $st = $db->prepare('SELECT code, qty, price FROM order_lines WHERE order_id = ? ORDER BY id');
+    $st = $db->prepare('SELECT code, qty, price, price_w, disc_pct FROM order_lines WHERE order_id = ? ORDER BY id');
     $st->execute([$id]);
 
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . $no . '.csv"');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['code', 'qty', 'price']);
+    fputcsv($out, ['code', 'qty', 'price', 'price_w', 'disc_pct']);
     while ($r = $st->fetch()) {
-        fputcsv($out, [$r['code'], $r['qty'], $r['price']]);
+        fputcsv($out, [$r['code'], $r['qty'], $r['price'], $r['price_w'], $r['disc_pct']]);
     }
     fclose($out);
     exit;

@@ -96,6 +96,8 @@ CREATE TABLE IF NOT EXISTS order_lines (
   code     VARCHAR(50)   NOT NULL,
   name     VARCHAR(255)  NOT NULL,
   qty      DECIMAL(12,3) NOT NULL,
+  price_w  DECIMAL(12,4) NOT NULL DEFAULT 0,
+  disc_pct DECIMAL(6,2)  NOT NULL DEFAULT 0,
   price    DECIMAL(12,4) NOT NULL,
   net      DECIMAL(14,2) NOT NULL,
   vat_pct  DECIMAL(6,2)  NOT NULL DEFAULT 0,
