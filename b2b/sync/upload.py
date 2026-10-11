@@ -1,7 +1,7 @@
 """Upload b2b/out/*.json to the B2B portal sync API.
 
 Config lives in b2b/sync/local.json (gitignored):
-    {"base_url": "https://b2bfountoukas.gr", "token": "..."}
+    {"base_url": "https://ksilakia.gr/b2b", "token": "..."}
 """
 import gzip
 import json
@@ -12,13 +12,15 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
 DATASETS = ["item_groups", "items", "customers", "prices", "ledger", "invoices"]
+# dataset name -> file under b2b/out (export.py writes groups.json)
+FILES = {"item_groups": "groups.json"}
 
 
 def main():
     cfg = json.loads((BASE / "local.json").read_text("utf-8"))
     url = cfg["base_url"].rstrip("/") + "/api/sync"
     for ds in DATASETS:
-        body = (BASE.parent / "out" / f"{ds}.json").read_bytes()
+        body = (BASE.parent / "out" / FILES.get(ds, f"{ds}.json")).read_bytes()
         req = urllib.request.Request(
             f"{url}?dataset={ds}",
             data=gzip.compress(body),

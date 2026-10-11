@@ -98,8 +98,8 @@ ORDER BY x.customer_id, x.item_id
 Q_LEDGER = f"""
 SELECT t.TRDR AS customer_id, CAST(t.TRNDATE AS date) AS date,
        ISNULL(t.FINCODE,'') AS doc, ISNULL(t.COMMENTS,'') AS descr,
-       CASE WHEN {SIGN} > 0 THEN t.TRNVAL ELSE 0 END AS debit,
-       CASE WHEN {SIGN} < 0 THEN t.TRNVAL ELSE 0 END AS credit
+       CASE WHEN {SIGN} > 0 THEN {SIGN} ELSE 0 END AS debit,
+       CASE WHEN {SIGN} < 0 THEN -({SIGN}) ELSE 0 END AS credit
 FROM dbo.TRDTRN t {TP_JOIN}
 WHERE t.COMPANY=3000 AND t.SODTYPE=13
   AND t.TRNDATE >= {CUTOFF24}

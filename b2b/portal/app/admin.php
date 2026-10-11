@@ -83,7 +83,7 @@ function admin_home(): void
          ORDER BY o.created_at DESC LIMIT 100'
     )->fetchAll();
     $sync = $db->query(
-        'SELECT s.dataset, s.rows, s.synced_at
+        'SELECT s.dataset, s.row_count, s.synced_at
          FROM sync_log s
          JOIN (SELECT dataset, MAX(synced_at) m FROM sync_log GROUP BY dataset) x
            ON x.dataset = s.dataset AND x.m = s.synced_at
@@ -99,7 +99,7 @@ function admin_home(): void
   <table>
     <tr><th>Dataset</th><th class="r">Εγγραφές</th><th>Ημ/νία</th></tr>
     <?php foreach ($sync as $s): ?>
-    <tr><td><?= e($s['dataset']) ?></td><td class="r"><?= (int)$s['rows'] ?></td><td><?= e($s['synced_at']) ?></td></tr>
+    <tr><td><?= e($s['dataset']) ?></td><td class="r"><?= (int)$s['row_count'] ?></td><td><?= e($s['synced_at']) ?></td></tr>
     <?php endforeach; ?>
   </table>
   <?php endif; ?>

@@ -6,7 +6,7 @@ return [
     'db_name'         => 'b2b',
     'db_user'         => 'b2b_user',
     'db_pass'         => 'CHANGE_ME',
-    'sync_token'      => 'CHANGE_ME_LONG_RANDOM_TOKEN',
+    'sync_token_sha256' => 'PASTE_SHA256_HEX_OF_TOKEN', // hash('sha256', $token) — δες b2b/sync/token.sha256
     'admin_pass_hash' => 'PASTE_password_hash_OUTPUT', // password_hash('...', PASSWORD_DEFAULT)
     'notify_email'    => 'orders@b2bfountoukas.gr',
     'mail_from'       => 'noreply@b2bfountoukas.gr',

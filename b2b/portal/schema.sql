@@ -1,7 +1,4 @@
--- B2B portal schema (MySQL 8.0, utf8mb4)
-CREATE DATABASE IF NOT EXISTS b2b CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE b2b;
-
+-- B2B portal schema (MySQL 8.0, utf8mb4) — run inside the existing b2b database.
 CREATE TABLE IF NOT EXISTS item_groups (
   id    INT          NOT NULL PRIMARY KEY,
   name  VARCHAR(255) NOT NULL
@@ -104,7 +101,7 @@ CREATE TABLE IF NOT EXISTS order_lines (
 CREATE TABLE IF NOT EXISTS sync_log (
   id        INT         NOT NULL AUTO_INCREMENT PRIMARY KEY,
   dataset   VARCHAR(32) NOT NULL,
-  rows      INT         NOT NULL,
+  row_count INT         NOT NULL,
   synced_at DATETIME    NOT NULL,
   ip        VARCHAR(45) NOT NULL DEFAULT '',
   KEY idx_sync_ds (dataset, synced_at)

@@ -12,7 +12,7 @@ function api_sync(): void
     }
     $token = $_SERVER['HTTP_X_SYNC_TOKEN'] ?? '';
     if (!is_string($token)
-        || !hash_equals((string)cfg()['sync_token'], $token)) {
+        || !hash_equals((string)cfg()['sync_token_sha256'], hash('sha256', $token))) {
         http_response_code(401);
         echo '{"ok":false,"error":"unauthorized"}';
         return;
@@ -77,7 +77,7 @@ function api_sync(): void
             $n++;
         }
         $db->prepare(
-            'INSERT INTO sync_log (dataset, rows, synced_at, ip) VALUES (?,?,NOW(),?)'
+            'INSERT INTO sync_log (dataset, row_count, synced_at, ip) VALUES (?,?,NOW(),?)'
         )->execute([$ds, $n, $_SERVER['REMOTE_ADDR'] ?? '']);
         $db->commit();
         echo json_encode(['ok' => true, 'rows' => $n]);
