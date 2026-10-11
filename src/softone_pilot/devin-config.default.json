@@ -235,7 +235,9 @@
       "trdr_code": "0261",
       "series_code": "ΤΙΜΔ",
       "line_code": "",
-      "line_codes": {},
+      "line_codes": {
+        "5586-19": "10062"
+      },
       "payment_method": "1003",
       "settlement": false
     },
@@ -244,7 +246,7 @@
       "kind": "expense",
       "trdr_code": "0046",
       "series_code": "ΤΙΜΔ",
-      "line_code": "",
+      "line_code": "81009",
       "payment_method": "1003",
       "settlement": false
     },
@@ -256,7 +258,10 @@
       "line_code": "",
       "payment_method": "1003",
       "settlement": false,
-      "item_map": {}
+      "item_map": {
+        "10007": "02852",
+        "VersandEG": "02340"
+      }
     }
   }
 }
