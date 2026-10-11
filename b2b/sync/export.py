@@ -38,11 +38,13 @@ SELECT m.MTRL AS id, m.CODE AS code, m.NAME AS name, m.MTRGROUP AS group_id,
        CAST(ISNULL(m.PRICEW,0) AS float) AS price_w,
        CAST(ISNULL((SELECT TOP 1 d.QTY1 FROM dbo.MTRDATA d
                     WHERE d.MTRL=m.MTRL AND d.COMPANY=m.COMPANY
-                    ORDER BY d.FISCPRD DESC),0) AS float) AS stock
+                    ORDER BY d.FISCPRD DESC),0) AS float) AS stock,
+       ISNULL(m.WEBPAGE,'') AS webpage
 FROM dbo.MTRL m
 LEFT JOIN dbo.MTRUNIT u ON u.MTRUNIT=m.MTRUNIT1 AND u.COMPANY=m.COMPANY
 LEFT JOIN dbo.VAT v ON v.VAT=m.VAT
 WHERE m.COMPANY=3000 AND m.SODTYPE=51 AND m.ISACTIVE=1
+  AND NULLIF(LTRIM(RTRIM(ISNULL(m.WEBPAGE,''))),'') IS NOT NULL
 ORDER BY m.CODE
 """
 
@@ -132,6 +134,14 @@ GROUP BY b.TRDR
 """
 
 
+DRIVE_ID_RE = re.compile(r"(?:/d/|[?&]id=)([A-Za-z0-9_-]{20,})")
+
+
+def drive_id(url):
+    m = DRIVE_ID_RE.search(str(url or ""))
+    return m.group(1) if m else ""
+
+
 def norm_afm(v):
     a = re.sub(r"[\s .\-]+", "", str(v or "")).upper()
     a = re.sub(r"^(E|Ε)(L|Λ)", "", a)
@@ -161,7 +171,10 @@ def main():
     cur = cn.cursor()
 
     out = []
-    out.append(dump("items", rows(cur, Q_ITEMS)))
+    items = rows(cur, Q_ITEMS)
+    for it in items:
+        it["photo"] = drive_id(it.pop("webpage"))
+    out.append(dump("items", items))
     out.append(dump("groups", rows(cur, Q_GROUPS)))
 
     raw = rows(cur, Q_CUSTOMERS)
