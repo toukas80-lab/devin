@@ -21,6 +21,7 @@ function page_top(string $title): void
     <?php if ($u): ?>
     <nav>
       <a href="/catalog">Κατάλογος</a>
+      <a href="/quick">Γρήγορη παραγγελία</a>
       <a href="/cart">Καλάθι<?= empty($_SESSION['cart']) ? '' : ' (' . count($_SESSION['cart']) . ')' ?></a>
       <a href="/orders">Παραγγελίες</a>
       <a href="/ledger">Καρτέλα</a>

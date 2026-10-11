@@ -666,6 +666,80 @@ function page_reorder(): void
     redirect('/cart');
 }
 
+function page_quick(): void
+{
+    $u      = require_user();
+    $db     = db();
+    $cid    = $u['customer_id'];
+    $errors = [];
+    $keep   = '';
+
+    if (is_post()) {
+        csrf_check();
+        $raw   = (string)($_POST['lines'] ?? '');
+        $todo  = [];
+        foreach (preg_split('/\r\n|\n|\r/', $raw) as $i => $line) {
+            $line = trim($line);
+            if ($line !== '') {
+                $todo[] = [$i + 1, $line];
+            }
+        }
+        if (count($todo) > 200) {
+            flash('Έως 200 γραμμές.', 'err');
+            $keep = $raw;
+        } else {
+            $n    = 0;
+            $find = $db->prepare('SELECT id FROM items WHERE code = ?');
+            foreach ($todo as [$ln, $line]) {
+                $parts = preg_match('/[\t; ]/', $line)
+                    ? preg_split('/[\t; ]+/', $line, 2)
+                    : explode(',', $line, 2);
+                $code = trim($parts[0] ?? '');
+                $qtyr = str_replace(',', '.', trim($parts[1] ?? ''));
+                $err  = null;
+                $iid  = 0;
+                if ($code === '' || !is_numeric($qtyr) || (float)$qtyr <= 0) {
+                    $err = 'άκυρη ποσότητα';
+                } else {
+                    $find->execute([$code]);
+                    $iid = (int)$find->fetchColumn();
+                    if ($iid <= 0) {
+                        $err = 'δεν βρέθηκε';
+                    } elseif (cust_price($db, $cid, $iid) <= 0) {
+                        $err = 'ρωτήστε τιμή';
+                    }
+                }
+                if ($err !== null) {
+                    $errors[] = "Γραμμή $ln: $line — $err";
+                    $keep    .= ($keep === '' ? '' : "\n") . $line;
+                } else {
+                    $_SESSION['cart'][$iid] =
+                        ($_SESSION['cart'][$iid] ?? 0) + (float)$qtyr;
+                    $n++;
+                }
+            }
+            if (!$errors) {
+                flash("Μπήκαν $n είδη στο καλάθι.");
+                redirect('/cart');
+            }
+            flash("Μπήκαν $n είδη στο καλάθι.");
+        }
+    }
+
+    page_top('Γρήγορη παραγγελία');
+    ?>
+<h1>Γρήγορη παραγγελία</h1>
+<p>Μία γραμμή ανά είδος: κωδικός και ποσότητα. Μπορείτε να επικολλήσετε δύο στήλες από Excel.</p>
+<?php if ($errors): ?>
+<ul class="err">
+  <?php foreach ($errors as $err): ?><li><?= e($err) ?></li><?php endforeach; ?>
+</ul>
+<?php endif; ?>
+<form method="post" action="/quick"><?= csrf_field() ?><textarea name="lines" rows="15" cols="40"><?= e($keep) ?></textarea><br><button type="submit">Προσθήκη στο καλάθι</button></form>
+<?php
+    page_bottom();
+}
+
 function page_ledger(): void
 {
     $u  = require_user();
