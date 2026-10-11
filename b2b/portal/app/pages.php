@@ -357,7 +357,7 @@ function page_catalog(): void
     </td>
     <td class="r">
       <?php if ($eff > 0): ?>
-      <form method="post" action="/catalog" class="inline">
+      <form method="post" action="/catalog?<?= e(http_build_query(['q' => $q, 'g' => $g, 'p' => $pg, 's' => $s, 'd' => $d])) ?>" class="inline">
         <?= csrf_field() ?>
         <input type="hidden" name="item_id" value="<?= (int)$it['id'] ?>">
         <input class="qty" type="number" name="qty" value="1" min="0.001" step="any">
