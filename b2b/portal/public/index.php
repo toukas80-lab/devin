@@ -29,6 +29,7 @@ if ($r === 'api/sync') {
         'cart'     => page_cart(),
         'order'    => page_order(),
         'orders'   => page_orders(),
+        'reorder'  => page_reorder(),
         'ledger'   => page_ledger(),
         'invoices' => page_invoices(),
         default    => page_not_found(),

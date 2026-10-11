@@ -584,6 +584,7 @@ function page_order(): void
   Καθαρή: <?= money($o['net']) ?> &euro; · ΦΠΑ: <?= money($o['vat']) ?> &euro; ·
   Σύνολο: <strong><?= money($o['total']) ?> &euro;</strong>
 </p>
+<form method="post" action="/reorder" class="inline"><?= csrf_field() ?><input type="hidden" name="order_id" value="<?= (int)$o['id'] ?>"><button type="submit">Ξανά στο καλάθι</button></form>
 <?php
     page_bottom();
 }
@@ -613,7 +614,8 @@ function page_orders(): void
     <td><?= e($o['created_at']) ?></td>
     <td class="r"><?= money($o['total']) ?> &euro;</td>
     <td><?= e(status_label($o['status'])) ?></td>
-    <td><a href="/order?id=<?= (int)$o['id'] ?>">Προβολή</a></td>
+    <td><a href="/order?id=<?= (int)$o['id'] ?>">Προβολή</a>
+        <form method="post" action="/reorder" class="inline"><?= csrf_field() ?><input type="hidden" name="order_id" value="<?= (int)$o['id'] ?>"><button type="submit">Ξανά στο καλάθι</button></form></td>
   </tr>
   <?php endforeach; ?>
 </table>
@@ -621,6 +623,47 @@ function page_orders(): void
 <?php endif; ?>
 <?php
     page_bottom();
+}
+
+function page_reorder(): void
+{
+    $u   = require_user();
+    $db  = db();
+    $cid = $u['customer_id'];
+    if (!is_post()) {
+        redirect('/orders');
+    }
+    csrf_check();
+    $oid = (int)($_POST['order_id'] ?? 0);
+    $st  = $db->prepare('SELECT id FROM orders WHERE id = ? AND customer_id = ?');
+    $st->execute([$oid, $cid]);
+    if (!$st->fetch()) {
+        page_not_found();
+        return;
+    }
+    $st = $db->prepare(
+        'SELECT l.item_id, l.code, l.qty, i.id AS live
+         FROM order_lines l
+         LEFT JOIN items i ON i.id = l.item_id
+         WHERE l.order_id = ? ORDER BY l.id'
+    );
+    $st->execute([$oid]);
+    $n    = 0;
+    $gone = [];
+    foreach ($st->fetchAll() as $l) {
+        if ($l['live'] !== null && cust_price($db, $cid, (int)$l['item_id']) > 0) {
+            $iid = (int)$l['item_id'];
+            $_SESSION['cart'][$iid] = ($_SESSION['cart'][$iid] ?? 0) + (float)$l['qty'];
+            $n++;
+        } else {
+            $gone[] = $l['code'];
+        }
+    }
+    flash("Μπήκαν $n είδη στο καλάθι.");
+    if ($gone) {
+        flash('Δεν είναι πλέον διαθέσιμα: ' . implode(', ', $gone), 'err');
+    }
+    redirect('/cart');
 }
 
 function page_ledger(): void
