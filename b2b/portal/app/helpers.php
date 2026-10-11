@@ -87,3 +87,19 @@ function send_mail(string $to, string $subject, string $body): void
        . 'From: ' . $c['mail_from'] . "\r\n";
     @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $h);
 }
+
+function dmy($d): string
+{
+    $d = (string)$d;
+    if ($d === '') {
+        return '';
+    }
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) {
+        return substr($d, 8, 2) . '/' . substr($d, 5, 2) . '/' . substr($d, 0, 4);
+    }
+    if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/', $d)) {
+        return substr($d, 8, 2) . '/' . substr($d, 5, 2) . '/'
+             . substr($d, 0, 4) . ' ' . substr($d, 11, 5);
+    }
+    return $d;
+}

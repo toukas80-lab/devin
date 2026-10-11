@@ -213,7 +213,7 @@ function page_home(): void
       <?php foreach ($orders as $o): ?>
       <tr>
         <td><?= e($o['order_no']) ?></td>
-        <td><?= e($o['created_at']) ?></td>
+        <td><?= e(dmy($o['created_at'])) ?></td>
         <td class="r"><?= money($o['total']) ?> &euro;</td>
         <td><?= e(status_label($o['status'])) ?></td>
       </tr>
@@ -569,7 +569,7 @@ function page_order(): void
     page_top('Παραγγελία ' . $o['order_no']);
     ?>
 <h1>Παραγγελία <?= e($o['order_no']) ?></h1>
-<p><?= e($o['created_at']) ?> · Κατάσταση: <strong><?= e(status_label($o['status'])) ?></strong></p>
+<p><?= e(dmy($o['created_at'])) ?> · Κατάσταση: <strong><?= e(status_label($o['status'])) ?></strong></p>
 <div class="scroll">
 <table>
   <tr><th>Κωδικός</th><th>Είδος</th><th class="r">Ποσ.</th><th class="r">Τιμή</th><th class="r">Σύνολο</th></tr>
@@ -615,7 +615,7 @@ function page_orders(): void
   <?php foreach ($orders as $o): ?>
   <tr>
     <td><?= e($o['order_no']) ?></td>
-    <td><?= e($o['created_at']) ?></td>
+    <td><?= e(dmy($o['created_at'])) ?></td>
     <td class="r"><?= money($o['total']) ?> &euro;</td>
     <td><?= e(status_label($o['status'])) ?></td>
     <td><a href="/order?id=<?= (int)$o['id'] ?>">Προβολή</a>
@@ -910,7 +910,7 @@ function page_ledger(): void
   <?php $bal = $open; ?>
   <?php if ($from !== ''): ?>
   <tr>
-    <td><?= e($from) ?></td>
+    <td><?= e(dmy($from)) ?></td>
     <td></td>
     <td>Υπόλοιπο μεταφοράς</td>
     <td class="r"><?= $open > 0 ? money($open) : '' ?></td>
@@ -920,7 +920,7 @@ function page_ledger(): void
   <?php endif; ?>
   <?php $sd = $sc = 0.0; foreach ($shown as $r): $bal += (float)$r['debit'] - (float)$r['credit']; $sd += (float)$r['debit']; $sc += (float)$r['credit']; ?>
   <tr>
-    <td><?= e($r['date']) ?></td>
+    <td><?= e(dmy($r['date'])) ?></td>
     <td><?= e($r['doc']) ?></td>
     <td><?= e($r['descr']) ?></td>
     <td class="r"><?= (float)$r['debit']  > 0 ? money($r['debit'])  : '' ?></td>
@@ -984,7 +984,7 @@ function page_invoices(): void
   <?php $sn = $sv = $su = 0.0; foreach ($rows as $r):
       $sn += (float)$r['net']; $sv += (float)$r['vat']; $su += (float)$r['total']; ?>
   <tr>
-    <td><?= e($r['date']) ?></td>
+    <td><?= e(dmy($r['date'])) ?></td>
     <td><?= e($r['doc']) ?></td>
     <td class="r"><?= money($r['net']) ?> &euro;</td>
     <td class="r"><?= money($r['vat']) ?> &euro;</td>

@@ -99,7 +99,7 @@ function admin_home(): void
   <table>
     <tr><th>Dataset</th><th class="r">Εγγραφές</th><th>Ημ/νία</th></tr>
     <?php foreach ($sync as $s): ?>
-    <tr><td><?= e($s['dataset']) ?></td><td class="r"><?= (int)$s['row_count'] ?></td><td><?= e($s['synced_at']) ?></td></tr>
+    <tr><td><?= e($s['dataset']) ?></td><td class="r"><?= (int)$s['row_count'] ?></td><td><?= e(dmy($s['synced_at'])) ?></td></tr>
     <?php endforeach; ?>
   </table>
   <?php endif; ?>
@@ -113,7 +113,7 @@ function admin_home(): void
     <?php foreach ($orders as $o): ?>
     <tr>
       <td><?= e($o['order_no']) ?></td>
-      <td><?= e($o['created_at']) ?></td>
+      <td><?= e(dmy($o['created_at'])) ?></td>
       <td><?= e($o['code']) ?> <?= e($o['name']) ?></td>
       <td class="r"><?= money($o['total']) ?> &euro;</td>
       <td>
@@ -171,7 +171,7 @@ function admin_status(): void
                 'Παραγγελία ' . $o['order_no'] . ': ' . status_label($status),
                 "Η κατάσταση της παραγγελίας σας άλλαξε.\n\n"
                 . 'Παραγγελία: ' . $o['order_no'] . "\n"
-                . 'Ημερομηνία: ' . $o['created_at'] . "\n"
+                . 'Ημερομηνία: ' . dmy($o['created_at']) . "\n"
                 . 'Σύνολο: ' . money($o['total']) . " ευρώ (με ΦΠΑ)\n"
                 . 'Νέα κατάσταση: ' . status_label($status) . "\n"
             );
@@ -256,7 +256,7 @@ function admin_users(): void
     <tr>
       <td><?= e($x['code']) ?></td>
       <td><?= e($x['name']) ?></td>
-      <td><?= e($x['last_login'] ?? '—') ?></td>
+      <td><?= e(dmy($x['last_login'] ?? '—')) ?></td>
       <td><?= (int)$x['is_active'] === 1 ? 'Ενεργός' : 'Ανενεργός' ?></td>
       <td><?= (int)$x['must_change'] === 1 ? 'Ναι' : '—' ?></td>
       <td>
