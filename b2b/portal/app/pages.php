@@ -248,7 +248,15 @@ function page_catalog(): void
     $s   = (string)($_GET['s'] ?? '');
     $s   = in_array($s, ['code', 'name', 'price'], true) ? $s : 'code';
     $d   = (string)($_GET['d'] ?? '') === 'desc' ? 'desc' : 'asc';
-    $per = 24;
+    $n   = (string)($_GET['n'] ?? '');
+    if (in_array($n, ['25', '50', '100', 'all'], true)) {
+        $_SESSION['cat_n'] = $n;
+    } else {
+        $n = (string)($_SESSION['cat_n'] ?? '');
+        if (!in_array($n, ['25', '50', '100', 'all'], true)) {
+            $n = '25';
+        }
+    }
 
     if (is_post()) {
         csrf_check();
@@ -280,6 +288,7 @@ function page_catalog(): void
     $st = $db->prepare("SELECT COUNT(*) FROM items i WHERE $where");
     $st->execute($par);
     $total = (int)$st->fetchColumn();
+    $per   = $n === 'all' ? max(1, $total) : (int)$n;
     $pages = max(1, (int)ceil($total / $per));
     $pg    = min($pg, $pages);
     $off   = ($pg - 1) * $per;
@@ -331,6 +340,14 @@ function page_catalog(): void
     <option value="<?= (int)$gr['id'] ?>" <?= $g === (int)$gr['id'] ? 'selected' : '' ?>><?= e($gr['name']) ?></option>
     <?php endforeach; ?>
   </select>
+  <label>Ανά σελίδα
+    <select name="n" onchange="this.form.submit()">
+      <option value="25" <?= $n === '25' ? 'selected' : '' ?>>25</option>
+      <option value="50" <?= $n === '50' ? 'selected' : '' ?>>50</option>
+      <option value="100" <?= $n === '100' ? 'selected' : '' ?>>100</option>
+      <option value="all" <?= $n === 'all' ? 'selected' : '' ?>>Όλα</option>
+    </select>
+  </label>
   <button type="submit">Αναζήτηση</button>
 </form>
 <div class="scroll">
