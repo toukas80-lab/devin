@@ -472,7 +472,7 @@ function page_cart(): void
 <?php if (!$lines): ?>
   <p>Το καλάθι είναι άδειο. <a href="/catalog">Μετάβαση στον κατάλογο &rarr;</a></p>
 <?php else: ?>
-<form method="post" action="/cart">
+<form id="cartform" method="post" action="/cart">
   <?= csrf_field() ?>
 <div class="scroll">
 <table>
@@ -508,10 +508,45 @@ function page_cart(): void
   <button type="submit" name="clear" value="1" formnovalidate>Άδειασμα</button>
 </p>
 </form>
-<form method="post" action="/order">
+<form id="orderform" method="post" action="/order">
   <?= csrf_field() ?>
   <button type="submit" class="primary">Αποστολή παραγγελίας</button>
 </form>
+<script>
+(function () {
+  var f = document.getElementById('cartform');
+  if (!f) return;
+  var t, dirty = false, busy = false;
+  function go(i) {
+    if (busy) return;
+    busy = true;
+    clearTimeout(t);
+    sessionStorage.setItem('cartFocus', i.name);
+    f.submit();
+  }
+  f.querySelectorAll('input.qty').forEach(function (i) {
+    i.addEventListener('input', function () {
+      dirty = true;
+      clearTimeout(t);
+      if (i.value === '') return;
+      t = setTimeout(function () { go(i); }, 800);
+    });
+    i.addEventListener('change', function () {
+      if (dirty && i.value !== '') go(i);
+    });
+  });
+  var o = document.getElementById('orderform');
+  if (o) o.addEventListener('submit', function (ev) {
+    if (dirty || busy) { ev.preventDefault(); }
+  });
+  var n = sessionStorage.getItem('cartFocus');
+  if (n) {
+    sessionStorage.removeItem('cartFocus');
+    var e = f.querySelector('input[name="' + n + '"]');
+    if (e) { e.focus(); e.select(); }
+  }
+})();
+</script>
 <?php endif; ?>
 <?php
     page_bottom();
