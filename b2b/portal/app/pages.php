@@ -893,6 +893,9 @@ function page_ledger(): void
     $st = db()->prepare('SELECT * FROM ledger WHERE customer_id = ? ORDER BY seq');
     $st->execute([$u['customer_id']]);
     $rows = $st->fetchAll();
+    $st = db()->prepare('SELECT name, afm FROM customers WHERE id = ?');
+    $st->execute([$u['customer_id']]);
+    $cust = $st->fetch() ?: ['name' => $u['name'], 'afm' => ''];
 
     $from = date_param('from');
     $to   = date_param('to');
@@ -921,11 +924,18 @@ function page_ledger(): void
   Έως <input type="date" name="to" value="<?= e($to) ?>">
   <button type="submit">Εφαρμογή</button>
   <a href="/ledger">Καθαρισμός</a>
+  <button type="button" class="print" onclick="window.print()">Εκτύπωση / PDF</button>
 </form>
 <p class="muted">Εμφανίζονται οι κινήσεις των τελευταίων 3 ετών.</p>
 <?php if (!$shown): ?>
   <p>Δεν υπάρχουν κινήσεις στο διάστημα αυτό.</p>
 <?php else: ?>
+<div class="print-only">
+  <p><strong><?= e($cust['name']) ?></strong> · ΑΦΜ <?= e($cust['afm']) ?></p>
+  <p><?= e('Καρτέλα ' . ($from !== '' ? 'από ' . dmy($from) : 'από την αρχή')
+            . ($to !== '' ? ' έως ' . dmy($to) : ' έως σήμερα')) ?>
+     · Εκτύπωση: <?= e(dmy(date('Y-m-d'))) ?></p>
+</div>
 <div class="scroll">
 <table>
   <tr><th>Ημ/νία</th><th>Παραστατικό</th><th>Περιγραφή</th><th class="r">Χρέωση</th><th class="r">Πίστωση</th><th class="r">Υπόλοιπο</th></tr>
@@ -971,7 +981,7 @@ function page_invoices(): void
     if ($from !== '' && $to !== '' && $from > $to) {
         [$from, $to] = [$to, $from];
     }
-    $sql = 'SELECT date, doc, net, vat, total
+    $sql = 'SELECT date, doc, net, vat, total, einv_url
             FROM invoices WHERE customer_id = ?';
     $par = [$u['customer_id']];
     if ($from !== '') {
@@ -1002,15 +1012,17 @@ function page_invoices(): void
 <?php else: ?>
 <div class="scroll">
 <table>
-  <tr><th>Ημ/νία</th><th>Παραστατικό</th><th class="r">Καθαρή</th><th class="r">ΦΠΑ</th><th class="r">Σύνολο</th></tr>
+  <tr><th>Ημ/νία</th><th>Παραστατικό</th><th class="r">Καθαρή</th><th class="r">ΦΠΑ</th><th class="r">Σύνολο</th><th></th></tr>
   <?php $sn = $sv = $su = 0.0; foreach ($rows as $r):
-      $sn += (float)$r['net']; $sv += (float)$r['vat']; $su += (float)$r['total']; ?>
+      $sn += (float)$r['net']; $sv += (float)$r['vat']; $su += (float)$r['total'];
+      $eu = (string)$r['einv_url']; ?>
   <tr>
     <td><?= e(dmy($r['date'])) ?></td>
     <td><?= e($r['doc']) ?></td>
     <td class="r"><?= money($r['net']) ?> &euro;</td>
     <td class="r"><?= money($r['vat']) ?> &euro;</td>
     <td class="r"><?= money($r['total']) ?> &euro;</td>
+    <td><?php if (str_starts_with($eu, 'https://einvoice.impact.gr/p/') || str_starts_with($eu, 'https://einvoice.s1ecos.gr/p/')): ?><a href="<?= e($eu) ?>" target="_blank" rel="noopener noreferrer">PDF</a><?php endif; ?></td>
   </tr>
   <?php endforeach; ?>
   <tr>
@@ -1018,6 +1030,7 @@ function page_invoices(): void
     <td class="r"><strong><?= money($sn) ?> &euro;</strong></td>
     <td class="r"><strong><?= money($sv) ?> &euro;</strong></td>
     <td class="r"><strong><?= money($su) ?> &euro;</strong></td>
+    <td></td>
   </tr>
 </table>
 </div>

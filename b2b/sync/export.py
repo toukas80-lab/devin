@@ -1,4 +1,4 @@
-"""B2B-02: SoftOne (FOUNTOUKAS, COMPANY=3000, read-only) -> b2b/out/*.json."""
+"""B2B-25: SoftOne (FOUNTOUKAS, COMPANY=1001 — απόθεμα από STOCK_COMPANY κατά CODE είδους, read-only) -> b2b/out/*.json."""
 import json
 import os
 import random
@@ -10,7 +10,8 @@ from pathlib import Path
 
 import pyodbc
 
-COMPANY = 3000
+COMPANY = 1001
+STOCK_COMPANY = 3000
 OUT_DIR = Path(__file__).resolve().parent.parent / "out"
 CUTOFF36 = "DATEADD(month,-36,CAST(GETDATE() AS date))"
 CUTOFF12 = "DATEADD(month,-12,CAST(GETDATE() AS date))"
@@ -31,13 +32,15 @@ TP_JOIN = (
     " ON tp.TPRMS=t.TPRMS"
 )
 
-Q_ITEMS = """
+Q_ITEMS = f"""
 SELECT m.MTRL AS id, m.CODE AS code, m.NAME AS name, m.MTRGROUP AS group_id,
        ISNULL(u.NAME,'') AS unit,
        CAST(ISNULL(v.PERCNT,0) AS float) AS vat_pct,
        CAST(ISNULL(m.PRICEW,0) AS float) AS price_w,
-       CAST(ISNULL((SELECT TOP 1 d.QTY1 FROM dbo.MTRDATA d
-                    WHERE d.MTRL=m.MTRL AND d.COMPANY=m.COMPANY
+       CAST(ISNULL((SELECT TOP 1 d.QTY1 FROM dbo.MTRL s JOIN dbo.MTRDATA d
+                    ON d.MTRL=s.MTRL AND d.COMPANY=s.COMPANY
+                    WHERE s.COMPANY={STOCK_COMPANY} AND s.SODTYPE=51
+                      AND s.CODE=m.CODE
                     ORDER BY d.FISCPRD DESC),0) AS float) AS stock,
        ISNULL(mf.NAME,'') AS manufacturer,
        ISNULL(m.WEBPAGE,'') AS webpage
@@ -45,33 +48,33 @@ FROM dbo.MTRL m
 LEFT JOIN dbo.MTRUNIT u ON u.MTRUNIT=m.MTRUNIT1 AND u.COMPANY=m.COMPANY
 LEFT JOIN dbo.VAT v ON v.VAT=m.VAT
 LEFT JOIN dbo.MTRMANFCTR mf ON mf.MTRMANFCTR=m.MTRMANFCTR AND mf.COMPANY=m.COMPANY
-WHERE m.COMPANY=3000 AND m.SODTYPE=51 AND m.ISACTIVE=1
+WHERE m.COMPANY={COMPANY} AND m.SODTYPE=51 AND m.ISACTIVE=1
   AND NULLIF(LTRIM(RTRIM(ISNULL(m.WEBPAGE,''))),'') IS NOT NULL
 ORDER BY m.CODE
 """
 
-Q_GROUPS = """
+Q_GROUPS = f"""
 SELECT g.MTRGROUP AS id, g.NAME AS name
 FROM dbo.MTRGROUP g
-WHERE g.COMPANY=3000
+WHERE g.COMPANY={COMPANY}
   AND EXISTS (SELECT 1 FROM dbo.MTRL m
-              WHERE m.COMPANY=3000 AND m.SODTYPE=51 AND m.ISACTIVE=1
+              WHERE m.COMPANY={COMPANY} AND m.SODTYPE=51 AND m.ISACTIVE=1
                 AND m.MTRGROUP=g.MTRGROUP)
 ORDER BY g.NAME
 """
 
-Q_CUSTOMERS = """
+Q_CUSTOMERS = f"""
 SELECT t.TRDR AS id, t.CODE AS code, t.NAME AS name,
        ISNULL(t.EMAIL,'') AS email, ISNULL(t.AFM,'') AS afm
 FROM dbo.TRDR t
-WHERE t.COMPANY=3000 AND t.SODTYPE=13 AND t.ISACTIVE=1
+WHERE t.COMPANY={COMPANY} AND t.SODTYPE=13 AND t.ISACTIVE=1
 ORDER BY t.CODE
 """
 
 Q_BALANCES = f"""
 SELECT t.TRDR AS id, SUM({SIGN}) AS bal
 FROM dbo.TRDTRN t {TP_JOIN}
-WHERE t.COMPANY=3000 AND t.SODTYPE=13
+WHERE t.COMPANY={COMPANY} AND t.SODTYPE=13
 GROUP BY t.TRDR
 """
 
@@ -86,7 +89,7 @@ FROM (
   FROM dbo.MTRLINES l
   JOIN dbo.FINDOC f ON f.FINDOC=l.FINDOC
   JOIN dbo.FPRMS p ON p.FPRMS=f.FPRMS AND p.COMPANY=f.COMPANY AND p.SOSOURCE=f.SOSOURCE
-  WHERE f.COMPANY=3000 AND f.SOSOURCE=1351 AND f.ISCANCEL=0
+  WHERE f.COMPANY={COMPANY} AND f.SOSOURCE=1351 AND f.ISCANCEL=0
     AND p.TFPRMS IN (102,103)
     AND f.TRNDATE >= {CUTOFF12}
     AND l.QTY1>0 AND l.LINEVAL>0
@@ -101,7 +104,7 @@ SELECT t.TRDR AS customer_id, CAST(t.TRNDATE AS date) AS date,
        CASE WHEN {SIGN} > 0 THEN {SIGN} ELSE 0 END AS debit,
        CASE WHEN {SIGN} < 0 THEN -({SIGN}) ELSE 0 END AS credit
 FROM dbo.TRDTRN t {TP_JOIN}
-WHERE t.COMPANY=3000 AND t.SODTYPE=13
+WHERE t.COMPANY={COMPANY} AND t.SODTYPE=13
   AND t.TRNDATE >= {CUTOFF36}
 ORDER BY t.TRDR, t.TRNDATE, t.FINDOC, t.TRDTRN
 """
@@ -109,7 +112,7 @@ ORDER BY t.TRDR, t.TRNDATE, t.FINDOC, t.TRDTRN
 Q_OPENING = f"""
 SELECT t.TRDR AS customer_id, SUM({SIGN}) AS opening
 FROM dbo.TRDTRN t {TP_JOIN}
-WHERE t.COMPANY=3000 AND t.SODTYPE=13
+WHERE t.COMPANY={COMPANY} AND t.SODTYPE=13
   AND t.TRNDATE < {CUTOFF36}
 GROUP BY t.TRDR
 """
@@ -117,31 +120,40 @@ GROUP BY t.TRDR
 Q_INVOICES = f"""
 SELECT f.FINDOC AS findoc_id, f.TRDR AS customer_id,
        CAST(f.TRNDATE AS date) AS date, f.FINCODE AS doc,
-       CAST(f.NETAMNT * CASE WHEN p.TFPRMS IN (151,152) THEN -1 ELSE 1 END AS float) AS net,
-       CAST(f.VATAMNT * CASE WHEN p.TFPRMS IN (151,152) THEN -1 ELSE 1 END AS float) AS vat,
-       CAST(f.SUMAMNT * CASE WHEN p.TFPRMS IN (151,152) THEN -1 ELSE 1 END AS float) AS total
+       CAST(f.NETAMNT * CASE WHEN p.TFPRMS IN (151,152,181) THEN -1 ELSE 1 END AS float) AS net,
+       CAST(f.VATAMNT * CASE WHEN p.TFPRMS IN (151,152,181) THEN -1 ELSE 1 END AS float) AS vat,
+       CAST(f.SUMAMNT * CASE WHEN p.TFPRMS IN (151,152,181) THEN -1 ELSE 1 END AS float) AS total,
+       ISNULL(md.SOSIGNQR,'') AS einv_url
 FROM dbo.FINDOC f
 JOIN dbo.FPRMS p ON p.FPRMS=f.FPRMS AND p.COMPANY=f.COMPANY AND p.SOSOURCE=f.SOSOURCE
-WHERE f.COMPANY=3000 AND f.SOSOURCE=1351 AND f.ISCANCEL=0
-  AND p.TFPRMS IN (102,103,151,152)
+LEFT JOIN dbo.MTRDOC md ON md.FINDOC=f.FINDOC
+WHERE f.COMPANY={COMPANY} AND f.SOSOURCE=1351 AND f.ISCANCEL=0
+  AND p.TFPRMS IN (102,103,131,151,152,181)
   AND f.TRNDATE >= {CUTOFF36}
 ORDER BY f.TRDR, f.TRNDATE, f.FINDOC
 """
 
-Q_BALSHEET = """
+Q_BALSHEET = f"""
 SELECT b.TRDR AS id, SUM(b.LDEBIT - b.LCREDIT) AS bal
 FROM dbo.TRDBALSHEET b
-WHERE b.COMPANY=3000
+WHERE b.COMPANY={COMPANY}
 GROUP BY b.TRDR
 """
 
 
 DRIVE_ID_RE = re.compile(r"(?:/d/|[?&]id=)([A-Za-z0-9_-]{20,})")
+EINV_PREFIXES = ("https://einvoice.impact.gr/p/",
+                 "https://einvoice.s1ecos.gr/p/")
 
 
 def drive_id(url):
     m = DRIVE_ID_RE.search(str(url or ""))
     return m.group(1) if m else ""
+
+
+def einv_url(v):
+    u = str(v or "")
+    return u if u.startswith(EINV_PREFIXES) and len(u) <= 255 else ""
 
 
 def norm_afm(v):
@@ -228,11 +240,15 @@ def main():
                                not r.get("opening"), r["date"], r["doc"]))
     out.append(dump("ledger", ledger))
 
-    invoices = [r for r in rows(cur, Q_INVOICES) if r["customer_id"] in cust_ids]
+    inv_rows = rows(cur, Q_INVOICES)
+    if len({r["findoc_id"] for r in inv_rows}) != len(inv_rows):
+        sys.exit("duplicate findoc_id in Q_INVOICES (MTRDOC join) — STOP")
+    invoices = [r for r in inv_rows if r["customer_id"] in cust_ids]
     for r in invoices:
         r["date"] = r["date"].isoformat()
         for k in ("net", "vat", "total"):
             r[k] = round(r[k], 2)
+        r["einv_url"] = einv_url(r["einv_url"])
     out.append(dump("invoices", invoices))
 
     sample = random.Random().sample(sorted(cust_ids), min(3, len(cust_ids)))

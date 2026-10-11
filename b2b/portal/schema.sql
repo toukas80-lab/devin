@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   net         DECIMAL(14,2) NOT NULL DEFAULT 0,
   vat         DECIMAL(14,2) NOT NULL DEFAULT 0,
   total       DECIMAL(14,2) NOT NULL DEFAULT 0,
+  einv_url    VARCHAR(255)  NOT NULL DEFAULT '',
   KEY idx_invoices_cust (customer_id, date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

@@ -90,7 +90,7 @@ function api_sync(): void
         'customers'   => ['customers', ['id', 'code', 'name', 'email', 'afm', 'balance']],
         'prices'      => ['prices', ['customer_id', 'item_id', 'price', 'date']],
         'ledger'      => ['ledger', ['customer_id', 'date', 'doc', 'descr', 'debit', 'credit', 'opening']],
-        'invoices'    => ['invoices', ['findoc_id', 'customer_id', 'date', 'doc', 'net', 'vat', 'total']],
+        'invoices'    => ['invoices', ['findoc_id', 'customer_id', 'date', 'doc', 'net', 'vat', 'total', 'einv_url']],
     ];
     if (!isset($map[$ds])) {
         http_response_code(400);
