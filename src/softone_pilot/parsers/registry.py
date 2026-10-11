@@ -15,9 +15,12 @@ from softone_pilot.parsers.enartia import EnartiaParser
 from softone_pilot.parsers.fedex import FedexParser
 from softone_pilot.parsers.finloup import FinloupLeasing1Parser, FinloupLeasing2Parser
 from softone_pilot.parsers.goldair import GoldairCargoParser
+from softone_pilot.parsers.hellenicshipping import HellenicShippingParser
 from softone_pilot.parsers.karasoulis import KarasoulisParser
 from softone_pilot.parsers.kerbl import KerblParser
+from softone_pilot.parsers.malinis import MalinisParser
 from softone_pilot.parsers.prometal import PrometalParser
+from softone_pilot.parsers.reiko import ReikoParser
 from softone_pilot.parsers.samson import GrSamsonParser
 from softone_pilot.parsers.sfakianakis import SfakianakisParser
 from softone_pilot.parsers.technomatic import TechnomaticParser
@@ -35,6 +38,7 @@ PARSERS: tuple[SupplierParser, ...] = (
     GrSamsonParser(),
     EltaCourierParser(),
     CargoBookParser(),
+    HellenicShippingParser(),
     DigitalSupportParser(),
     GoldairCargoParser(),
     SfakianakisParser(),
@@ -43,6 +47,8 @@ PARSERS: tuple[SupplierParser, ...] = (
     PrometalParser(),
     KerblParser(),
     VnParser(),
+    MalinisParser(),
+    ReikoParser(),
 )
 
 

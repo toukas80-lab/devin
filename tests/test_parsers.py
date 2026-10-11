@@ -16,9 +16,12 @@ from softone_pilot.parsers.enartia import EnartiaParser
 from softone_pilot.parsers.fedex import FedexParser
 from softone_pilot.parsers.finloup import FinloupLeasing1Parser, FinloupLeasing2Parser
 from softone_pilot.parsers.goldair import GoldairCargoParser
+from softone_pilot.parsers.hellenicshipping import HellenicShippingParser
 from softone_pilot.parsers.karasoulis import KarasoulisParser
 from softone_pilot.parsers.kerbl import KerblParser
+from softone_pilot.parsers.malinis import MalinisParser
 from softone_pilot.parsers.prometal import PrometalParser
+from softone_pilot.parsers.reiko import ReikoParser
 from softone_pilot.parsers.samson import GrSamsonParser
 from softone_pilot.parsers.sfakianakis import SfakianakisParser
 from softone_pilot.parsers.technomatic import TechnomaticParser
@@ -1114,3 +1117,278 @@ def test_vn_rejects_lines_not_matching_net() -> None:
     text = VN_TEXT.replace("45,00010", "46,00010").replace("202,500", "207,000")
     with pytest.raises(PdfParseError, match="Άθροισμα γραμμών"):
         VnParser().parse_text(Path("vn.pdf"), text)
+
+
+HELLENIC_TEXT = """\
+ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ/INVOICE 4691 06/10/2026
+ΕΠΩΝΥΜΙΑ   :
+ΔΙΕΥΘΥΝΣΗ   :
+Α.Φ.Μ./Δ.Ο.Υ.
+ΠΟΛΗ   :
+ΜΑΚΕΔΟΝΙΚΟΥ ΑΓΩΝΑ 0
+57013
+ΩΡΑΙΟΚΑΣΤΡΟ
+ΤΗΛ   :
+ΦΟΥΝΤΟΥΚΑΣ ΘΕΟΔΩΡΟΣ ΜΟΝΟΠΡΟΣΩΠΗ ΙΔΙΩΤΙΚΗ
+36175
+ΠΕΡΙΓΡΑΦΗ ΕΙΔΟΥΣ Ξ.Ν. ΤΙΜΗ
+ΜΟΝΑΔΑΣ
+ΚΑΘΑΡΗ
+ΑΞΙΑ
+Φ.Π.Α
+%
+Διάφορες Δραστηριότητες
+802313849
+ΜΕΡΙΔΑ   :
+ΠΛΟΙΟ/ΑΥΤΟΚ/ΠΤΗΣΗ:
+ΤΟΠΟΣ ΦΟΡΤΩΣΗΣ   :
+ΚΕΦΟΔΕ ΑΤΤΙΚΗΣ
+Β
+ΤΕΛΙΚΗ
+ΑΞΙΑ
+ΠΕΡ/ΦΗ
+ΦΟΡ/ΟΥ:
+ΣΤΟΙΧΕΙΑ ΠΕΛΑΤΗ ΣΤΟΙΧΕΙΑ ΦΟΡΤΩΣΗΣ
+Τ.Κ.   :
+ΕΠΑΓΓΕΛΜΑ  :
+ΤΟΠΟΣ ΕΚΦΟΡΤΩΣΗΣ   :
+ΕΛΛΗΝΙΚΑ ΝΑΥΤΙΚΑ ΠΡΑΚΤΟΡΕΙΑ ΕΠΕ
+ΜΕΤΑΦΟΡΙΚΗ,ΔΙΑΧ. DEPOT,ΑΠΟΘΗΚΕΥΣΕΙΣ
+Α ΦΜ: 095082846 , Δ .Ο.Υ ΚΕΦΟΔ Ε Α Τ Τ ΙΚΗΣ
+ΑΡ. ΓΕΜΗ : 44433407000
+ΚΕΝΤΡΙΚΟ : ΔΡΑΓΑΤΣΑΝΙΟΥ 63 ,ΠΕΙΡΑΙΑΣ,Τ.Κ. 18545
+ΤΗΛ. 2111893750
+ΤΗΛ. 2111907090
+Νο ΦΟΡΤΩΤΙΚΗΣ   :
+HM/NIA ΑΦΙΞΗΣ   :
+ΑΠΟΣΤΟΛΕΑΣ   :
+Δ.Ο.Υ.   :
+HELLENIC SHIPPING AGENCIES LTD
+TRANSPORTATION, DEPOT, WAREHOUSE
+VAT: EL095082846
+63 DRAGATSANIOU STR, 18545,PIRAEUS
+VAT: EL095082846
+TEL: 2111893750
+E-Mail : info@cargobook.grΥΠΟΚ/ΜΑ : ΘΕΣΗ ΠΑΤΗΜΑ, ΜΑΝΔΡΑ
+EMAIL : warehouse@hellenicshipping.gr
+E-Mail : info@cargobook.grEMAIL: warehouse@hellenicshipping.gr
+ΠΡΩΤΟΤΥΠΟ
+Σελίδα 1 από 1
+EGSU9484303-3COLL-2087KGS
+ΚΩΔ.ΠΕΛΑΤΗ
+ΚΩΔΙΚΟΣ
+Σ Τ Ο Ι Χ Ε Ι Α   Π Α Ρ Α Σ Τ Α Τ Ι Κ Ο Υ
+ΕΙΔΟΣ
+ΔΙΑΧΕΙΡΙΣΤΙΚΟ ΚΟΣΤΟΣ 24%5586-19 120,00 120,00 24 148,80 EUR
+ΑΠΟΘΗΚΕΥΤΙΚΑ 24%5572-19 20,16 20,16 24 25,00 EUR
+0,000,00
+0,00 0,00
+140,16 ΚΑΘ.ΑΞΙΑ
+ΦΠΑ  % ΥΠΟ Κ.
+ΑΝΑΛΥΣΗ  ΑΞΙΩΝ ΑΝΑ  Φ.Π.Α.
+24,00
+ΕΠΙ ΠΙΣΤΩΣΕΙ
+Ο ΕΚΔΟΣΑΣΟ ΠΡΟΪΣΤΑΜΕΝΟΣ
+Α ΞΙΑ  ΦΠΑ
+33,64
+0,00
+0,00
+ΤΕΛ ΙΚΗ Α ΞΙΑ
+173,80
+0,00
+0,00
+Η ΕΞΟΦΛΗΣΗ ΤΟΥ ΤΙΜΟΛΟΓΙΟΥ
+ΕΝΤΟΣ 10 ΗΜΕΡΩΝ
+ΚΑ Θ Α ΡΗ
+140,16
+0,00
+0,00
+140,16
+ΕΚΤΟΣ ΑΝΤΙΘΕΤΟΥ ΕΓΓΡΑΦΟΥ
+ΣΥΜΦΩΝΙΑΣ
+ΓΙΑ ΚΑΘΕ ΔΙΑΦΟΡΑ ΑΡΜΟΔΙΑ
+ΕΙΝΑΙ  ΤΑ ΔΙΚΑΣΤΗΡΙΑ ΠΕΙΡΑΙΑ
+ΛΟΓΑΡΙΑΣΜΟΙ ΤΡΑΠΕΖΩΝ
+33,64
+ΣΥΝΟΛΑ
+ΑΞΙΑ Φ.Π.Α.
+ΠΛΗΡΩΤΕΟ EUR
+Συναλλασσόμαστε μόνο με τους Γενικούς Όρους Διαμεταφοράς και Αποθήκευσης Εμπορευμάτων που έχουν
+ηλεκτρονική διεύθυνση: https://www.synddel.gr/el
+173,80
+400015546644938
+"""
+
+
+def test_hellenic_shipping_parses_charge_lines_with_codes() -> None:
+    invoice = HellenicShippingParser().parse_text(Path("4691.pdf"), HELLENIC_TEXT)
+
+    assert invoice.supplier_vat == "095082846"
+    assert invoice.document_number == "4691"
+    assert invoice.document_date == date(2026, 10, 6)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("140.16"),
+        Decimal("33.64"),
+        Decimal("173.80"),
+    )
+    assert [(line.category, line.value, line.vat_pct) for line in invoice.lines] == [
+        ("5586-19", Decimal("120.00"), Decimal("24")),
+        ("5572-19", Decimal("20.16"), Decimal("24")),
+    ]
+
+
+def test_hellenic_shipping_text_is_not_cargobook() -> None:
+    normalized = HELLENIC_TEXT.replace(" ", "").upper()
+    assert not CargoBookParser().matches(normalized)
+    assert HellenicShippingParser().matches(normalized)
+
+
+MALINIS_TEXT = """\
+   ΜΑΛΙΝΗΣ ΠΕΤΡΟΣ ΔΗΜΗΤΡΙΟΣ
+   ΛΟΓΙΣΤΙΚΕΣ ΥΠΗΡΕΣΙΕΣ
+   ΤΖΑΒΕΛΛΑ 27 ΘΕΣΣΑΛΟΝΙΚΗ 54249
+   ΑΦΜ: 054804818 ΔΟΥ: ΘΕΣΣΑΛΟΝΙΚΗΣ Ζ΄
+   ΤΗΛ.: 2313027290 - 6976693396
+   Email: malinis1967log@gmail.com
+
+Είδος Παραστατικού   Σειρά   Α/Α   Ημερομηνία
+Τιμολόγιο Παροχής Υπηρεσιών(με ΠΑΡΑΚΡΑΤΗΣΗ 20%)   265   6/10/2026
+
+Στοιχεία Πελάτη
+ Επωνυμία :   ΦΟΥΝΤΟΥΚΑΣ ΘΕΟΔΩΡΟΣ ΜΟΝΟΠΡΟΣΩΠΗ   Τρόπος Πληρωμής :   Επί Πιστώσει
+   ΙΔΙΩΤΙΚΗ ΚΕΦΑΛΑΙΟΥΧΙΚΗ ΕΤΑΙΡΕΙΑ
+Επάγγελμα :   ΧΟΝΔΡΙΚΟ ΕΜΠΟΡΙΟ ΜΗΧΑΝΗΜΑΤΩΝ ΕΙΔΙΚΗΣ
+   ΧΡΗΣΗΣ Π.Δ.Κ.Α.
+Διεύθυνση :   ΜΑΚΕΔΟΝΙΚΟΥ ΑΓΩΝΑ 0
+   Πόλη :   ΩΡΑΙΟΚΑΣΤΡΟ
+   Τ.Κ.:  57013
+   Τηλ.:
+   Α.Φ.Μ. :   802313849
+   ΔΟΥ :   ΑΜΠΕΛΟΚΗΠΩΝ
+
+Κωδικός   Περιγραφή   Καθ. Αξία   %ΦΠΑ   Αξία ΦΠΑΑξία Έκπτ.   Καθ. Αξία
+   Μετά Έκπτ.
+ΕΠ-ΤΔΒ9   Εργασίες Τήρησης Διπλογραφικών Βιβλίων με   200,00   200,00   24   48,00
+   παρακράτηση μηνός Σεπτεμβρίου 2026
+
+Υποκείμενη Αξία   %Φ.Π.Α.   Αξία ΦΠΑ   Σύνολα
+   200,00   24   48,00   Αξία προ Έκπτωσης :   200,00
+   Σύνολο έκπτωσης :
+   Αξία μετά Έκπτωσης :   200,00
+   ΦΠΑ :   48,00
+   Σύνολο :   248,00
+   Παρ/θείς Φόρος :
+Παρατηρήσεις   Πληρωτέο Ποσό :   248,00
+   Για την έκδοση   Για την παραλαβή
+
+"""
+
+
+def test_malinis_service_invoice() -> None:
+    invoice = MalinisParser().parse_text(Path("265.pdf"), MALINIS_TEXT)
+
+    assert invoice.document_number == "265"
+    assert invoice.document_date == date(2026, 10, 6)
+    assert (invoice.net_value, invoice.vat_value, invoice.total_value) == (
+        Decimal("200.00"),
+        Decimal("48.00"),
+        Decimal("248.00"),
+    )
+    assert invoice.vat_pct == Decimal("24")
+    (line,) = invoice.lines
+    assert line.code == "ΕΠ-ΤΔΒ9"
+    assert line.value == Decimal("200.00")
+    assert line.description.endswith("ΜΗΝΟΣ ΣΕΠΤΕΜΒΡΙΟΥ 2026")
+
+
+def test_malinis_rejects_total_mismatch() -> None:
+    with pytest.raises(PdfParseError):
+        MalinisParser().parse_text(
+            Path("265.pdf"),
+            MALINIS_TEXT.replace("Σύνολο :   248,00", "Σύνολο :  250,00"),
+        )
+
+
+REIKO_TEXT = """\
+ReiKo aproTex GmbH
+Ollsener Straße 54a
+D - 21271 Hanstedt
+Fon: +49(0)40 800084-533
+
+EMail: info@reiko-aprotex.com
+Internet: www.reiko-aprotex.com
+
+Company
+Fountoukas Theodoros
+Single Member Private Company
+
+Makedonikoy Agona 19
+
+GR - 57013 Palaiokastro, Thessaloniki
+
+I N V O I C E  Nr. 72720
+
+Date   : 05.10.2026
+Customer-No.   : 14067
+Delivery note-No.   : 53539
+Your order   : Eleni Gkouramani  /  E-Mail  /  17.09.2026
+Shipment date (non-binding)   : 02.10.2026
+Sales agent   : Export
+Your VAT No.   : GR802313849
+Delivery term   : EXW
+Payment term   : 14 days net
+Contact   : info@crazysouvle.gr  /  +30 2310 227642
+
+Pos   Qty   Unit   Item   | Description   U-Price   VAT   %   Discount%   Total
+
+1   (Delivery note No. 53539 from 18.09.2026)
+
+   Delivery date (non-binding): 02.10.2026
+
+1.1   60   Piece   10007
+   aproLin® -L90- Apron, Open edge, Width: ca. 90 cm, 300 µm   7.700   0   0   462.00
+   Colour: white [0], Length: 130 cm
+   NV, GMH, F1
+   EAN:  4260587590547
+   Customs tariff no. / Place of origin: 3926 2000 00 0 | PL
+   Position weight (kg): 22.50
+   Delivery date (non-binding): 02.10.2026
+
+2   1   Piece   VersandEG
+   Transport, incl. packaging   0   0   27.87
+
+   Delivery date (non-binding): 02.10.2026
+
+Sub-total   EUR   489.87
+I N V O I C E  Nr. 72720 vom 05.10.2026   Seite:   2
+Transfer   EUR   489.87
+
+Pos   Qty   Unit   Item   | Description   U-Price   VAT   %   Discount%   Total
+
+   The goods remain our property until full payment!
+Net amount   (Transport costs 27.87 )   EUREUR   489.87
+Gross invoice amount   EUR   489.87
+   Tax-free intra-Community supply of goods according to Article 138
+
+"""
+
+
+def test_reiko_intra_community_purchase() -> None:
+    invoice = ReikoParser().parse_text(Path("72720.pdf"), REIKO_TEXT)
+
+    assert invoice.document_number == "72720"
+    assert invoice.document_date == date(2026, 10, 5)
+    assert invoice.net_value == invoice.total_value == Decimal("489.87")
+    assert invoice.vat_value == Decimal("0")
+    assert [(line.code, line.quantity, line.unit_price, line.value) for line in invoice.lines] == [
+        ("10007", Decimal("60"), Decimal("7.70"), Decimal("462.00")),
+        ("VersandEG", Decimal("1"), Decimal("27.87"), Decimal("27.87")),
+    ]
+
+
+def test_reiko_rejects_vat() -> None:
+    with pytest.raises(PdfParseError):
+        ReikoParser().parse_text(
+            Path("72720.pdf"),
+            REIKO_TEXT.replace("EUR   489.87", "EUR   607.44"),
+        )

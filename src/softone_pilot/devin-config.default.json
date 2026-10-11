@@ -7,7 +7,9 @@
     "trusted_connection": true,
     "timeout_seconds": 10
   },
-  "vat_ids": { "0": "0" },
+  "vat_ids": {
+    "0": "0"
+  },
   "suppliers": {
     "999082935": {
       "name": "ENARTIA ΜΟΝΟΠΡΟΣΩΠΗ ΑΝΩΝΥΜΗ ΕΤΑΙΡΕΙΑ",
@@ -226,6 +228,35 @@
       },
       "payment_method": "1003",
       "settlement": false
+    },
+    "095082846": {
+      "name": "ΕΛΛΗΝΙΚΑ ΝΑΥΤΙΚΑ ΠΡΑΚΤΟΡΕΙΑ ΕΠΕ",
+      "kind": "expense",
+      "trdr_code": "0261",
+      "series_code": "ΤΙΜΔ",
+      "line_code": "",
+      "line_codes": {},
+      "payment_method": "1003",
+      "settlement": false
+    },
+    "054804818": {
+      "name": "ΜΑΛΙΝΗΣ ΠΕΤΡΟΣ ΔΗΜΗΤΡΙΟΣ",
+      "kind": "expense",
+      "trdr_code": "0046",
+      "series_code": "ΤΙΜΔ",
+      "line_code": "",
+      "payment_method": "1003",
+      "settlement": false
+    },
+    "PL5263671757": {
+      "name": "REIKO APROTEX GMBH",
+      "kind": "purchase",
+      "trdr_code": "0032",
+      "series_code": "ΤΔΑΕ",
+      "line_code": "",
+      "payment_method": "1003",
+      "settlement": false,
+      "item_map": {}
     }
   }
 }
