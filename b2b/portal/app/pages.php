@@ -503,14 +503,14 @@ function page_cart(): void
   ΦΠΑ: <strong><?= money($tv) ?> &euro;</strong><br>
   Γενικό σύνολο: <strong><?= money($tn + $tv) ?> &euro;</strong>
 </p>
-<p>
-  <button type="submit">Ενημέρωση ποσοτήτων</button>
-  <button type="submit" name="clear" value="1" formnovalidate>Άδειασμα</button>
-</p>
 </form>
 <form id="orderform" method="post" action="/order">
   <?= csrf_field() ?>
   <button type="submit" class="primary">Αποστολή παραγγελίας</button>
+</form>
+<form method="post" action="/cart">
+  <?= csrf_field() ?>
+  <button type="submit" name="clear" value="1" onclick="return confirm('Άδειασμα καλαθιού;')">Άδειασμα</button>
 </form>
 <script>
 (function () {
