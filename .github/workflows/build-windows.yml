@@ -1,0 +1,26 @@
+name: Build DEVIN-PDF.exe
+
+on:
+  push:
+    paths:
+      - "src/**"
+      - "pyproject.toml"
+      - "scripts/build_windows.ps1"
+      - ".github/workflows/build-windows.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ".[build]"
+      - run: pwsh scripts/build_windows.ps1 -SkipInstall
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEVIN-PDF
+          path: dist/DEVIN-PDF.exe
+          if-no-files-found: error
