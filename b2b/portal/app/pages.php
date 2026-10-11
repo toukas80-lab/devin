@@ -245,6 +245,9 @@ function page_catalog(): void
     $q   = trim((string)($_GET['q'] ?? ''));
     $g   = (int)($_GET['g'] ?? 0);
     $pg  = max(1, (int)($_GET['p'] ?? 1));
+    $s   = (string)($_GET['s'] ?? '');
+    $s   = in_array($s, ['code', 'name', 'price'], true) ? $s : 'code';
+    $d   = (string)($_GET['d'] ?? '') === 'desc' ? 'desc' : 'asc';
     $per = 24;
 
     if (is_post()) {
@@ -260,7 +263,7 @@ function page_catalog(): void
                 flash('Προστέθηκε στο καλάθι.');
             }
         }
-        redirect('/catalog?' . http_build_query(['q' => $q, 'g' => $g, 'p' => $pg]));
+        redirect('/catalog?' . http_build_query(['q' => $q, 'g' => $g, 'p' => $pg, 's' => $s, 'd' => $d]));
     }
 
     $where = '1=1';
@@ -281,6 +284,15 @@ function page_catalog(): void
     $pg    = min($pg, $pages);
     $off   = ($pg - 1) * $per;
 
+    $dir = $d === 'desc' ? 'DESC' : 'ASC';
+    if ($s === 'name') {
+        $ord = "i.name $dir, i.code ASC";
+    } elseif ($s === 'price') {
+        $ord = "(COALESCE(p.price, i.price_w) <= 0 OR COALESCE(p.price, i.price_w) IS NULL) ASC, "
+             . "COALESCE(p.price, i.price_w) $dir, i.code ASC";
+    } else {
+        $ord = "i.code $dir";
+    }
     $st = $db->prepare(
         "SELECT i.id, i.code, i.name, i.unit, i.price_w, i.vat_pct, i.img_ver,
                 g.name AS gname, p.price AS special,
@@ -290,11 +302,19 @@ function page_catalog(): void
          LEFT JOIN prices p ON p.item_id = i.id AND p.customer_id = ?
          LEFT JOIN favorites f ON f.item_id = i.id AND f.customer_id = ?
          WHERE $where
-         ORDER BY i.code
+         ORDER BY $ord
          LIMIT $per OFFSET $off"
     );
     $st->execute(array_merge([$cid, $cid], $par));
     $items = $st->fetchAll();
+
+    $sl = static function (string $col, string $label) use ($q, $g, $s, $d): string {
+        $nd    = $s === $col ? ($d === 'asc' ? 'desc' : 'asc') : 'asc';
+        $arrow = $s === $col ? ($d === 'asc' ? ' ▲' : ' ▼') : '';
+        return '<a class="sort" href="/catalog?' . e(http_build_query(
+                ['q' => $q, 'g' => $g, 's' => $col, 'd' => $nd, 'p' => 1]))
+            . '">' . e($label) . $arrow . '</a>';
+    };
 
     $groups = $db->query('SELECT id, name FROM item_groups ORDER BY name')->fetchAll();
 
@@ -302,6 +322,8 @@ function page_catalog(): void
     ?>
 <h1>Κατάλογος</h1>
 <form class="filters" method="get" action="/catalog">
+  <input type="hidden" name="s" value="<?= e($s) ?>">
+  <input type="hidden" name="d" value="<?= e($d) ?>">
   <input type="search" name="q" value="<?= e($q) ?>" placeholder="Αναζήτηση κωδικού ή περιγραφής">
   <select name="g" onchange="this.form.submit()">
     <option value="0">Όλες οι ομάδες</option>
@@ -313,7 +335,7 @@ function page_catalog(): void
 </form>
 <div class="scroll">
 <table>
-  <tr><th></th><th>Κωδικός</th><th>Είδος</th><th>ΜΜ</th><th class="r">Τιμή</th><th></th><th></th></tr>
+  <tr><th></th><th><?= $sl('code', 'Κωδικός') ?></th><th><?= $sl('name', 'Είδος') ?></th><th>ΜΜ</th><th class="r"><?= $sl('price', 'Τιμή') ?></th><th></th><th></th></tr>
   <?php foreach ($items as $it):
       $eff = $it['special'] !== null ? (float)$it['special'] : (float)$it['price_w'];
       $v   = (string)$it['img_ver']; ?>
@@ -344,7 +366,7 @@ function page_catalog(): void
       <?php endif; ?>
     </td>
     <td class="r">
-      <form method="post" action="/fav" class="inline"><?= csrf_field() ?><input type="hidden" name="item_id" value="<?= (int)$it['id'] ?>"><input type="hidden" name="back" value="<?= e('/catalog?' . http_build_query(['q' => $q, 'g' => $g, 'p' => $pg])) ?>"><button type="submit" class="fav" title="Αγαπημένο"><?= $it['fav'] ? '★' : '☆' ?></button></form>
+      <form method="post" action="/fav" class="inline"><?= csrf_field() ?><input type="hidden" name="item_id" value="<?= (int)$it['id'] ?>"><input type="hidden" name="back" value="<?= e('/catalog?' . http_build_query(['q' => $q, 'g' => $g, 'p' => $pg, 's' => $s, 'd' => $d])) ?>"><button type="submit" class="fav" title="Αγαπημένο"><?= $it['fav'] ? '★' : '☆' ?></button></form>
     </td>
   </tr>
   <?php endforeach; ?>
@@ -356,7 +378,7 @@ function page_catalog(): void
     <?php if ($i === $pg): ?>
       <strong><?= $i ?></strong>
     <?php else: ?>
-      <a href="/catalog?<?= e(http_build_query(['q' => $q, 'g' => $g, 'p' => $i])) ?>"><?= $i ?></a>
+      <a href="/catalog?<?= e(http_build_query(['q' => $q, 'g' => $g, 'p' => $i, 's' => $s, 'd' => $d])) ?>"><?= $i ?></a>
     <?php endif; ?>
   <?php endfor; ?>
 </nav>
