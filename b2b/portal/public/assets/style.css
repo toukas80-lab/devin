@@ -90,7 +90,7 @@ a.sort{color:inherit;text-decoration:none}
 a.sort:hover{text-decoration:underline}
 .print-only{display:none}
 @media print{
-  header.top, nav, form.filters, .print, .flash, footer{display:none !important}
+  header.top, nav, form.filters, .print, .flash, footer, p.muted{display:none !important}
   .print-only{display:block}
   .scroll{overflow:visible}
   table{font-size:10pt}
