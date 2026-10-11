@@ -21,6 +21,7 @@ function db(): PDO
                 PDO::ATTR_EMULATE_PREPARES   => false,
             ]
         );
+        $pdo->exec("SET time_zone = '" . date('P') . "'");
     }
     return $pdo;
 }
