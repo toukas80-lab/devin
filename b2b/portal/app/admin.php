@@ -148,8 +148,37 @@ function admin_status(): void
     $oid    = (int)($_POST['order_id'] ?? 0);
     $status = (string)($_POST['status'] ?? '');
     if ($oid > 0 && in_array($status, ['new', 'seen', 'done', 'cancelled'], true)) {
-        db()->prepare('UPDATE orders SET status = ? WHERE id = ?')->execute([$status, $oid]);
-        flash('Η κατάσταση ενημερώθηκε.');
+        $st = db()->prepare(
+            'SELECT o.order_no, o.status, o.total, o.created_at, c.email
+             FROM orders o LEFT JOIN customers c ON c.id = o.customer_id
+             WHERE o.id = ?'
+        );
+        $st->execute([$oid]);
+        $o = $st->fetch();
+        if (!$o) {
+            flash('Η παραγγελία δεν βρέθηκε.', 'err');
+            redirect('/admin');
+        }
+        db()->prepare('UPDATE orders SET status = ? WHERE id = ?')
+           ->execute([$status, $oid]);
+        $sent = false;
+        if (in_array($status, ['seen', 'done', 'cancelled'], true)
+            && $status !== $o['status']
+            && trim((string)$o['email']) !== ''
+            && filter_var($o['email'], FILTER_VALIDATE_EMAIL)) {
+            send_mail(
+                $o['email'],
+                'Παραγγελία ' . $o['order_no'] . ': ' . status_label($status),
+                "Η κατάσταση της παραγγελίας σας άλλαξε.\n\n"
+                . 'Παραγγελία: ' . $o['order_no'] . "\n"
+                . 'Ημερομηνία: ' . $o['created_at'] . "\n"
+                . 'Σύνολο: ' . money($o['total']) . " ευρώ (με ΦΠΑ)\n"
+                . 'Νέα κατάσταση: ' . status_label($status) . "\n"
+            );
+            $sent = true;
+        }
+        flash('Η κατάσταση ενημερώθηκε.'
+              . ($sent ? ' Στάλθηκε email στον πελάτη.' : ''));
     }
     redirect('/admin');
 }

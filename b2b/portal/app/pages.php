@@ -313,7 +313,7 @@ function page_catalog(): void
 </form>
 <div class="scroll">
 <table>
-  <tr><th></th><th>Κωδικός</th><th>Είδος</th><th>Ομάδα</th><th>ΜΜ</th><th class="r">Τιμή</th><th></th><th></th></tr>
+  <tr><th></th><th>Κωδικός</th><th>Είδος</th><th>ΜΜ</th><th class="r">Τιμή</th><th></th><th></th></tr>
   <?php foreach ($items as $it):
       $eff = $it['special'] !== null ? (float)$it['special'] : (float)$it['price_w'];
       $v   = (string)$it['img_ver']; ?>
@@ -325,7 +325,6 @@ function page_catalog(): void
     </td>
     <td><?= e($it['code']) ?></td>
     <td><?= e($it['name']) ?></td>
-    <td><?= e($it['gname'] ?? '') ?></td>
     <td><?= e($it['unit'] ?? '') ?></td>
     <td class="r">
       <?php if ($eff > 0): ?>
