@@ -244,6 +244,7 @@ function page_catalog(): void
     $cid = $u['customer_id'];
     $q   = trim((string)($_GET['q'] ?? ''));
     $g   = (int)($_GET['g'] ?? 0);
+    $m   = trim((string)($_GET['m'] ?? ''));
     $pg  = max(1, (int)($_GET['p'] ?? 1));
     $per = 24;
 
@@ -260,7 +261,7 @@ function page_catalog(): void
                 flash('Προστέθηκε στο καλάθι.');
             }
         }
-        redirect('/catalog?' . http_build_query(['q' => $q, 'g' => $g, 'p' => $pg]));
+        redirect('/catalog?' . http_build_query(['q' => $q, 'g' => $g, 'm' => $m, 'p' => $pg]));
     }
 
     $where = '1=1';
@@ -273,6 +274,10 @@ function page_catalog(): void
     if ($g > 0) {
         $where .= ' AND i.group_id = ?';
         $par[] = $g;
+    }
+    if ($m !== '') {
+        $where .= ' AND i.manufacturer = ?';
+        $par[] = $m;
     }
 
     $st = $db->prepare("SELECT COUNT(*) FROM items i WHERE $where");
@@ -296,6 +301,10 @@ function page_catalog(): void
     $items = $st->fetchAll();
 
     $groups = $db->query('SELECT id, name FROM item_groups ORDER BY name')->fetchAll();
+    $manfs  = $db->query(
+        "SELECT DISTINCT manufacturer FROM items
+         WHERE manufacturer <> '' ORDER BY manufacturer"
+    )->fetchAll(PDO::FETCH_COLUMN);
 
     page_top('Κατάλογος');
     ?>
@@ -306,6 +315,12 @@ function page_catalog(): void
     <option value="0">Όλες οι ομάδες</option>
     <?php foreach ($groups as $gr): ?>
     <option value="<?= (int)$gr['id'] ?>" <?= $g === (int)$gr['id'] ? 'selected' : '' ?>><?= e($gr['name']) ?></option>
+    <?php endforeach; ?>
+  </select>
+  <select name="m" onchange="this.form.submit()">
+    <option value="">Όλοι οι κατασκευαστές</option>
+    <?php foreach ($manfs as $mf): ?>
+    <option value="<?= e($mf) ?>" <?= $m === $mf ? 'selected' : '' ?>><?= e($mf) ?></option>
     <?php endforeach; ?>
   </select>
   <button type="submit">Αναζήτηση</button>
@@ -347,7 +362,7 @@ function page_catalog(): void
     <?php if ($i === $pg): ?>
       <strong><?= $i ?></strong>
     <?php else: ?>
-      <a href="/catalog?<?= e(http_build_query(['q' => $q, 'g' => $g, 'p' => $i])) ?>"><?= $i ?></a>
+      <a href="/catalog?<?= e(http_build_query(['q' => $q, 'g' => $g, 'm' => $m, 'p' => $i])) ?>"><?= $i ?></a>
     <?php endif; ?>
   <?php endfor; ?>
 </nav>

@@ -39,10 +39,12 @@ SELECT m.MTRL AS id, m.CODE AS code, m.NAME AS name, m.MTRGROUP AS group_id,
        CAST(ISNULL((SELECT TOP 1 d.QTY1 FROM dbo.MTRDATA d
                     WHERE d.MTRL=m.MTRL AND d.COMPANY=m.COMPANY
                     ORDER BY d.FISCPRD DESC),0) AS float) AS stock,
+       ISNULL(mf.NAME,'') AS manufacturer,
        ISNULL(m.WEBPAGE,'') AS webpage
 FROM dbo.MTRL m
 LEFT JOIN dbo.MTRUNIT u ON u.MTRUNIT=m.MTRUNIT1 AND u.COMPANY=m.COMPANY
 LEFT JOIN dbo.VAT v ON v.VAT=m.VAT
+LEFT JOIN dbo.MTRMANFCTR mf ON mf.MTRMANFCTR=m.MTRMANFCTR AND mf.COMPANY=m.COMPANY
 WHERE m.COMPANY=3000 AND m.SODTYPE=51 AND m.ISACTIVE=1
   AND NULLIF(LTRIM(RTRIM(ISNULL(m.WEBPAGE,''))),'') IS NOT NULL
 ORDER BY m.CODE
@@ -174,6 +176,9 @@ def main():
     items = rows(cur, Q_ITEMS)
     for it in items:
         it["photo"] = drive_id(it.pop("webpage"))
+    manfs = {it["manufacturer"] for it in items if it["manufacturer"]}
+    print(f"items: {len(items)} | manufacturers: {len(manfs)} | "
+          f"no manufacturer: {len(items) - sum(1 for i in items if i['manufacturer'])}")
     out.append(dump("items", items))
     out.append(dump("groups", rows(cur, Q_GROUPS)))
 

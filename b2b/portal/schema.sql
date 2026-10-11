@@ -13,8 +13,10 @@ CREATE TABLE IF NOT EXISTS items (
   vat_pct  DECIMAL(6,2)  NOT NULL DEFAULT 0,
   price_w  DECIMAL(12,4) NOT NULL DEFAULT 0,
   stock    DECIMAL(14,3) NOT NULL DEFAULT 0,
+  manufacturer VARCHAR(100) NOT NULL DEFAULT '',
   KEY idx_items_group (group_id),
-  KEY idx_items_code (code)
+  KEY idx_items_code (code),
+  KEY idx_items_manf (manufacturer)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS customers (
