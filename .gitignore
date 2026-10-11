@@ -12,3 +12,4 @@ config/local.json
 *.log
 b2b/out/
 b2b/sync/local.json
+b2b/sync/sync.log
