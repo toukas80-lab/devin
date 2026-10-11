@@ -48,6 +48,7 @@ SELECT m.MTRL AS id, m.CODE AS code, m.NAME AS name, m.MTRGROUP AS group_id,
        ISNULL(u.NAME,'') AS unit,
        CAST(ISNULL(v.PERCNT,0) AS float) AS vat_pct,
        CAST(ISNULL(m.PRICEW,0) AS float) AS price_w,
+       CAST(ISNULL(m.PRICER,0) AS float) AS price_r,
        CAST(ISNULL((SELECT TOP 1 d.QTY1 FROM dbo.MTRL s JOIN dbo.MTRDATA d
                     ON d.MTRL=s.MTRL AND d.COMPANY=s.COMPANY
                     WHERE s.COMPANY={STOCK_COMPANY} AND s.SODTYPE=51

@@ -164,21 +164,13 @@ function page_logout(): void
 
 function cust_price(PDO $db, int $cid, int $itemId): float
 {
-    $st = $db->prepare(
-        'SELECT i.price_w, p.price AS special
-         FROM items i LEFT JOIN prices p
-           ON p.item_id = i.id AND p.customer_id = ?
-         WHERE i.id = ? LIMIT 1'
-    );
-    $st->execute([$cid, $itemId]);
+    $st = $db->prepare('SELECT i.price_r FROM items i WHERE i.id = ? LIMIT 1');
+    $st->execute([$itemId]);
     $r = $st->fetch();
     if (!$r) {
         return 0.0;
     }
-    return price_info(
-        (float)$r['price_w'],
-        $r['special'] !== null ? (float)$r['special'] : null
-    )['eff'];
+    return price_info((float)$r['price_r'])['eff'];
 }
 
 function page_home(): void
@@ -300,14 +292,13 @@ function page_catalog(): void
     if ($s === 'name') {
         $ord = "i.name $dir, i.code ASC";
     } elseif ($s === 'price') {
-        $ord = "(CASE WHEN i.price_w>0 THEN i.price_w ELSE COALESCE(p.price,0) END <= 0) ASC, "
-             . "CASE WHEN i.price_w>0 THEN i.price_w ELSE COALESCE(p.price,0) END $dir, i.code ASC";
+        $ord = "(i.price_r <= 0) ASC, i.price_r $dir, i.code ASC";
     } else {
         $ord = "i.code $dir";
     }
     $st = $db->prepare(
-        "SELECT i.id, i.code, i.name, i.unit, i.price_w, i.vat_pct, i.img_ver,
-                g.name AS gname, p.price AS special,
+        "SELECT i.id, i.code, i.name, i.unit, i.price_r, i.vat_pct, i.img_ver,
+                g.name AS gname,
                 (f.item_id IS NOT NULL) AS fav
          FROM items i
          LEFT JOIN item_groups g ON g.id = i.group_id
@@ -373,9 +364,9 @@ function page_catalog(): void
 <table>
   <tr><th></th><th><?= $sl('code', 'Κωδικός') ?></th><th><?= $sl('name', 'Είδος') ?></th><th>ΜΜ</th><th class="r"><?= $sl('price', 'Τιμή') ?></th><th></th><th></th></tr>
   <?php foreach ($items as $it):
-      $pi  = price_info((float)$it['price_w'], $it['special'] !== null ? (float)$it['special'] : null);
+      $pi  = price_info((float)$it['price_r']);
       $eff = $pi['eff'];
-      $prc = (float)$it['price_w'] > 0 ? (float)$it['price_w'] : $eff;
+      $prc = (float)$it['price_r'];
       $v   = (string)$it['img_ver']; ?>
   <tr>
     <td>
@@ -455,15 +446,14 @@ function page_cart(): void
     if ($cart) {
         $in  = implode(',', array_fill(0, count($cart), '?'));
         $st  = $db->prepare(
-            "SELECT i.id, i.code, i.name, i.unit, i.vat_pct, i.stock, i.price_w,
-                    p.price AS special
+            "SELECT i.id, i.code, i.name, i.unit, i.vat_pct, i.stock, i.price_r
              FROM items i
              LEFT JOIN prices p ON p.item_id = i.id AND p.customer_id = ?
              WHERE i.id IN ($in)"
         );
         $st->execute(array_merge([$cid], array_map('intval', array_keys($cart))));
         foreach ($st->fetchAll() as $it) {
-            $pi  = price_info((float)$it['price_w'], $it['special'] !== null ? (float)$it['special'] : null);
+            $pi  = price_info((float)$it['price_r']);
             $eff = $pi['eff'];
             $qty = (float)$cart[$it['id']];
             $net = round($eff * $qty, 2);
@@ -486,7 +476,7 @@ function page_cart(): void
   <?= csrf_field() ?>
 <div class="scroll">
 <table>
-  <tr><th>Κωδικός</th><th>Είδος</th><th class="r">Χονδρική</th><th class="r">Έκπτ. %</th><th class="r">Τιμή</th><th class="r">Ποσότητα</th><th class="r">Σύνολο</th></tr>
+  <tr><th>Κωδικός</th><th>Είδος</th><th class="r">Λιανική</th><th class="r">Έκπτ. %</th><th class="r">Τιμή</th><th class="r">Ποσότητα</th><th class="r">Σύνολο</th></tr>
   <?php $tn = 0.0; $tv = 0.0; foreach ($lines as $l): $tn += $l['net']; $tv += $l['vat']; ?>
   <tr>
     <td><?= e($l['it']['code']) ?></td>
@@ -542,7 +532,7 @@ function page_order(): void
         }
         $in = implode(',', array_fill(0, count($cart), '?'));
         $st = $db->prepare(
-            "SELECT i.id, i.code, i.name, i.vat_pct, i.price_w, p.price AS special
+            "SELECT i.id, i.code, i.name, i.vat_pct, i.price_r
              FROM items i
              LEFT JOIN prices p ON p.item_id = i.id AND p.customer_id = ?
              WHERE i.id IN ($in)"
@@ -553,7 +543,7 @@ function page_order(): void
         $lines = [];
         $tn = $tv = 0.0;
         foreach ($rows as $it) {
-            $pi  = price_info((float)$it['price_w'], $it['special'] !== null ? (float)$it['special'] : null);
+            $pi  = price_info((float)$it['price_r']);
             $eff = $pi['eff'];
             if ($eff <= 0) {
                 flash('Το είδος ' . $it['code'] . ' δεν έχει τιμή και αφαιρέθηκε.', 'err');
@@ -641,7 +631,7 @@ function page_order(): void
 <p><?= e(dmy($o['created_at'])) ?> · Κατάσταση: <strong><?= e(status_label($o['status'])) ?></strong></p>
 <div class="scroll">
 <table>
-  <tr><th>Κωδικός</th><th>Είδος</th><th class="r">Ποσ.</th><th class="r">Χονδρική</th><th class="r">Έκπτ. %</th><th class="r">Τιμή</th><th class="r">Σύνολο</th></tr>
+  <tr><th>Κωδικός</th><th>Είδος</th><th class="r">Ποσ.</th><th class="r">Λιανική</th><th class="r">Έκπτ. %</th><th class="r">Τιμή</th><th class="r">Σύνολο</th></tr>
   <?php foreach ($lines as $l): ?>
   <tr>
     <td><?= e($l['code']) ?></td>
@@ -873,7 +863,7 @@ function page_favorites(): void
     }
 
     $st = $db->prepare(
-        'SELECT i.id, i.code, i.name, i.unit, i.price_w, p.price AS special
+        'SELECT i.id, i.code, i.name, i.unit, i.price_r
          FROM favorites f
          JOIN items i ON i.id = f.item_id
          LEFT JOIN prices p ON p.item_id = i.id AND p.customer_id = ?
@@ -896,9 +886,9 @@ function page_favorites(): void
 <table>
   <tr><th>Κωδικός</th><th>Είδος</th><th>ΜΜ</th><th class="r">Τιμή</th><th class="r">Ποσότητα</th><th></th></tr>
   <?php foreach ($rows as $r):
-      $pi  = price_info((float)$r['price_w'], $r['special'] !== null ? (float)$r['special'] : null);
+      $pi  = price_info((float)$r['price_r']);
       $eff = $pi['eff'];
-      $prc = (float)$r['price_w'] > 0 ? (float)$r['price_w'] : $eff; ?>
+      $prc = (float)$r['price_r']; ?>
   <tr>
     <td><?= e($r['code']) ?></td>
     <td><?= e($r['name']) ?></td>

@@ -86,7 +86,7 @@ function api_sync(): void
     $ds = (string)($_GET['dataset'] ?? '');
     $map = [
         'item_groups' => ['item_groups', ['id', 'name']],
-        'items'       => ['items', ['id', 'code', 'name', 'group_id', 'unit', 'vat_pct', 'price_w', 'stock', 'manufacturer', 'img_ver']],
+        'items'       => ['items', ['id', 'code', 'name', 'group_id', 'unit', 'vat_pct', 'price_w', 'price_r', 'stock', 'manufacturer', 'img_ver']],
         'customers'   => ['customers', ['id', 'code', 'name', 'email', 'afm', 'balance']],
         'prices'      => ['prices', ['customer_id', 'item_id', 'price', 'date']],
         'ledger'      => ['ledger', ['customer_id', 'date', 'doc', 'descr', 'debit', 'credit', 'opening']],

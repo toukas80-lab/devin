@@ -11,20 +11,17 @@ function money(mixed $v): string
     return number_format((float)$v, 2, ',', '.');
 }
 
-function price_info(float $pw, ?float $sp): array
+const B2B_DISC = 40.0;
+
+function price_info(float $pr): array
 {
     $disc = 0.0;
-    if ($pw > 0) {
-        if ($sp !== null && $sp > 0 && $sp < $pw) {
-            $disc = round((1 - $sp / $pw) * 100, 2);
-            $eff  = round($pw * (1 - $disc / 100), 2);
-        } else {
-            $eff = $pw;
-        }
-    } else {
-        $eff = $sp !== null && $sp > 0 ? $sp : 0.0;
+    $eff  = 0.0;
+    if ($pr > 0) {
+        $disc = B2B_DISC;
+        $eff  = round($pr * (1 - $disc / 100), 2);
     }
-    return ['w' => $pw, 'disc' => $disc, 'eff' => $eff];
+    return ['w' => $pr, 'disc' => $disc, 'eff' => $eff];
 }
 
 function qtyf(mixed $v): string
