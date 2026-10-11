@@ -1,6 +1,75 @@
 <?php
 declare(strict_types=1);
 
+function api_auth(): bool
+{
+    $token = $_SERVER['HTTP_X_SYNC_TOKEN'] ?? '';
+    if (!is_string($token)
+        || !hash_equals((string)cfg()['sync_token_sha256'], hash('sha256', $token))) {
+        http_response_code(401);
+        echo '{"ok":false,"error":"unauthorized"}';
+        return false;
+    }
+    return true;
+}
+
+function api_image(): void
+{
+    header('Content-Type: application/json; charset=utf-8');
+
+    if (!is_post()) {
+        http_response_code(405);
+        echo '{"ok":false,"error":"POST only"}';
+        return;
+    }
+    if (!api_auth()) {
+        return;
+    }
+    $code = (string)($_GET['code'] ?? '');
+    if (!preg_match('/^[A-Za-z0-9_-]{1,50}$/', $code)) {
+        http_response_code(400);
+        echo '{"ok":false,"error":"bad code"}';
+        return;
+    }
+    $raw = file_get_contents('php://input');
+    if ($raw === false) {
+        $raw = '';
+    }
+    if (strlen($raw) === 0 || strlen($raw) > 2 * 1024 * 1024) {
+        http_response_code(413);
+        echo '{"ok":false,"error":"too large"}';
+        return;
+    }
+    $info = @getimagesizefromstring($raw);
+    if ($info === false || $info[2] !== IMAGETYPE_JPEG) {
+        http_response_code(415);
+        echo '{"ok":false,"error":"jpeg only"}';
+        return;
+    }
+    $dir = PUBLIC_DIR . '/img';
+    if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
+        http_response_code(500);
+        echo '{"ok":false,"error":"mkdir"}';
+        return;
+    }
+    $tmp = tempnam($dir, '.tmp');
+    if ($tmp === false || file_put_contents($tmp, $raw) === false) {
+        if ($tmp !== false) {
+            @unlink($tmp);
+        }
+        http_response_code(500);
+        echo '{"ok":false,"error":"write"}';
+        return;
+    }
+    if (!rename($tmp, $dir . '/' . $code . '.jpg')) {
+        @unlink($tmp);
+        http_response_code(500);
+        echo '{"ok":false,"error":"rename"}';
+        return;
+    }
+    echo json_encode(['ok' => true, 'code' => $code, 'bytes' => strlen($raw)]);
+}
+
 function api_sync(): void
 {
     header('Content-Type: application/json; charset=utf-8');
@@ -10,17 +79,13 @@ function api_sync(): void
         echo '{"ok":false,"error":"POST only"}';
         return;
     }
-    $token = $_SERVER['HTTP_X_SYNC_TOKEN'] ?? '';
-    if (!is_string($token)
-        || !hash_equals((string)cfg()['sync_token_sha256'], hash('sha256', $token))) {
-        http_response_code(401);
-        echo '{"ok":false,"error":"unauthorized"}';
+    if (!api_auth()) {
         return;
     }
     $ds = (string)($_GET['dataset'] ?? '');
     $map = [
         'item_groups' => ['item_groups', ['id', 'name']],
-        'items'       => ['items', ['id', 'code', 'name', 'group_id', 'unit', 'vat_pct', 'price_w', 'stock', 'manufacturer']],
+        'items'       => ['items', ['id', 'code', 'name', 'group_id', 'unit', 'vat_pct', 'price_w', 'stock', 'manufacturer', 'img_ver']],
         'customers'   => ['customers', ['id', 'code', 'name', 'email', 'afm', 'balance']],
         'prices'      => ['prices', ['customer_id', 'item_id', 'price', 'date']],
         'ledger'      => ['ledger', ['customer_id', 'date', 'doc', 'descr', 'debit', 'credit', 'opening']],
