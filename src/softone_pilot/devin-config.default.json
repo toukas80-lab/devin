@@ -49,6 +49,7 @@
         "export24": "10016",
         "export0": "10017",
         "import24": "10002",
+        "import0": "10003",
         "duty": "10053"
       },
       "payment_method": "1003",
