@@ -811,6 +811,15 @@ def test_fedex_net_rows_with_eur_prefix() -> None:
     assert (invoice.net_value, invoice.vat_value) == (Decimal("52.20"), Decimal("2.89"))
 
 
+def test_fedex_net_rows_with_thousands_separator() -> None:
+    text = FEDEX_EXEMPT_TEXT.replace(
+        "Έκπτωση Καθαρή Αξία\n-46.39 12.03\n-160.24 40.17\n",
+        "Έκπτωση Καθαρή Αξία\n-46.39 12.03\n-1,160.24 40.17\n",
+    )
+    invoice = FedexParser().parse_text(Path("fedex.pdf"), text)
+    assert (invoice.net_value, invoice.vat_value) == (Decimal("52.20"), Decimal("2.89"))
+
+
 CARGOBOOK_TEXT = """6947806591
 ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ/INVOICE 7790 28/09/2026
 ΚΑΡΓΚΟ ΜΠΟΥΚ

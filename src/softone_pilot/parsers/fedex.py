@@ -26,7 +26,9 @@ SHIPMENT_RE = re.compile(
 VAT_PCT_RE = re.compile(r"Ισχύον ΦΠΑ\s+(\d+(?:\.\d+)?)%")
 # "Έκπτωση Καθαρή Αξία" is followed by one "<discount> <net>" row per VAT rate, with or without
 # "EUR" in front of each amount ("-363.37 83.43" / "EUR -363.37 EUR 83.43").
-NET_ROWS_RE = re.compile(r"Καθαρή Αξία\s*\n((?:(?:EUR )?-?\d+\.\d{2} (?:EUR )?\d+\.\d{2}\n)+)")
+NET_ROWS_RE = re.compile(
+    r"Καθαρή Αξία\s*\n((?:(?:EUR )?-?[\d,]+\.\d{2} (?:EUR )?[\d,]+\.\d{2}\n)+)"
+)
 DUTY_TITLE = "Απόδειξη Δασμών"
 DUTY_VAT_RE = re.compile(r"ΦΠΑ σε [\d.]+ % (\d+\.\d{2})")
 DUTY_CATEGORY = "duty"
@@ -73,7 +75,7 @@ class FedexParser(SupplierParser):
                 raise PdfParseError("Λείπει καθαρή αξία FEDEX")
             net = sum(
                 (
-                    parse_amount(row.replace("EUR", "").split()[1])
+                    parse_amount(row.replace("EUR", "").replace(",", "").split()[1])
                     for row in rows.group(1).splitlines()
                 ),
                 Decimal("0"),
