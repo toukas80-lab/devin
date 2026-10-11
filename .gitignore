@@ -10,3 +10,5 @@ dist/
 pilot-data/
 config/local.json
 *.log
+b2b/out/
+b2b/sync/local.json
