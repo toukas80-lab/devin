@@ -133,10 +133,14 @@ GROUP BY b.TRDR
 
 
 def norm_afm(v):
-    a = re.sub(r"\s+", "", str(v or "")).upper()
-    if a.startswith("EL"):
-        a = a[2:]
-    return a if re.fullmatch(r"\d{9}", a) else ""
+    a = re.sub(r"[\s .\-]+", "", str(v or "")).upper()
+    a = re.sub(r"^(E|Ε)(L|Λ)", "", a)
+    if re.fullmatch(r"\d{8}", a):
+        a = "0" + a
+    if not re.fullmatch(r"\d{9}", a) or a == "0" * 9:
+        return ""
+    s = sum(int(a[i]) << (8 - i) for i in range(8))
+    return a if s % 11 % 10 == int(a[8]) else ""
 
 
 def rows(cur, sql):

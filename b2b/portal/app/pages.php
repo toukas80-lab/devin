@@ -17,9 +17,10 @@ function page_login(): void
     $err = '';
     if (is_post()) {
         csrf_check();
-        $afm = preg_replace('/\s+/', '', mb_strtoupper((string)($_POST['afm'] ?? '')));
-        if (str_starts_with($afm, 'EL')) {
-            $afm = substr($afm, 2);
+        $afm = preg_replace('/[\s\x{00A0}.\-]+/u', '', mb_strtoupper((string)($_POST['afm'] ?? '')));
+        $afm = preg_replace('/^(E|Ε)(L|Λ)/u', '', (string)$afm);
+        if (preg_match('/^\d{8}$/', (string)$afm)) {
+            $afm = '0' . $afm;
         }
         $pass = (string)($_POST['pass'] ?? '');
         $db = db();
