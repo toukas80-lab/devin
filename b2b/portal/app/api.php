@@ -67,6 +67,7 @@ function api_image(): void
         echo '{"ok":false,"error":"rename"}';
         return;
     }
+    @chmod($dir . '/' . $code . '.jpg', 0644);
     echo json_encode(['ok' => true, 'code' => $code, 'bytes' => strlen($raw)]);
 }
 

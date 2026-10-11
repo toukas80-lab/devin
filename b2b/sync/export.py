@@ -12,7 +12,7 @@ import pyodbc
 
 COMPANY = 3000
 OUT_DIR = Path(__file__).resolve().parent.parent / "out"
-CUTOFF24 = "DATEADD(month,-24,CAST(GETDATE() AS date))"
+CUTOFF36 = "DATEADD(month,-36,CAST(GETDATE() AS date))"
 CUTOFF12 = "DATEADD(month,-12,CAST(GETDATE() AS date))"
 
 CONN_STR = (
@@ -102,7 +102,7 @@ SELECT t.TRDR AS customer_id, CAST(t.TRNDATE AS date) AS date,
        CASE WHEN {SIGN} < 0 THEN -({SIGN}) ELSE 0 END AS credit
 FROM dbo.TRDTRN t {TP_JOIN}
 WHERE t.COMPANY=3000 AND t.SODTYPE=13
-  AND t.TRNDATE >= {CUTOFF24}
+  AND t.TRNDATE >= {CUTOFF36}
 ORDER BY t.TRDR, t.TRNDATE, t.FINDOC, t.TRDTRN
 """
 
@@ -110,7 +110,7 @@ Q_OPENING = f"""
 SELECT t.TRDR AS customer_id, SUM({SIGN}) AS opening
 FROM dbo.TRDTRN t {TP_JOIN}
 WHERE t.COMPANY=3000 AND t.SODTYPE=13
-  AND t.TRNDATE < {CUTOFF24}
+  AND t.TRNDATE < {CUTOFF36}
 GROUP BY t.TRDR
 """
 
@@ -124,7 +124,7 @@ FROM dbo.FINDOC f
 JOIN dbo.FPRMS p ON p.FPRMS=f.FPRMS AND p.COMPANY=f.COMPANY AND p.SOSOURCE=f.SOSOURCE
 WHERE f.COMPANY=3000 AND f.SOSOURCE=1351 AND f.ISCANCEL=0
   AND p.TFPRMS IN (102,103,151,152)
-  AND f.TRNDATE >= {CUTOFF24}
+  AND f.TRNDATE >= {CUTOFF36}
 ORDER BY f.TRDR, f.TRNDATE, f.FINDOC
 """
 
@@ -213,7 +213,7 @@ def main():
         r["debit"] = round(r["debit"], 2)
         r["credit"] = round(r["credit"], 2)
     cutoff = str(cur.execute(
-        f"SELECT CAST({CUTOFF24} AS date)").fetchone()[0])
+        f"SELECT CAST({CUTOFF36} AS date)").fetchone()[0])
     openings = {r["customer_id"]: round(r["opening"] or 0, 2)
                 for r in rows(cur, Q_OPENING)}
     for cid, ob in sorted(openings.items()):

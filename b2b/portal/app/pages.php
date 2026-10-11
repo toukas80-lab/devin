@@ -855,6 +855,16 @@ function page_favorites(): void
     page_bottom();
 }
 
+function date_param(string $k): string
+{
+    $v = (string)($_GET[$k] ?? '');
+    if ($v === '') {
+        return '';
+    }
+    $d = DateTime::createFromFormat('Y-m-d', $v);
+    return ($d !== false && $d->format('Y-m-d') === $v) ? $v : '';
+}
+
 function page_ledger(): void
 {
     $u  = require_user();
@@ -862,13 +872,53 @@ function page_ledger(): void
     $st->execute([$u['customer_id']]);
     $rows = $st->fetchAll();
 
+    $from = date_param('from');
+    $to   = date_param('to');
+    if ($from !== '' && $to !== '' && $from > $to) {
+        [$from, $to] = [$to, $from];
+    }
+
+    $open  = 0.0;
+    $shown = [];
+    foreach ($rows as $r) {
+        if ($from !== '' && $r['date'] < $from) {
+            $open += (float)$r['debit'] - (float)$r['credit'];
+            continue;
+        }
+        if ($to !== '' && $r['date'] > $to) {
+            continue;
+        }
+        $shown[] = $r;
+    }
+
     page_top('Καρτέλα');
     ?>
 <h1>Καρτέλα</h1>
+<form method="get" action="/ledger" class="filters">
+  Από <input type="date" name="from" value="<?= e($from) ?>">
+  Έως <input type="date" name="to" value="<?= e($to) ?>">
+  <button type="submit">Εφαρμογή</button>
+  <a href="/ledger">Καθαρισμός</a>
+</form>
+<p class="muted">Εμφανίζονται οι κινήσεις των τελευταίων 3 ετών.</p>
+<?php if (!$shown): ?>
+  <p>Δεν υπάρχουν κινήσεις στο διάστημα αυτό.</p>
+<?php else: ?>
 <div class="scroll">
 <table>
   <tr><th>Ημ/νία</th><th>Παραστατικό</th><th>Περιγραφή</th><th class="r">Χρέωση</th><th class="r">Πίστωση</th><th class="r">Υπόλοιπο</th></tr>
-  <?php $bal = 0.0; foreach ($rows as $r): $bal += (float)$r['debit'] - (float)$r['credit']; ?>
+  <?php $bal = $open; ?>
+  <?php if ($from !== ''): ?>
+  <tr>
+    <td><?= e($from) ?></td>
+    <td></td>
+    <td>Υπόλοιπο μεταφοράς</td>
+    <td class="r"><?= $open > 0 ? money($open) : '' ?></td>
+    <td class="r"><?= $open < 0 ? money(-$open) : '' ?></td>
+    <td class="r"><?= money($open) ?></td>
+  </tr>
+  <?php endif; ?>
+  <?php $sd = $sc = 0.0; foreach ($shown as $r): $bal += (float)$r['debit'] - (float)$r['credit']; $sd += (float)$r['debit']; $sc += (float)$r['credit']; ?>
   <tr>
     <td><?= e($r['date']) ?></td>
     <td><?= e($r['doc']) ?></td>
@@ -878,33 +928,61 @@ function page_ledger(): void
     <td class="r"><?= money($bal) ?></td>
   </tr>
   <?php endforeach; ?>
+  <tr>
+    <td colspan="3"><strong>Σύνολα</strong></td>
+    <td class="r"><strong><?= money($sd) ?></strong></td>
+    <td class="r"><strong><?= money($sc) ?></strong></td>
+    <td class="r"><strong><?= money($bal) ?></strong></td>
+  </tr>
 </table>
 </div>
+<?php endif; ?>
 <?php
     page_bottom();
 }
 
 function page_invoices(): void
 {
-    $u  = require_user();
-    $st = db()->prepare(
-        'SELECT date, doc, net, vat, total
-         FROM invoices WHERE customer_id = ?
-         ORDER BY date DESC, findoc_id DESC'
-    );
-    $st->execute([$u['customer_id']]);
+    $u    = require_user();
+    $from = date_param('from');
+    $to   = date_param('to');
+    if ($from !== '' && $to !== '' && $from > $to) {
+        [$from, $to] = [$to, $from];
+    }
+    $sql = 'SELECT date, doc, net, vat, total
+            FROM invoices WHERE customer_id = ?';
+    $par = [$u['customer_id']];
+    if ($from !== '') {
+        $sql .= ' AND date >= ?';
+        $par[] = $from;
+    }
+    if ($to !== '') {
+        $sql .= ' AND date <= ?';
+        $par[] = $to;
+    }
+    $sql .= ' ORDER BY date DESC, findoc_id DESC';
+    $st = db()->prepare($sql);
+    $st->execute($par);
     $rows = $st->fetchAll();
 
     page_top('Τιμολόγια');
     ?>
 <h1>Τιμολόγια</h1>
+<form method="get" action="/invoices" class="filters">
+  Από <input type="date" name="from" value="<?= e($from) ?>">
+  Έως <input type="date" name="to" value="<?= e($to) ?>">
+  <button type="submit">Εφαρμογή</button>
+  <a href="/invoices">Καθαρισμός</a>
+</form>
+<p class="muted">Εμφανίζονται τα παραστατικά των τελευταίων 3 ετών.</p>
 <?php if (!$rows): ?>
-  <p>Δεν υπάρχουν παραστατικά.</p>
+  <p>Δεν υπάρχουν παραστατικά στο διάστημα αυτό.</p>
 <?php else: ?>
 <div class="scroll">
 <table>
   <tr><th>Ημ/νία</th><th>Παραστατικό</th><th class="r">Καθαρή</th><th class="r">ΦΠΑ</th><th class="r">Σύνολο</th></tr>
-  <?php foreach ($rows as $r): ?>
+  <?php $sn = $sv = $su = 0.0; foreach ($rows as $r):
+      $sn += (float)$r['net']; $sv += (float)$r['vat']; $su += (float)$r['total']; ?>
   <tr>
     <td><?= e($r['date']) ?></td>
     <td><?= e($r['doc']) ?></td>
@@ -913,6 +991,12 @@ function page_invoices(): void
     <td class="r"><?= money($r['total']) ?> &euro;</td>
   </tr>
   <?php endforeach; ?>
+  <tr>
+    <td colspan="2"><strong>Σύνολο</strong></td>
+    <td class="r"><strong><?= money($sn) ?> &euro;</strong></td>
+    <td class="r"><strong><?= money($sv) ?> &euro;</strong></td>
+    <td class="r"><strong><?= money($su) ?> &euro;</strong></td>
+  </tr>
 </table>
 </div>
 <?php endif; ?>
