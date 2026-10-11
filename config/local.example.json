@@ -236,7 +236,8 @@
       "series_code": "ΤΙΜΔ",
       "line_code": "",
       "line_codes": {
-        "5586-19": "10062"
+        "5586-19": "10062",
+        "5572-19": "81017"
       },
       "payment_method": "1003",
       "settlement": false
