@@ -1,5 +1,5 @@
 """B2B-25: SoftOne (FOUNTOUKAS, COMPANY=1001 — απόθεμα από STOCK_COMPANY κατά CODE είδους, read-only) -> b2b/out/*.json.
-B2B-29: εξαιρούνται είδη με κατασκευαστή/ομάδα στις EXCLUDE_*."""
+B2B-33: είδη μόνο από catalog_codes.txt."""
 import json
 import os
 import random
@@ -13,9 +13,14 @@ import pyodbc
 
 COMPANY = 1001
 STOCK_COMPANY = 3000
-EXCLUDE_MANUFACTURERS = ("SMO", "VNSRL")
 EXCLUDE_GROUPS = ("SCRAP",)
 OUT_DIR = Path(__file__).resolve().parent.parent / "out"
+CATALOG_FILE = Path(__file__).resolve().parent / "catalog_codes.txt"
+CATALOG_CODES = (
+    {ln.strip() for ln in CATALOG_FILE.read_text(encoding="utf-8").splitlines()
+     if ln.strip()}
+    if CATALOG_FILE.exists() else set()
+)
 CUTOFF36 = "DATEADD(month,-36,CAST(GETDATE() AS date))"
 CUTOFF12 = "DATEADD(month,-12,CAST(GETDATE() AS date))"
 
@@ -40,7 +45,6 @@ def _sql_list(vals):
     return ", ".join("'" + str(v).replace("'", "''") + "'" for v in vals)
 
 
-_EXCL_MANF_SQL = _sql_list(EXCLUDE_MANUFACTURERS)
 _EXCL_GRP_SQL = _sql_list(EXCLUDE_GROUPS)
 
 Q_ITEMS = f"""
@@ -62,7 +66,6 @@ LEFT JOIN dbo.VAT v ON v.VAT=m.VAT
 LEFT JOIN dbo.MTRMANFCTR mf ON mf.MTRMANFCTR=m.MTRMANFCTR AND mf.COMPANY=m.COMPANY
 WHERE m.COMPANY={COMPANY} AND m.SODTYPE=51 AND m.ISACTIVE=1
   AND NULLIF(LTRIM(RTRIM(ISNULL(m.WEBPAGE,''))),'') IS NOT NULL
-  AND UPPER(LTRIM(RTRIM(ISNULL(mf.NAME,'')))) NOT IN ({_EXCL_MANF_SQL})
   AND UPPER(LTRIM(RTRIM(ISNULL((SELECT g.NAME FROM dbo.MTRGROUP g
               WHERE g.COMPANY=m.COMPANY AND g.MTRGROUP=m.MTRGROUP),''))))
       NOT IN ({_EXCL_GRP_SQL})
@@ -196,12 +199,15 @@ def dump(name, data):
 
 def main():
     t0 = time.time()
+    if len(CATALOG_CODES) < 100:
+        sys.exit(f"catalog_codes.txt missing or has <100 codes ({len(CATALOG_CODES)})")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     cn = pyodbc.connect(CONN_STR)
     cur = cn.cursor()
 
     out = []
     items = rows(cur, Q_ITEMS)
+    items = [it for it in items if str(it["code"]).strip() in CATALOG_CODES]
     for it in items:
         it["photo"] = drive_id(it.pop("webpage"))
     manfs = {it["manufacturer"] for it in items if it["manufacturer"]}
