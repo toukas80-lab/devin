@@ -350,6 +350,22 @@ function page_catalog(): void
   </label>
   <button type="submit">Αναζήτηση</button>
 </form>
+<script>
+(function () {
+  var i = document.querySelector('form.filters input[name=q]');
+  if (!i) return;
+  var t;
+  i.addEventListener('input', function () {
+    clearTimeout(t);
+    t = setTimeout(function () { i.form.submit(); }, 600);
+  });
+  if (i.value !== '') {
+    i.focus();
+    var l = i.value.length;
+    i.setSelectionRange(l, l);
+  }
+})();
+</script>
 <div class="scroll">
 <table>
   <tr><th></th><th><?= $sl('code', 'Κωδικός') ?></th><th><?= $sl('name', 'Είδος') ?></th><th>ΜΜ</th><th class="r"><?= $sl('price', 'Τιμή') ?></th><th></th><th></th></tr>
