@@ -20,6 +20,7 @@ if ($r === 'api/sync') {
     match ($r) {
         ''         => page_home(),
         'login'    => page_login(),
+        'password' => page_password(),
         'logout'   => page_logout(),
         'catalog'  => page_catalog(),
         'cart'     => page_cart(),

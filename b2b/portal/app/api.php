@@ -21,7 +21,7 @@ function api_sync(): void
     $map = [
         'item_groups' => ['item_groups', ['id', 'name']],
         'items'       => ['items', ['id', 'code', 'name', 'group_id', 'unit', 'vat_pct', 'price_w', 'stock']],
-        'customers'   => ['customers', ['id', 'code', 'name', 'email', 'balance']],
+        'customers'   => ['customers', ['id', 'code', 'name', 'email', 'afm', 'balance']],
         'prices'      => ['prices', ['customer_id', 'item_id', 'price', 'date']],
         'ledger'      => ['ledger', ['customer_id', 'date', 'doc', 'descr', 'debit', 'credit', 'opening']],
         'invoices'    => ['invoices', ['findoc_id', 'customer_id', 'date', 'doc', 'net', 'vat', 'total']],

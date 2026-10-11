@@ -2,8 +2,10 @@
 import json
 import os
 import random
+import re
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 
 import pyodbc
@@ -54,17 +56,11 @@ WHERE g.COMPANY=3000
 ORDER BY g.NAME
 """
 
-Q_CUSTOMERS = f"""
-SELECT t.TRDR AS id, t.CODE AS code, t.NAME AS name, ISNULL(t.EMAIL,'') AS email
+Q_CUSTOMERS = """
+SELECT t.TRDR AS id, t.CODE AS code, t.NAME AS name,
+       ISNULL(t.EMAIL,'') AS email, ISNULL(t.AFM,'') AS afm
 FROM dbo.TRDR t
 WHERE t.COMPANY=3000 AND t.SODTYPE=13 AND t.ISACTIVE=1
-  AND EXISTS (
-    SELECT 1 FROM dbo.FINDOC f
-    JOIN dbo.FPRMS p ON p.FPRMS=f.FPRMS AND p.COMPANY=f.COMPANY AND p.SOSOURCE=f.SOSOURCE
-    WHERE f.COMPANY=3000 AND f.SOSOURCE=1351 AND f.ISCANCEL=0
-      AND p.TFPRMS IN (102,103,131,151,152,181)
-      AND f.TRNDATE >= {CUTOFF24}
-      AND f.TRDR = t.TRDR)
 ORDER BY t.CODE
 """
 
@@ -136,6 +132,13 @@ GROUP BY b.TRDR
 """
 
 
+def norm_afm(v):
+    a = re.sub(r"\s+", "", str(v or "")).upper()
+    if a.startswith("EL"):
+        a = a[2:]
+    return a if re.fullmatch(r"\d{9}", a) else ""
+
+
 def rows(cur, sql):
     return [dict(zip([c[0] for c in cur.description], r)) for r in cur.execute(sql)]
 
@@ -157,7 +160,19 @@ def main():
     out.append(dump("items", rows(cur, Q_ITEMS)))
     out.append(dump("groups", rows(cur, Q_GROUPS)))
 
-    customers = rows(cur, Q_CUSTOMERS)
+    raw = rows(cur, Q_CUSTOMERS)
+    n_active = len(raw)
+    for c in raw:
+        c["afm"] = norm_afm(c["afm"])
+    customers = [c for c in raw if c["afm"]]
+    n_bad_afm = n_active - len(customers)
+    cnt = Counter(c["afm"] for c in customers)
+    dup = {a for a, n in cnt.items() if n > 1}
+    n_dup = sum(1 for c in customers if c["afm"] in dup)
+    customers = [c for c in customers if c["afm"] not in dup]
+    print(f"customers: {n_active} active, {n_bad_afm} invalid/blank AFM, "
+          f"{n_dup} duplicate-AFM removed ({len(dup)} AFMs)")
+
     balances = {r["id"]: round(r["bal"] or 0, 2) for r in rows(cur, Q_BALANCES)}
     for c in customers:
         c["balance"] = balances.get(c["id"], 0.0)

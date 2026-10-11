@@ -22,8 +22,10 @@ CREATE TABLE IF NOT EXISTS customers (
   code    VARCHAR(25)   NOT NULL,
   name    VARCHAR(255)  NOT NULL,
   email   VARCHAR(191)  NOT NULL DEFAULT '',
+  afm     VARCHAR(9)    NOT NULL DEFAULT '',
   balance DECIMAL(14,2) NOT NULL DEFAULT 0,
-  KEY idx_customers_email (email)
+  KEY idx_customers_email (email),
+  KEY idx_customers_afm (afm)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS prices (
@@ -60,12 +62,12 @@ CREATE TABLE IF NOT EXISTS invoices (
 CREATE TABLE IF NOT EXISTS users (
   id          INT          NOT NULL AUTO_INCREMENT PRIMARY KEY,
   customer_id INT          NOT NULL,
-  email       VARCHAR(191) NOT NULL,
+  email       VARCHAR(191) NULL,
   pass_hash   VARCHAR(255) NOT NULL,
+  must_change TINYINT(1)   NOT NULL DEFAULT 1,
   is_active   TINYINT(1)   NOT NULL DEFAULT 1,
   created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_login  DATETIME     NULL,
-  UNIQUE KEY uq_users_email (email),
   UNIQUE KEY uq_users_cust (customer_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

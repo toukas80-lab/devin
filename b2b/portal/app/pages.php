@@ -17,38 +17,64 @@ function page_login(): void
     $err = '';
     if (is_post()) {
         csrf_check();
-        $email = mb_strtolower(trim((string)($_POST['email'] ?? '')));
-        $pass  = (string)($_POST['pass'] ?? '');
+        $afm = preg_replace('/\s+/', '', mb_strtoupper((string)($_POST['afm'] ?? '')));
+        if (str_starts_with($afm, 'EL')) {
+            $afm = substr($afm, 2);
+        }
+        $pass = (string)($_POST['pass'] ?? '');
         $db = db();
-        if (auth_locked($db, $email)) {
+        if (auth_locked($db, $afm)) {
             $err = 'Ο λογαριασμός κλειδώθηκε για 15 λεπτά λόγω επαναλαμμένων αποτυχιών.';
         } else {
             $st = $db->prepare(
-                'SELECT u.id, u.customer_id, u.email, u.pass_hash, u.is_active,
-                        c.name, c.code
-                 FROM users u JOIN customers c ON c.id = u.customer_id
-                 WHERE u.email = ? LIMIT 1'
+                'SELECT id, code, name, email FROM customers WHERE afm = ? LIMIT 1'
             );
-            $st->execute([$email]);
-            $row = $st->fetch();
-            if ($row && (int)$row['is_active'] === 1
-                && password_verify($pass, $row['pass_hash'])) {
-                auth_log($db, $email, true);
-                auth_clear($db, $email);
+            $st->execute([$afm]);
+            $cust = $st->fetch();
+            $u = false;
+            if ($cust) {
+                $st = $db->prepare(
+                    'SELECT id, pass_hash, is_active, must_change
+                     FROM users WHERE customer_id = ? LIMIT 1'
+                );
+                $st->execute([$cust['id']]);
+                $u = $st->fetch();
+                if (!$u && $pass === $afm) {
+                    try {
+                        $db->prepare(
+                            'INSERT INTO users (customer_id, email, pass_hash, must_change)
+                             VALUES (?,?,?,1)'
+                        )->execute([
+                            $cust['id'],
+                            $cust['email'] !== '' ? $cust['email'] : null,
+                            password_hash($afm, PASSWORD_DEFAULT),
+                        ]);
+                    } catch (Throwable $ex) {
+                        // παράλληλη δημιουργία — ξαναδιαβάζουμε τη γραμμή
+                    }
+                    $st->execute([$cust['id']]);
+                    $u = $st->fetch();
+                }
+            }
+            if ($u && (int)$u['is_active'] === 1
+                && password_verify($pass, $u['pass_hash'])) {
+                auth_log($db, $afm, true);
+                auth_clear($db, $afm);
                 session_regenerate_id(true);
                 $_SESSION['user'] = [
-                    'id'          => (int)$row['id'],
-                    'customer_id' => (int)$row['customer_id'],
-                    'email'       => $row['email'],
-                    'name'        => $row['name'],
-                    'code'        => $row['code'],
+                    'id'          => (int)$u['id'],
+                    'customer_id' => (int)$cust['id'],
+                    'email'       => (string)($cust['email'] ?? ''),
+                    'name'        => $cust['name'],
+                    'code'        => $cust['code'],
+                    'must_change' => (int)$u['must_change'],
                 ];
                 $db->prepare('UPDATE users SET last_login = NOW() WHERE id = ?')
-                   ->execute([$row['id']]);
-                redirect('/');
+                   ->execute([$u['id']]);
+                redirect((int)$u['must_change'] === 1 ? '/password' : '/');
             }
-            auth_log($db, $email, false);
-            $err = 'Λάθος email ή κωδικός.';
+            auth_log($db, $afm, false);
+            $err = 'Λάθος ΑΦΜ ή κωδικός.';
         }
     }
     page_top('Σύνδεση');
@@ -58,13 +84,65 @@ function page_login(): void
   <?php if ($err !== ''): ?><div class="flash err"><?= e($err) ?></div><?php endif; ?>
   <form method="post" action="/login">
     <?= csrf_field() ?>
-    <label>Email
-      <input type="email" name="email" required autofocus autocomplete="username">
+    <label>ΑΦΜ
+      <input type="text" name="afm" required autofocus autocomplete="username" maxlength="13">
     </label>
     <label>Κωδικός
       <input type="password" name="pass" required autocomplete="current-password">
     </label>
     <button type="submit">Είσοδος</button>
+  </form>
+</div>
+<?php
+    page_bottom();
+}
+
+function page_password(): void
+{
+    $u = user();
+    if ($u === null) {
+        redirect('/login');
+    }
+    $db = db();
+    $err = '';
+    if (is_post()) {
+        csrf_check();
+        $p1 = (string)($_POST['pass1'] ?? '');
+        $p2 = (string)($_POST['pass2'] ?? '');
+        $st = $db->prepare('SELECT afm FROM customers WHERE id = ?');
+        $st->execute([$u['customer_id']]);
+        $afm = (string)$st->fetchColumn();
+        if (mb_strlen($p1) < 6) {
+            $err = 'Ο κωδικός πρέπει να έχει τουλάχιστον 6 χαρακτήρες.';
+        } elseif ($p1 !== $p2) {
+            $err = 'Οι κωδικοί δεν ταιριάζουν.';
+        } elseif ($p1 === $afm) {
+            $err = 'Ο νέος κωδικός δεν μπορεί να είναι το ΑΦΜ.';
+        } else {
+            $db->prepare('UPDATE users SET pass_hash = ?, must_change = 0 WHERE id = ?')
+               ->execute([password_hash($p1, PASSWORD_DEFAULT), $u['id']]);
+            $_SESSION['user']['must_change'] = 0;
+            flash('Ο κωδικός άλλαξε επιτυχώς.');
+            redirect('/');
+        }
+    }
+    page_top('Αλλαγή κωδικού');
+    ?>
+<div class="card login">
+  <h1>Αλλαγή κωδικού</h1>
+  <?php if (!empty($u['must_change'])): ?>
+    <p>Για λόγους ασφαλείας ορίστε προσωπικό κωδικό (όχι το ΑΦΜ).</p>
+  <?php endif; ?>
+  <?php if ($err !== ''): ?><div class="flash err"><?= e($err) ?></div><?php endif; ?>
+  <form method="post" action="/password">
+    <?= csrf_field() ?>
+    <label>Νέος κωδικός
+      <input type="password" name="pass1" required minlength="6" autocomplete="new-password">
+    </label>
+    <label>Επανάληψη κωδικού
+      <input type="password" name="pass2" required minlength="6" autocomplete="new-password">
+    </label>
+    <button type="submit">Αποθήκευση</button>
   </form>
 </div>
 <?php

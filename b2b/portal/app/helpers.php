@@ -73,6 +73,9 @@ function require_user(): array
     if ($u === null) {
         redirect('/login');
     }
+    if (!empty($u['must_change'])) {
+        redirect('/password');
+    }
     return $u;
 }
 
