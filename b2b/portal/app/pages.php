@@ -250,6 +250,21 @@ function page_catalog(): void
 
     if (is_post()) {
         csrf_check();
+        if (isset($_POST['fav'])) {
+            $iid = (int)$_POST['fav'];
+            $st = $db->prepare(
+                'SELECT 1 FROM favorites WHERE customer_id = ? AND item_id = ?'
+            );
+            $st->execute([$cid, $iid]);
+            if ($st->fetch()) {
+                $db->prepare('DELETE FROM favorites WHERE customer_id = ? AND item_id = ?')
+                   ->execute([$cid, $iid]);
+            } else {
+                $db->prepare('INSERT IGNORE INTO favorites (customer_id, item_id) VALUES (?,?)')
+                   ->execute([$cid, $iid]);
+            }
+            redirect('/catalog?' . http_build_query(['q' => $q, 'g' => $g, 'm' => $m, 'p' => $pg]));
+        }
         $iid = (int)($_POST['item_id'] ?? 0);
         $qty = (float)str_replace(',', '.', (string)($_POST['qty'] ?? '0'));
         if ($iid > 0 && $qty > 0) {
@@ -289,15 +304,17 @@ function page_catalog(): void
 
     $st = $db->prepare(
         "SELECT i.id, i.code, i.name, i.unit, i.price_w, i.vat_pct,
-                g.name AS gname, p.price AS special
+                g.name AS gname, p.price AS special,
+                (f.item_id IS NOT NULL) AS fav
          FROM items i
          LEFT JOIN item_groups g ON g.id = i.group_id
          LEFT JOIN prices p ON p.item_id = i.id AND p.customer_id = ?
+         LEFT JOIN favorites f ON f.item_id = i.id AND f.customer_id = ?
          WHERE $where
          ORDER BY i.code
          LIMIT $per OFFSET $off"
     );
-    $st->execute(array_merge([$cid], $par));
+    $st->execute(array_merge([$cid, $cid], $par));
     $items = $st->fetchAll();
 
     $groups = $db->query('SELECT id, name FROM item_groups ORDER BY name')->fetchAll();
@@ -343,6 +360,11 @@ function page_catalog(): void
       <?php endif; ?>
     </td>
     <td class="r">
+      <form method="post" action="/catalog" class="inline">
+        <?= csrf_field() ?>
+        <button type="submit" name="fav" value="<?= (int)$it['id'] ?>"
+                title="Αγαπημένο"><?= (int)$it['fav'] ? '★' : '☆' ?></button>
+      </form>
       <?php if ($eff > 0): ?>
       <form method="post" action="/catalog" class="inline">
         <?= csrf_field() ?>
@@ -594,6 +616,10 @@ function page_order(): void
   Καθαρή: <?= money($o['net']) ?> &euro; · ΦΠΑ: <?= money($o['vat']) ?> &euro; ·
   Σύνολο: <strong><?= money($o['total']) ?> &euro;</strong>
 </p>
+<form method="post" action="/orders" class="inline">
+  <?= csrf_field() ?>
+  <button type="submit" name="reorder" value="<?= (int)$o['id'] ?>">Ξανά στο καλάθι</button>
+</form>
 <?php
     page_bottom();
 }
@@ -601,7 +627,48 @@ function page_order(): void
 function page_orders(): void
 {
     $u  = require_user();
-    $st = db()->prepare(
+    $db = db();
+
+    if (is_post()) {
+        csrf_check();
+        $oid = (int)($_POST['reorder'] ?? 0);
+        $st = $db->prepare('SELECT id FROM orders WHERE id = ? AND customer_id = ?');
+        $st->execute([$oid, $u['customer_id']]);
+        if ($st->fetch()) {
+            $st = $db->prepare(
+                'SELECT item_id, code, qty FROM order_lines WHERE order_id = ?'
+            );
+            $st->execute([$oid]);
+            $lines = $st->fetchAll();
+            $avail = [];
+            if ($lines) {
+                $in = implode(',', array_fill(0, count($lines), '?'));
+                $st = $db->prepare("SELECT id FROM items WHERE id IN ($in)");
+                $st->execute(array_map(fn($l) => (int)$l['item_id'], $lines));
+                $avail = array_fill_keys(
+                    array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN)), true);
+            }
+            $added = 0;
+            $missing = [];
+            foreach ($lines as $l) {
+                $iid = (int)$l['item_id'];
+                if (isset($avail[$iid])) {
+                    $_SESSION['cart'][$iid] = ($_SESSION['cart'][$iid] ?? 0) + (float)$l['qty'];
+                    $added++;
+                } else {
+                    $missing[] = $l['code'];
+                }
+            }
+            $msg = "Προστέθηκαν $added είδη στο καλάθι.";
+            if ($missing) {
+                $msg .= ' Δεν είναι πια διαθέσιμα: ' . implode(', ', $missing);
+            }
+            flash($msg, $added > 0 ? 'ok' : 'err');
+        }
+        redirect('/orders');
+    }
+
+    $st = $db->prepare(
         'SELECT id, order_no, status, total, created_at
          FROM orders WHERE customer_id = ? ORDER BY created_at DESC'
     );
@@ -623,12 +690,176 @@ function page_orders(): void
     <td><?= e($o['created_at']) ?></td>
     <td class="r"><?= money($o['total']) ?> &euro;</td>
     <td><?= e(status_label($o['status'])) ?></td>
-    <td><a href="/order?id=<?= (int)$o['id'] ?>">Προβολή</a></td>
+    <td>
+      <a href="/order?id=<?= (int)$o['id'] ?>">Προβολή</a>
+      <form method="post" action="/orders" class="inline">
+        <?= csrf_field() ?>
+        <button type="submit" name="reorder" value="<?= (int)$o['id'] ?>">Ξανά στο καλάθι</button>
+      </form>
+    </td>
   </tr>
   <?php endforeach; ?>
 </table>
 </div>
 <?php endif; ?>
+<?php
+    page_bottom();
+}
+
+function page_favorites(): void
+{
+    $u   = require_user();
+    $db  = db();
+    $cid = $u['customer_id'];
+
+    if (is_post()) {
+        csrf_check();
+        $st = $db->prepare('SELECT item_id FROM favorites WHERE customer_id = ?');
+        $st->execute([$cid]);
+        $favs = array_fill_keys(
+            array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN)), true);
+        $added = 0;
+        foreach ((array)($_POST['qty'] ?? []) as $iid => $qv) {
+            $iid = (int)$iid;
+            $qv  = (float)str_replace(',', '.', (string)$qv);
+            if ($iid > 0 && $qv > 0 && isset($favs[$iid])) {
+                $_SESSION['cart'][$iid] = ($_SESSION['cart'][$iid] ?? 0) + $qv;
+                $added++;
+            }
+        }
+        flash($added > 0 ? "Προστέθηκαν $added είδη στο καλάθι."
+                         : 'Δεν δόθηκαν ποσότητες.',
+              $added > 0 ? 'ok' : 'err');
+        redirect('/favorites');
+    }
+
+    $st = $db->prepare(
+        'SELECT i.id, i.code, i.name, i.unit, i.vat_pct, i.stock, i.price_w,
+                p.price AS special
+         FROM favorites f
+         JOIN items i ON i.id = f.item_id
+         LEFT JOIN prices p ON p.item_id = i.id AND p.customer_id = ?
+         WHERE f.customer_id = ?
+         ORDER BY f.created_at DESC, i.code'
+    );
+    $st->execute([$cid, $cid]);
+    $rows = $st->fetchAll();
+
+    page_top('Αγαπημένα');
+    ?>
+<h1>Αγαπημένα</h1>
+<?php if (!$rows): ?>
+  <p>Δεν έχετε αγαπημένα — σημειώστε είδη με ☆ στον <a href="/catalog">κατάλογο</a>.</p>
+<?php else: ?>
+<form method="post" action="/favorites">
+  <?= csrf_field() ?>
+<div class="scroll">
+<table>
+  <tr><th>Κωδικός</th><th>Είδος</th><th class="r">Τιμή</th><th class="r">Ποσότητα</th></tr>
+  <?php foreach ($rows as $r): $eff = $r['special'] !== null ? (float)$r['special'] : (float)$r['price_w']; ?>
+  <tr>
+    <td><?= e($r['code']) ?></td>
+    <td><?= e($r['name']) ?></td>
+    <td class="r">
+      <?php if ($eff > 0): ?>
+        <?= money($eff) ?> &euro;
+      <?php else: ?>
+        <span class="muted">Ρωτήστε τιμή</span>
+      <?php endif; ?>
+    </td>
+    <td class="r">
+      <?php if ($eff > 0): ?>
+      <input class="qty" type="number" name="qty[<?= (int)$r['id'] ?>]" value="1" min="0" step="any">
+      <?php endif; ?>
+    </td>
+  </tr>
+  <?php endforeach; ?>
+</table>
+</div>
+<p><button type="submit" class="primary">Προσθήκη στο καλάθι</button></p>
+</form>
+<?php endif; ?>
+<?php
+    page_bottom();
+}
+
+function page_quick(): void
+{
+    $u   = require_user();
+    $db  = db();
+    $cid = $u['customer_id'];
+    $added = 0;
+    $bad = [];
+
+    if (is_post()) {
+        csrf_check();
+        $raw   = (string)($_POST['lines'] ?? '');
+        $pairs = [];
+        $ln = 0;
+        foreach (preg_split('/\r\n|\r|\n/', $raw) as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            if (++$ln > 200) {
+                $bad[] = '… οι γραμμές πάνω από 200 αγνοήθηκαν';
+                break;
+            }
+            if (!preg_match('/^(\S+)[\s\x{00A0};,]+(.+)$/u', $line, $mm)) {
+                $bad[] = $line;
+                continue;
+            }
+            $code = $mm[1];
+            $qtyr = str_replace(',', '.', trim($mm[2]));
+            if (!is_numeric($qtyr) || (float)$qtyr <= 0) {
+                $bad[] = $code . ' — άκυρη ποσότητα';
+                continue;
+            }
+            $pairs[] = [$code, (float)$qtyr];
+        }
+        $ids = [];
+        if ($pairs) {
+            $in = implode(',', array_fill(0, count($pairs), '?'));
+            $st = $db->prepare("SELECT id, code FROM items WHERE code IN ($in)");
+            $st->execute(array_map(fn($p) => $p[0], $pairs));
+            foreach ($st->fetchAll() as $r) {
+                $ids[$r['code']] = (int)$r['id'];
+            }
+        }
+        foreach ($pairs as [$code, $qty]) {
+            if (!isset($ids[$code])) {
+                $bad[] = $code . ' — δεν βρέθηκε';
+                continue;
+            }
+            $iid = (int)$ids[$code];
+            $_SESSION['cart'][$iid] = ($_SESSION['cart'][$iid] ?? 0) + $qty;
+            $added++;
+        }
+    }
+
+    page_top('Γρήγορη παραγγελία');
+    ?>
+<h1>Γρήγορη παραγγελία</h1>
+<div class="card">
+  <p>Μία γραμμή ανά είδος: <strong>κωδικός ποσότητα</strong> — διαχωριστικό
+     tab, κενό, ; ή , (και επικόλληση 2 στηλών από Excel). Έως 200 γραμμές.</p>
+  <form method="post" action="/quick">
+    <?= csrf_field() ?>
+    <textarea name="lines" rows="12" style="width:100%"
+      placeholder="00043&#9;2&#10;00051 1,5"></textarea>
+    <p><button type="submit" class="primary">Προσθήκη στο καλάθι</button></p>
+  </form>
+  <?php if (is_post()): ?>
+  <p><strong><?= $added ?></strong> είδη προστέθηκαν.
+     <a href="/cart">Μετάβαση στο καλάθι &rarr;</a></p>
+  <?php if ($bad): ?>
+  <p>Γραμμές που αγνοήθηκαν:</p>
+  <ul>
+    <?php foreach ($bad as $b): ?><li><?= e($b) ?></li><?php endforeach; ?>
+  </ul>
+  <?php endif; ?>
+  <?php endif; ?>
+</div>
 <?php
     page_bottom();
 }

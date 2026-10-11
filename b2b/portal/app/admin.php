@@ -148,8 +148,28 @@ function admin_status(): void
     $oid    = (int)($_POST['order_id'] ?? 0);
     $status = (string)($_POST['status'] ?? '');
     if ($oid > 0 && in_array($status, ['new', 'seen', 'done', 'cancelled'], true)) {
-        db()->prepare('UPDATE orders SET status = ? WHERE id = ?')->execute([$status, $oid]);
-        flash('Η κατάσταση ενημερώθηκε.');
+        $st = db()->prepare(
+            'SELECT o.status, o.order_no, o.created_at, o.total, c.email
+             FROM orders o JOIN customers c ON c.id = o.customer_id
+             WHERE o.id = ?'
+        );
+        $st->execute([$oid]);
+        $o = $st->fetch();
+        if ($o && $o['status'] !== $status) {
+            db()->prepare('UPDATE orders SET status = ? WHERE id = ?')
+               ->execute([$status, $oid]);
+            if (in_array($status, ['seen', 'done', 'cancelled'], true)
+                && trim((string)$o['email']) !== '') {
+                send_mail(
+                    $o['email'],
+                    "Παραγγελία {$o['order_no']}: " . status_label($status),
+                    "Η παραγγελία σας {$o['order_no']} ({$o['created_at']}) άλλαξε κατάσταση.\n"
+                    . 'Νέα κατάσταση: ' . status_label($status) . "\n"
+                    . 'Σύνολο: ' . money($o['total']) . " ευρώ\n"
+                );
+            }
+            flash('Η κατάσταση ενημερώθηκε.');
+        }
     }
     redirect('/admin');
 }

@@ -102,6 +102,13 @@ CREATE TABLE IF NOT EXISTS order_lines (
   KEY idx_olines_order (order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS favorites (
+  customer_id INT      NOT NULL,
+  item_id     INT      NOT NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (customer_id, item_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS sync_log (
   id        INT         NOT NULL AUTO_INCREMENT PRIMARY KEY,
   dataset   VARCHAR(32) NOT NULL,
