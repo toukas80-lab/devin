@@ -23,7 +23,7 @@ function page_login(): void
         }
         $pass = (string)($_POST['pass'] ?? '');
         $db = db();
-        if (auth_locked($db, $afm)) {
+        if (auth_locked($db, $afm) || auth_locked_ip($db)) {
             $err = 'Ο λογαριασμός κλειδώθηκε για 15 λεπτά λόγω επαναλαμμένων αποτυχιών.';
         } else {
             $st = $db->prepare(
@@ -112,8 +112,8 @@ function page_password(): void
         $st = $db->prepare('SELECT afm FROM customers WHERE id = ?');
         $st->execute([$u['customer_id']]);
         $afm = (string)$st->fetchColumn();
-        if (mb_strlen($p1) < 6) {
-            $err = 'Ο κωδικός πρέπει να έχει τουλάχιστον 6 χαρακτήρες.';
+        if (mb_strlen($p1) < 8) {
+            $err = 'Ο κωδικός πρέπει να έχει τουλάχιστον 8 χαρακτήρες.';
         } elseif ($p1 !== $p2) {
             $err = 'Οι κωδικοί δεν ταιριάζουν.';
         } elseif ($p1 === $afm) {
@@ -121,6 +121,7 @@ function page_password(): void
         } else {
             $db->prepare('UPDATE users SET pass_hash = ?, must_change = 0 WHERE id = ?')
                ->execute([password_hash($p1, PASSWORD_DEFAULT), $u['id']]);
+            session_regenerate_id(true);
             $_SESSION['user']['must_change'] = 0;
             flash('Ο κωδικός άλλαξε επιτυχώς.');
             redirect('/');
@@ -137,10 +138,10 @@ function page_password(): void
   <form method="post" action="/password">
     <?= csrf_field() ?>
     <label>Νέος κωδικός
-      <input type="password" name="pass1" required minlength="6" autocomplete="new-password">
+      <input type="password" name="pass1" required minlength="8" autocomplete="new-password">
     </label>
     <label>Επανάληψη κωδικού
-      <input type="password" name="pass2" required minlength="6" autocomplete="new-password">
+      <input type="password" name="pass2" required minlength="8" autocomplete="new-password">
     </label>
     <button type="submit">Αποθήκευση</button>
   </form>

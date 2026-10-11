@@ -25,6 +25,7 @@ function page_top(string $title): void
       <a href="/orders">Παραγγελίες</a>
       <a href="/ledger">Καρτέλα</a>
       <a href="/invoices">Τιμολόγια</a>
+      <a href="/password">Κωδικός</a>
       <a href="/logout">Έξοδος</a>
     </nav>
     <?php endif; ?>

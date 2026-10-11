@@ -191,76 +191,52 @@ function admin_users(): void
             $uid = (int)$_POST['toggle'];
             $db->prepare('UPDATE users SET is_active = 1 - is_active WHERE id = ?')->execute([$uid]);
             flash('Η κατάσταση χρήστη άλλαξε.');
-        } elseif (isset($_POST['create'])) {
-            $cid  = (int)($_POST['customer_id'] ?? 0);
-            $pass = (string)($_POST['password'] ?? '');
-            $st = $db->prepare('SELECT email FROM customers WHERE id = ?');
-            $st->execute([$cid]);
-            $email = (string)$st->fetchColumn();
-            if ($cid > 0 && $email !== '' && mb_strlen($pass) >= 6) {
-                try {
-                    $db->prepare(
-                        'INSERT INTO users (customer_id, email, pass_hash) VALUES (?,?,?)'
-                    )->execute([$cid, $email, password_hash($pass, PASSWORD_DEFAULT)]);
-                    flash('Ο λογαριασμός δημιουργήθηκε.');
-                } catch (Throwable $ex) {
-                    flash('Ο πελάτης έχει ήδη λογαριασμό.', 'err');
-                }
-            } else {
-                flash('Απαιτείται πελάτης με email και κωδικός ≥ 6 χαρακτήρων.', 'err');
+        } elseif (isset($_POST['reset'])) {
+            $uid = (int)$_POST['reset'];
+            $st = $db->prepare(
+                'SELECT c.afm FROM users u JOIN customers c ON c.id = u.customer_id
+                 WHERE u.id = ?'
+            );
+            $st->execute([$uid]);
+            $afm = (string)$st->fetchColumn();
+            if ($afm !== '') {
+                $db->prepare('UPDATE users SET pass_hash = ?, must_change = 1 WHERE id = ?')
+                   ->execute([password_hash($afm, PASSWORD_DEFAULT), $uid]);
+                flash('Ο κωδικός επαναφέρθηκε στο ΑΦΜ — θα ζητηθεί αλλαγή στην είσοδο.');
             }
         }
         redirect('/admin/users');
     }
 
     $users = $db->query(
-        'SELECT u.id, u.email, u.is_active, u.last_login, c.code, c.name
+        'SELECT u.id, u.is_active, u.must_change, u.last_login, c.code, c.name
          FROM users u JOIN customers c ON c.id = u.customer_id
-         ORDER BY u.email'
-    )->fetchAll();
-    $free = $db->query(
-        "SELECT c.id, c.code, c.name, c.email FROM customers c
-         WHERE c.email <> '' AND NOT EXISTS (SELECT 1 FROM users u WHERE u.customer_id = c.id)
-         ORDER BY c.name"
+         ORDER BY c.code'
     )->fetchAll();
 
     page_top('Χρήστες');
     ?>
 <h1>Χρήστες <a class="btn" href="/admin">&larr; Πίσω</a></h1>
 <div class="card">
-  <h2>Νέος λογαριασμός πελάτη</h2>
-  <?php if (!$free): ?><p>Δεν υπάρχουν πελάτες με email χωρίς λογαριασμό.</p><?php else: ?>
-  <form method="post" action="/admin/users" class="filters">
-    <?= csrf_field() ?>
-    <select name="customer_id" required>
-      <option value="">— επιλογή πελάτη —</option>
-      <?php foreach ($free as $c): ?>
-      <option value="<?= (int)$c['id'] ?>"><?= e($c['code'] . ' · ' . $c['name'] . ' · ' . $c['email']) ?></option>
-      <?php endforeach; ?>
-    </select>
-    <input type="password" name="password" placeholder="Αρχικός κωδικός" required minlength="6">
-    <button type="submit" name="create" value="1">Δημιουργία</button>
-  </form>
-  <?php endif; ?>
-</div>
-<div class="card">
   <h2>Λογαριασμοί</h2>
   <?php if (!$users): ?><p>Κανένας λογαριασμός.</p><?php else: ?>
   <div class="scroll">
   <table>
-    <tr><th>Email</th><th>Πελάτης</th><th>Τελ. σύνδεση</th><th>Κατάσταση</th><th></th></tr>
+    <tr><th>Κωδικός</th><th>Πελάτης</th><th>Τελ. είσοδος</th><th>Κατάσταση</th><th>must_change</th><th></th></tr>
     <?php foreach ($users as $x): ?>
     <tr>
-      <td><?= e($x['email']) ?></td>
-      <td><?= e($x['code'] . ' ' . $x['name']) ?></td>
+      <td><?= e($x['code']) ?></td>
+      <td><?= e($x['name']) ?></td>
       <td><?= e($x['last_login'] ?? '—') ?></td>
       <td><?= (int)$x['is_active'] === 1 ? 'Ενεργός' : 'Ανενεργός' ?></td>
+      <td><?= (int)$x['must_change'] === 1 ? 'Ναι' : '—' ?></td>
       <td>
         <form method="post" action="/admin/users" class="inline">
           <?= csrf_field() ?>
           <button type="submit" name="toggle" value="<?= (int)$x['id'] ?>">
             <?= (int)$x['is_active'] === 1 ? 'Απενεργοποίηση' : 'Ενεργοποίηση' ?>
           </button>
+          <button type="submit" name="reset" value="<?= (int)$x['id'] ?>">Επαναφορά κωδικού</button>
         </form>
       </td>
     </tr>

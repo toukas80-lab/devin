@@ -12,6 +12,17 @@ function auth_locked(PDO $db, string $email): bool
     return (int)$st->fetchColumn() >= 5;
 }
 
+function auth_locked_ip(PDO $db): bool
+{
+    $st = $db->prepare(
+        'SELECT COUNT(*) FROM login_attempts
+         WHERE ip=? AND success=0
+           AND attempted_at > (NOW() - INTERVAL 15 MINUTE)'
+    );
+    $st->execute([$_SERVER['REMOTE_ADDR'] ?? '']);
+    return (int)$st->fetchColumn() >= 20;
+}
+
 function auth_log(PDO $db, string $email, bool $ok): void
 {
     $db->prepare(
