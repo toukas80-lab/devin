@@ -1127,3 +1127,22 @@ function page_invoices(): void
 <?php
     page_bottom();
 }
+
+function page_pricelist(): void
+{
+    require_user();
+    $f = dirname(__DIR__) . '/files/pricelist.pdf';
+    if (!is_file($f)) {
+        page_not_found();
+        return;
+    }
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: attachment; filename="Timokatalogos_2026.pdf"');
+    header('Content-Length: ' . filesize($f));
+    header('Cache-Control: private, no-cache');
+    readfile($f);
+    exit;
+}
