@@ -335,7 +335,7 @@ function page_catalog(): void
   <input type="hidden" name="d" value="<?= e($d) ?>">
   <input type="search" name="q" value="<?= e($q) ?>" placeholder="Αναζήτηση κωδικού ή περιγραφής">
   <select name="c" onchange="this.form.submit()">
-    <option value="">Όλα τα κεφάλαια</option>
+    <option value="">Όλα τα κεφάλαια του καταλόγου</option>
     <?php foreach ($chapters as $ch): ?>
     <option value="<?= e($ch) ?>" <?= $c === $ch ? 'selected' : '' ?>><?= e($ch) ?></option>
     <?php endforeach; ?>
