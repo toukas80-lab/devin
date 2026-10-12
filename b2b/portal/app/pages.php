@@ -668,7 +668,7 @@ function page_order(): void
         page_not_found();
         return;
     }
-    $st = $db->prepare('SELECT * FROM order_lines WHERE order_id = ? ORDER BY id');
+    $st = $db->prepare('SELECT l.*, (SELECT MAX(i.img_ver) FROM items i WHERE i.code = l.code) AS img_ver FROM order_lines l WHERE l.order_id = ? ORDER BY l.id');
     $st->execute([$id]);
     $lines = $st->fetchAll();
 
@@ -678,9 +678,15 @@ function page_order(): void
 <p><?= e(dmy($o['created_at'])) ?> · Κατάσταση: <strong><?= e(status_label($o['status'])) ?></strong></p>
 <div class="scroll">
 <table>
-  <tr><th>Κωδικός</th><th>Είδος</th><th class="r">Ποσ.</th><th class="r">Λιανική</th><th class="r">Έκπτ. %</th><th class="r">Τιμή</th><th class="r">Σύνολο</th></tr>
+  <tr><th></th><th>Κωδικός</th><th>Είδος</th><th class="r">Ποσ.</th><th class="r">Λιανική</th><th class="r">Έκπτ. %</th><th class="r">Τιμή</th><th class="r">Σύνολο</th></tr>
   <?php foreach ($lines as $l): ?>
   <tr>
+    <?php $v = (string)($l['img_ver'] ?? ''); ?>
+    <td>
+      <?php if ($v !== ''): ?>
+      <a href="/img/<?= e(rawurlencode($l['code'])) ?>.jpg?v=<?= e($v) ?>" target="_blank"><img class="thumb" src="/img/<?= e(rawurlencode($l['code'])) ?>.jpg?v=<?= e($v) ?>" loading="lazy" width="64" height="64" alt=""></a>
+      <?php endif; ?>
+    </td>
     <td><?= e($l['code']) ?></td>
     <td><?= e($l['name']) ?></td>
     <td class="r"><?= e(qtyf($l['qty'])) ?></td>
