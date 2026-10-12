@@ -90,10 +90,9 @@ a.sort{color:inherit;text-decoration:none}
 a.sort:hover{text-decoration:underline}
 .print-only{display:none}
 .cartbtn {
-  position: fixed; top: 10px; right: 16px; z-index: 50;
   display: inline-flex; align-items: center; gap: 8px;
   background: #facc15; color: #1c1917; font-weight: 700; font-size: 16px;
-  padding: 10px 18px; border-radius: 999px; text-decoration: none;
+  padding: 8px 16px; border-radius: 999px; text-decoration: none;
   box-shadow: 0 3px 10px rgba(0,0,0,.3);
 }
 .cartbtn:hover { background: #fde047; }
@@ -101,10 +100,11 @@ a.sort:hover{text-decoration:underline}
   background: var(--red2); color: #fff; border-radius: 999px;
   min-width: 24px; padding: 2px 7px; font-size: 14px; text-align: center;
 }
-header.top .bar { padding-right: 150px; }
+header.top .wrap { max-width: 1400px; }
+header.top .bar { gap: 16px; }
+header.top nav { gap: 12px; }
 @media (max-width: 720px) {
-  .cartbtn { top: auto; bottom: 16px; right: 16px; padding: 14px 20px; }
-  header.top .bar { padding-right: 0; }
+  .cartbtn { position: fixed; bottom: 16px; right: 16px; z-index: 50; padding: 14px 20px; }
 }
 @media print{
   header.top, nav, form.filters, .print, .flash, footer, p.muted, .cartbtn{display:none !important}
