@@ -458,7 +458,7 @@ function page_cart(): void
     if ($cart) {
         $in  = implode(',', array_fill(0, count($cart), '?'));
         $st  = $db->prepare(
-            "SELECT i.id, i.code, i.name, i.unit, i.vat_pct, i.stock, i.price_r
+            "SELECT i.id, i.code, i.name, i.unit, i.vat_pct, i.price_r
              FROM items i
              LEFT JOIN prices p ON p.item_id = i.id AND p.customer_id = ?
              WHERE i.id IN ($in)"
@@ -494,9 +494,6 @@ function page_cart(): void
     <td><?= e($l['it']['code']) ?></td>
     <td>
       <?= e($l['it']['name']) ?>
-      <?php if ($l['qty'] > (float)$l['it']['stock']): ?>
-        <div class="warn">Χαμηλό απόθεμα – μπορεί να υπάρξει καθυστέρηση</div>
-      <?php endif; ?>
     </td>
     <td class="r"><?= $l['w'] > 0 ? money($l['w']) . ' &euro;' : '' ?></td>
     <td class="r"><?= $l['disc'] > 0 ? money($l['disc']) : '' ?></td>
