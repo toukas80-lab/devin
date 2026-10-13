@@ -237,11 +237,22 @@ function admin_users(): void
         redirect('/admin/users');
     }
 
+    $sorts = ['code' => 'c.code', 'name' => 'c.name', 'login' => 'u.last_login'];
+    $s = (string)($_GET['s'] ?? 'code');
+    if (!isset($sorts[$s])) {
+        $s = 'code';
+    }
+    $d = ($_GET['d'] ?? '') === 'desc' ? 'desc' : 'asc';
     $users = $db->query(
         'SELECT u.id, u.is_active, u.must_change, u.last_login, c.code, c.name
          FROM users u JOIN customers c ON c.id = u.customer_id
-         ORDER BY c.code'
+         ORDER BY ' . $sorts[$s] . ' ' . strtoupper($d) . ', c.code'
     )->fetchAll();
+    $th = function (string $k, string $label) use ($s, $d): string {
+        $nd = ($s === $k && $d === 'asc') ? 'desc' : 'asc';
+        $ar = $s === $k ? ($d === 'asc' ? ' ▲' : ' ▼') : '';
+        return '<a href="/admin/users?' . e(http_build_query(['s' => $k, 'd' => $nd])) . '">' . e($label) . $ar . '</a>';
+    };
 
     page_top('Χρήστες');
     ?>
@@ -251,7 +262,7 @@ function admin_users(): void
   <?php if (!$users): ?><p>Κανένας λογαριασμός.</p><?php else: ?>
   <div class="scroll">
   <table>
-    <tr><th>Κωδικός</th><th>Πελάτης</th><th>Τελ. είσοδος</th><th>Κατάσταση</th><th>must_change</th><th></th></tr>
+    <tr><th><?= $th('code', 'Κωδικός') ?></th><th><?= $th('name', 'Πελάτης') ?></th><th><?= $th('login', 'Τελ. είσοδος') ?></th><th>Κατάσταση</th><th>must_change</th><th></th></tr>
     <?php foreach ($users as $x): ?>
     <tr>
       <td><?= e($x['code']) ?></td>
