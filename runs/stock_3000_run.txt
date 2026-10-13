@@ -1,0 +1,19 @@
+ΕΡΩΤΗΣΗ — ΣΤΑΜΑΤΗΣΑ ΠΡΙΝ ΤΟ SQL. Η εξαγωγή ΔΕΝ έτρεξε, δεν παράχθηκε CSV.
+
+Σφάλμα στο βήμα 1: `git checkout main` απέτυχε — δεν υπάρχει ούτε τοπικό
+branch `main` ούτε `origin/main` (ούτε `master`). Το default branch του
+origin είναι `devin/bootstrap-softone-pilot`.
+
+Κατάσταση κατά τον έλεγχο:
+- Τρέχον τοπικό branch: tools/softone-diag (HEAD 454887e)
+- Μη-commit τροποποιήσεις στον κύριο φάκελο: AGENTS.md,
+  src/softone_pilot/sql_readonly.py (δεν πειράχτηκαν)
+- Το branch `data/stock-3000` δημιουργήθηκε στο τρέχον HEAD μόνο για να
+  ανεβεί αυτό το αρχείο με την ερώτηση.
+
+Ερώτηση: από ποιο branch πρέπει να ξεκινήσει το `data/stock-3000`;
+  (α) origin/devin/bootstrap-softone-pilot  — default του repo, ή
+  (β) κάποιο άλλο (π.χ. tools/softone-diag, b2b-XX);
+
+Με την απάντηση ξανατρέχω τη ροή από το βήμα 1 (checkout σωστού base,
+SQL SELECT, CSV UTF-8+BOM με ';', checks, commit/push).
