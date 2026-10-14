@@ -641,7 +641,7 @@ function page_order(): void
         $body = "Νέα παραγγελία $orderNo\n"
               . 'Πελάτης: ' . $u['code'] . ' ' . $u['name'] . "\n\n";
         foreach ($lines as [$it, $qty, $pi, $net, $vat, $tot]) {
-            $body .= $it['code'] . ' x' . qtyf($qty) . ' @ '
+            $body .= $it['code'] . ' ' . $it['name'] . ' x' . qtyf($qty) . ' @ '
                    . ($pi['disc'] > 0
                         ? money($pi['w']) . ' -' . money($pi['disc']) . '% = ' . money($pi['eff'])
                         : money($pi['eff']))
