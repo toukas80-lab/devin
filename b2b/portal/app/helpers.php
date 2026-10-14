@@ -101,6 +101,27 @@ function send_mail(string $to, string $subject, string $body): void
     @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $h);
 }
 
+function send_mail_att(string $to, string $subject, string $body,
+                       string $fname, string $data): void
+{
+    $c = cfg();
+    $b = '=_' . bin2hex(random_bytes(12));
+    $h = "MIME-Version: 1.0\r\n"
+       . "Content-Type: multipart/mixed; boundary=\"$b\"\r\n"
+       . 'From: ' . $c['mail_from'] . "\r\n";
+    $m = "--$b\r\n"
+       . "Content-Type: text/plain; charset=UTF-8\r\n"
+       . "Content-Transfer-Encoding: base64\r\n\r\n"
+       . chunk_split(base64_encode($body))
+       . "--$b\r\n"
+       . "Content-Type: application/octet-stream; name=\"$fname\"\r\n"
+       . "Content-Transfer-Encoding: base64\r\n"
+       . "Content-Disposition: attachment; filename=\"$fname\"\r\n\r\n"
+       . chunk_split(base64_encode($data))
+       . "--$b--\r\n";
+    @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $m, $h);
+}
+
 function dmy($d): string
 {
     $d = (string)$d;

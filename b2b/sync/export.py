@@ -67,7 +67,8 @@ SELECT m.MTRL AS id, m.CODE AS code, m.NAME AS name, m.MTRGROUP AS group_id,
                       AND s.CODE=m.CODE
                     ORDER BY d.FISCPRD DESC),0) AS float) AS stock,
        ISNULL(mf.NAME,'') AS manufacturer,
-       ISNULL(m.WEBPAGE,'') AS webpage
+       ISNULL(m.WEBPAGE,'') AS webpage,
+       m.VAT AS vat_code, m.MTRUNIT1 AS mtrunit
 FROM dbo.MTRL m
 LEFT JOIN dbo.MTRUNIT u ON u.MTRUNIT=m.MTRUNIT1 AND u.COMPANY=m.COMPANY
 LEFT JOIN dbo.VAT v ON v.VAT=m.VAT
@@ -92,7 +93,8 @@ ORDER BY g.NAME
 
 Q_CUSTOMERS = f"""
 SELECT t.TRDR AS id, t.CODE AS code, t.NAME AS name,
-       ISNULL(t.EMAIL,'') AS email, ISNULL(t.AFM,'') AS afm
+       ISNULL(t.EMAIL,'') AS email, ISNULL(t.AFM,'') AS afm,
+       t.PAYMENT AS payment
 FROM dbo.TRDR t
 WHERE t.COMPANY={COMPANY} AND t.SODTYPE=13 AND t.ISACTIVE=1
 ORDER BY t.CODE

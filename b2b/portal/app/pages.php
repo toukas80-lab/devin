@@ -582,7 +582,7 @@ function page_order(): void
         }
         $in = implode(',', array_fill(0, count($cart), '?'));
         $st = $db->prepare(
-            "SELECT i.id, i.code, i.name, i.vat_pct, i.price_r
+            "SELECT i.id, i.code, i.name, i.vat_pct, i.price_r, i.vat_code, i.mtrunit
              FROM items i
              LEFT JOIN prices p ON p.item_id = i.id AND p.customer_id = ?
              WHERE i.id IN ($in)"
@@ -654,7 +654,38 @@ function page_order(): void
                    . ' → ' . money($tot) . "\n";
         }
         $body .= "\nΣύνολο: " . money($tn + $tv) . " ευρώ (με ΦΠΑ)\n";
-        send_mail($c['notify_email'], "Παραγγελία $orderNo", $body);
+        try {
+            $st2 = $db->prepare('SELECT payment FROM customers WHERE id = ?');
+            $st2->execute([$cid]);
+            $custPay = $st2->fetchColumn();
+            $xlines = [];
+            foreach ($lines as [$it, $qty, $pi, $net, $vat, $tot]) {
+                $xlines[] = [
+                    'item_id'  => (int)$it['id'],
+                    'code'     => $it['code'],
+                    'qty'      => $qty,
+                    'price'    => (float)$pi['eff'],
+                    'net'      => $net,
+                    'vat'      => $vat,
+                    'vat_code' => $it['vat_code'],
+                    'mtrunit'  => $it['mtrunit'],
+                ];
+            }
+            $created = $db->query(
+                "SELECT created_at FROM orders WHERE id = " . (int)$oid
+            )->fetchColumn();
+            send_mail_att($c['notify_email'], "Παραγγελία $orderNo", $body,
+                          "$orderNo.XXF",
+                          order_xxf(
+                              ['order_no' => $orderNo, 'created_at' => (string)$created],
+                              ['id' => $cid, 'code' => $u['code'],
+                               'payment' => $custPay === false ? null : $custPay],
+                              $xlines));
+        } catch (Throwable $ex) {
+            error_log('XXF ' . $orderNo . ': ' . $ex->getMessage());
+            send_mail($c['notify_email'], "Παραγγελία $orderNo",
+                      $body . "\n(Το XXF δεν δημιουργήθηκε: " . $ex->getMessage() . ")");
+        }
         if ($u['email'] !== '') {
             send_mail($u['email'], "Επιβεβαίωση παραγγελίας $orderNo",
                       "Η παραγγελία σας $orderNo καταχωρήθηκε.\n" . $body);

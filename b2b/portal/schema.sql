@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS items (
   chapter  VARCHAR(100)  NOT NULL DEFAULT '',
   unit     VARCHAR(32)   NULL,
   vat_pct  DECIMAL(6,2)  NOT NULL DEFAULT 0,
+  vat_code INT           NULL,
+  mtrunit  INT           NULL,
   price_w  DECIMAL(12,4) NOT NULL DEFAULT 0,
   price_r  DECIMAL(12,4) NOT NULL DEFAULT 0,
   stock    DECIMAL(14,3) NOT NULL DEFAULT 0,
@@ -28,6 +30,7 @@ CREATE TABLE IF NOT EXISTS customers (
   name    VARCHAR(255)  NOT NULL,
   email   VARCHAR(191)  NOT NULL DEFAULT '',
   afm     VARCHAR(9)    NOT NULL DEFAULT '',
+  payment INT           NULL,
   balance DECIMAL(14,2) NOT NULL DEFAULT 0,
   KEY idx_customers_email (email),
   KEY idx_customers_afm (afm)

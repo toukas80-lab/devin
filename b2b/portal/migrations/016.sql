@@ -1,0 +1,3 @@
+ALTER TABLE customers ADD COLUMN payment INT NULL;
+ALTER TABLE items ADD COLUMN vat_code INT NULL;
+ALTER TABLE items ADD COLUMN mtrunit INT NULL;
