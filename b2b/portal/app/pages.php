@@ -458,7 +458,7 @@ function page_cart(): void
     if ($cart) {
         $in  = implode(',', array_fill(0, count($cart), '?'));
         $st  = $db->prepare(
-            "SELECT i.id, i.code, i.name, i.unit, i.vat_pct, i.price_r
+            "SELECT i.id, i.code, i.name, i.unit, i.vat_pct, i.price_r, i.img_ver
              FROM items i
              LEFT JOIN prices p ON p.item_id = i.id AND p.customer_id = ?
              WHERE i.id IN ($in)"
@@ -488,9 +488,15 @@ function page_cart(): void
   <?= csrf_field() ?>
 <div class="scroll">
 <table>
-  <tr><th>Κωδικός</th><th>Είδος</th><th class="r">Λιανική</th><th class="r">Έκπτ. %</th><th class="r">Τιμή</th><th class="r">Ποσότητα</th><th class="r">Σύνολο</th></tr>
+  <tr><th></th><th>Κωδικός</th><th>Είδος</th><th class="r">Λιανική</th><th class="r">Έκπτ. %</th><th class="r">Τιμή</th><th class="r">Ποσότητα</th><th class="r">Σύνολο</th></tr>
   <?php $tn = 0.0; $tv = 0.0; foreach ($lines as $l): $tn += $l['net']; $tv += $l['vat']; ?>
   <tr>
+    <?php $v = (string)($l['it']['img_ver'] ?? ''); ?>
+    <td>
+      <?php if ($v !== ''): ?>
+      <a href="/img/<?= e(rawurlencode($l['it']['code'])) ?>.jpg?v=<?= e($v) ?>" target="_blank"><img class="thumb" src="/img/<?= e(rawurlencode($l['it']['code'])) ?>.jpg?v=<?= e($v) ?>" loading="lazy" width="64" height="64" alt=""></a>
+      <?php endif; ?>
+    </td>
     <td><?= e($l['it']['code']) ?></td>
     <td>
       <?= e($l['it']['name']) ?>
