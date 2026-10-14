@@ -14,7 +14,8 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parent
 OUT = BASE.parent / "out"
 UPLOADED = OUT / "photos_uploaded.json"
-DATASETS = ["item_groups", "items", "customers", "prices", "ledger", "invoices"]
+DATASETS = ["item_groups", "items", "customers", "prices", "ledger", "invoices",
+            "order_status"]
 # dataset name -> file under b2b/out (export.py writes groups.json)
 FILES = {"item_groups": "groups.json"}
 

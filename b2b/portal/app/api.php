@@ -13,6 +13,66 @@ function api_auth(): bool
     return true;
 }
 
+function api_order_status(): void
+{
+    $raw = file_get_contents('php://input');
+    if (($_SERVER['HTTP_CONTENT_ENCODING'] ?? '') === 'gzip') {
+        $raw = gzdecode($raw);
+    }
+    $data = json_decode((string)$raw, true);
+    if (!is_array($data)) {
+        http_response_code(400);
+        echo '{"error":"bad json"}';
+        return;
+    }
+    $db = db();
+    try {
+        $seen = $db->prepare(
+            "UPDATE orders SET status='seen'
+             WHERE order_no = ? AND status = 'new'"
+        );
+        $done = $db->prepare(
+            "UPDATE orders SET status='done'
+             WHERE order_no = ? AND status IN ('new','seen')"
+        );
+        $sel = $db->prepare(
+            'SELECT o.order_no, o.total, o.created_at, c.email
+             FROM orders o LEFT JOIN customers c ON c.id = o.customer_id
+             WHERE o.order_no = ?'
+        );
+        $changed = 0;
+        foreach ($data as $r) {
+            if (!is_array($r)) {
+                continue;
+            }
+            $orderNo = trim((string)($r['order_no'] ?? ''));
+            if ($orderNo === '') {
+                continue;
+            }
+            $target = !empty($r['done']) ? 'done' : 'seen';
+            $st = $target === 'done' ? $done : $seen;
+            $st->execute([$orderNo]);
+            if ($st->rowCount() === 1) {
+                $changed++;
+                $sel->execute([$orderNo]);
+                $o = $sel->fetch();
+                if ($o) {
+                    status_mail($o, $target);
+                }
+            }
+        }
+        $db->prepare(
+            'INSERT INTO sync_log (dataset, row_count, synced_at, ip)
+             VALUES (?,?,NOW(),?)'
+        )->execute(['order_status', $changed, $_SERVER['REMOTE_ADDR'] ?? '']);
+    } catch (Throwable $ex) {
+        http_response_code(500);
+        echo '{"error":"db"}';
+        return;
+    }
+    echo json_encode(['ok' => true, 'rows' => count($data), 'changed' => $changed]);
+}
+
 function api_image(): void
 {
     header('Content-Type: application/json; charset=utf-8');
@@ -84,6 +144,10 @@ function api_sync(): void
         return;
     }
     $ds = (string)($_GET['dataset'] ?? '');
+    if ($ds === 'order_status') {
+        api_order_status();
+        return;
+    }
     $map = [
         'item_groups' => ['item_groups', ['id', 'name']],
         'items'       => ['items', ['id', 'code', 'name', 'group_id', 'chapter', 'unit', 'vat_pct', 'vat_code', 'mtrunit', 'price_w', 'price_r', 'stock', 'manufacturer', 'img_ver']],

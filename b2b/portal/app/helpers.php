@@ -122,6 +122,23 @@ function send_mail_att(string $to, string $subject, string $body,
     @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $m, $h);
 }
 
+function status_mail(array $o, string $status): void
+{
+    $email = trim((string)($o['email'] ?? ''));
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return;
+    }
+    send_mail(
+        $email,
+        'Παραγγελία ' . $o['order_no'] . ': ' . status_label($status),
+        "Η κατάσταση της παραγγελίας σας άλλαξε.\n\n"
+        . 'Παραγγελία: ' . $o['order_no'] . "\n"
+        . 'Ημερομηνία: ' . dmy($o['created_at']) . "\n"
+        . 'Σύνολο: ' . money($o['total']) . " ευρώ (με ΦΠΑ)\n"
+        . 'Νέα κατάσταση: ' . status_label($status) . "\n"
+    );
+}
+
 function dmy($d): string
 {
     $d = (string)$d;

@@ -166,15 +166,7 @@ function admin_status(): void
             && $status !== $o['status']
             && trim((string)$o['email']) !== ''
             && filter_var($o['email'], FILTER_VALIDATE_EMAIL)) {
-            send_mail(
-                $o['email'],
-                'Παραγγελία ' . $o['order_no'] . ': ' . status_label($status),
-                "Η κατάσταση της παραγγελίας σας άλλαξε.\n\n"
-                . 'Παραγγελία: ' . $o['order_no'] . "\n"
-                . 'Ημερομηνία: ' . dmy($o['created_at']) . "\n"
-                . 'Σύνολο: ' . money($o['total']) . " ευρώ (με ΦΠΑ)\n"
-                . 'Νέα κατάσταση: ' . status_label($status) . "\n"
-            );
+            status_mail($o, $status);
             $sent = true;
         }
         flash('Η κατάσταση ενημερώθηκε.'
