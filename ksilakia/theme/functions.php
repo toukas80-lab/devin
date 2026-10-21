@@ -861,24 +861,34 @@ function ksilakia_cart_is_box( $item ) {
 		&& 'kouta-10000' === $item['variation']['attribute_pa_syskevasia'];
 }
 
-// Pallet tier: 30+ boxes => box at −25% (extra −5% on top of the −20% wholesale price).
-add_action( 'woocommerce_cart_calculate_fees', function ( $cart ) {
+// Wholesale tier on box only: 5–29 κούτες −20%, 30+ (παλέτα) −25%, under 5 = λιανική.
+add_filter( 'woocommerce_product_get_price', 'ksilakia_b2b_box_price', 20, 2 );
+add_filter( 'woocommerce_product_variation_get_price', 'ksilakia_b2b_box_price', 20, 2 );
+function ksilakia_b2b_box_price( $price, $product ) {
 	if ( ! ksilakia_is_b2b() ) {
-		return;
+		return $price;
 	}
-	$qty  = 0;
-	$disc = 0.0;
-	foreach ( $cart->get_cart() as $item ) {
-		if ( ksilakia_cart_is_box( $item ) ) {
-			$qty  += (int) $item['quantity'];
-			$net   = (float) wc_get_price_excluding_tax( $item['data'], array( 'price' => $item['data']->get_regular_price() ) );
-			$disc += $net * 0.05 * (int) $item['quantity'];
+	$attrs = $product->get_variation_attributes();
+	if ( empty( $attrs['attribute_pa_syskevasia'] ) || 'kouta-10000' !== $attrs['attribute_pa_syskevasia'] ) {
+		return $price;
+	}
+	$qty = 0;
+	if ( WC()->cart ) {
+		foreach ( WC()->cart->get_cart() as $item ) {
+			if ( ksilakia_cart_is_box( $item ) ) {
+				$qty += (int) $item['quantity'];
+			}
 		}
 	}
-	if ( $qty >= 30 && $disc > 0 ) {
-		$cart->add_fee( 'Έκπτωση παλέτας (κούτα −25%)', - round( $disc, 2 ), true );
+	$reg = (float) $product->get_regular_price();
+	if ( $qty >= 30 ) {
+		return round( $reg * 0.75, 2 );
 	}
-} );
+	if ( $qty >= 5 ) {
+		return round( $reg * 0.80, 2 );
+	}
+	return $reg;
+}
 
 // B2B shipping: only transport company, cost set after quote.
 add_filter( 'woocommerce_package_rates', function ( $rates ) {
@@ -900,12 +910,12 @@ add_filter( 'woocommerce_package_rates', function ( $rates ) {
 // B2B pricing note on product page and cart.
 add_action( 'woocommerce_single_product_summary', function () {
 	if ( ksilakia_is_b2b() ) {
-		echo '<p class="b2b-tier-note">Τιμή χονδρικής στην κούτα: <strong>−20%</strong> · για παλέτα (30+ κούτες): <strong>−25%</strong>. Αποστολή με μεταφορική εταιρία κατόπιν προσφοράς.</p>';
+		echo '<p class="b2b-tier-note">Τιμή χονδρικής στην κούτα: <strong>−20%</strong> από 5 κούτες και πάνω · για παλέτα (30+ κούτες): <strong>−25%</strong>. Αποστολή με μεταφορική εταιρία κατόπιν προσφοράς.</p>';
 	}
 }, 25 );
 
 add_action( 'woocommerce_before_cart', function () {
 	if ( ksilakia_is_b2b() ) {
-		wc_print_notice( 'Χονδρική: κούτα −20% · για παλέτα (30+ κούτες) η τιμή της κούτας γίνεται −25%. Η αποστολή γίνεται με μεταφορική εταιρία, κατόπιν προσφοράς και συνεννόησης.', 'notice' );
+		wc_print_notice( 'Χονδρική: κούτα −20% από 5 κούτες και πάνω · για παλέτα (30+ κούτες) η τιμή της κούτας γίνεται −25%. Η αποστολή γίνεται με μεταφορική εταιρία, κατόπιν προσφοράς και συνεννόησης.', 'notice' );
 	}
 } );
