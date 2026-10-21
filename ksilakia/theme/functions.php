@@ -941,9 +941,22 @@ add_action( 'woocommerce_before_checkout_form', function () {
 	}
 }, 5 );
 
-// B2B: hide PayPal express / card buttons on product, cart and checkout pages.
+// B2B: hide PayPal express / card buttons, coupon field and free-shipping tag.
 add_action( 'wp_head', function () {
 	if ( ksilakia_is_b2b() ) {
-		echo '<style>.ppc-button-container,#ppc-button,#ppc-button-ppcp-gateway,.woocommerce-PayPal,.ppcp-card-button,div[id*="ppc-button"],.wc-proceed-to-checkout .ppc-button-container{display:none!important}</style>';
+		echo '<style>.ppc-button-container,#ppc-button,#ppc-button-ppcp-gateway,.woocommerce-PayPal,.ppcp-card-button,div[id*="ppc-button"],.wc-proceed-to-checkout .ppc-button-container,.wc-block-components-totals-coupon,.wc-block-components-totals-coupon-link,.wc-block-components-totals-shipping .wc-block-components-formatted-money-amount,.wc-block-components-shipping-rates-control .wc-block-components-formatted-money-amount,.cart-collaterals .coupon{display:none!important}</style>';
 	}
 } );
+
+// B2B: no coupons (wholesale price is already discounted).
+add_filter( 'woocommerce_coupons_enabled', function ( $enabled ) {
+	return ksilakia_is_b2b() ? false : $enabled;
+} );
+
+// B2B: show transport-company label without the «ΔΩΡΕΑΝ» cost tag.
+add_filter( 'woocommerce_cart_shipping_method_full_label', function ( $label, $method ) {
+	if ( ksilakia_is_b2b() && 'b2b_transport' === $method->id ) {
+		return $method->get_label();
+	}
+	return $label;
+}, 10, 2 );
