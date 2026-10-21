@@ -966,6 +966,22 @@ add_filter( 'woocommerce_get_price_suffix', function ( $suffix, $product ) {
 	return ksilakia_is_b2b() ? ' +ΦΠΑ' : $suffix;
 }, 10, 2 );
 
+// Greek text for WooCommerce email-verification messages.
+add_filter( 'gettext_woocommerce', function ( $translation, $text ) {
+	$map = array(
+		'A confirmation link has been sent to your email address. Please check your inbox.' => 'Σας στάλθηκε σύνδεσμος επιβεβαίωσης στη διεύθυνση email σας. Ελέγξτε τα εισερχόμενά σας.',
+		'A confirmation link was sent recently. Please check your inbox, or wait a moment before requesting a new one.' => 'Σύνδεσμος επιβεβαίωσης στάλθηκε πρόσφατα. Ελέγξτε τα εισερχόμενά σας ή περιμένετε λίγο πριν ζητήσετε νέο.',
+		'Your email address has been confirmed.' => 'Το email σας επιβεβαιώθηκε.',
+		'This confirmation link is invalid or has expired. Please request a new one.' => 'Ο σύνδεσμος επιβεβαίωσης δεν είναι έγκυρος ή έληξε. Ζητήστε νέο.',
+		'Unable to confirm this email while you are logged in to a different account. Please log out and open the link again.' => 'Δεν είναι δυνατή η επιβεβαίωση ενώ είστε συνδεδεμένοι σε άλλο λογαριασμό. Αποσυνδεθείτε και ανοίξτε ξανά τον σύνδεσμο.',
+		'You need to be logged in to confirm your email address.' => 'Πρέπει να είστε συνδεδεμένοι για να επιβεβαιώσετε το email σας.',
+		'Confirm your email address to check for past orders. A confirmation link was sent recently — please check your inbox.' => 'Επιβεβαιώστε το email σας για να δείτε παλαιότερες παραγγελίες. Σύνδεσμος επιβεβαίωσης στάλθηκε πρόσφατα — ελέγξτε τα εισερχόμενά σας.',
+		'Confirm your email address to check for past orders and link them to your account.' => 'Επιβεβαιώστε το email σας για να δείτε παλαιότερες παραγγελίες και να τις συνδέσετε με τον λογαριασμό σας.',
+		'Confirm email address' => 'Επιβεβαίωση email',
+	);
+	return isset( $map[ $text ] ) ? $map[ $text ] : $translation;
+}, 10, 2 );
+
 // B2B: no coupons (wholesale price is already discounted).
 add_filter( 'woocommerce_coupons_enabled', function ( $enabled ) {
 	return ksilakia_is_b2b() ? false : $enabled;
