@@ -919,3 +919,24 @@ add_action( 'woocommerce_before_cart', function () {
 		wc_print_notice( 'Χονδρική: κούτα −20% από 5 κούτες και πάνω · για παλέτα (30+ κούτες) η τιμή της κούτας γίνεται −25%. Η αποστολή γίνεται με μεταφορική εταιρία, κατόπιν προσφοράς και συνεννόησης.', 'notice' );
 	}
 } );
+
+// B2B payment: no online payment — order is a request; quote follows.
+add_filter( 'woocommerce_available_payment_gateways', function ( $gateways ) {
+	if ( ! ksilakia_is_b2b() ) {
+		return $gateways;
+	}
+	return array_intersect_key( $gateways, array( 'bacs' => true ) );
+} );
+
+add_filter( 'woocommerce_gateway_title', function ( $title, $id ) {
+	if ( ksilakia_is_b2b() && 'bacs' === $id ) {
+		return 'Χωρίς online πληρωμή — θα λάβετε προσφορά με το κόστος μεταφορικής';
+	}
+	return $title;
+}, 10, 2 );
+
+add_action( 'woocommerce_before_checkout_form', function () {
+	if ( ksilakia_is_b2b() ) {
+		wc_print_notice( 'Η παραγγελία καταχωρείται χωρίς πληρωμή. Θα λάβετε προσφορά με το κόστος μεταφορικής και το τελικό σύνολο.', 'notice' );
+	}
+}, 5 );
