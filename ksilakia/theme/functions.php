@@ -940,3 +940,10 @@ add_action( 'woocommerce_before_checkout_form', function () {
 		wc_print_notice( 'Η παραγγελία καταχωρείται χωρίς πληρωμή. Θα λάβετε προσφορά με το κόστος μεταφορικής και το τελικό σύνολο.', 'notice' );
 	}
 }, 5 );
+
+// B2B: hide PayPal express / card buttons on product, cart and checkout pages.
+add_action( 'wp_head', function () {
+	if ( ksilakia_is_b2b() ) {
+		echo '<style>.ppc-button-container,#ppc-button,#ppc-button-ppcp-gateway,.woocommerce-PayPal,.ppcp-card-button,div[id*="ppc-button"],.wc-proceed-to-checkout .ppc-button-container{display:none!important}</style>';
+	}
+} );
