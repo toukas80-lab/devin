@@ -853,3 +853,59 @@ add_filter( 'gettext_woocommerce-wholesale-prices', function ( $t, $orig ) {
 	return isset( $map[ $orig ] ) ? $map[ $orig ] : $t;
 }, 10, 2 );
 add_filter( 'woocommerce_product_additional_information_heading', '__return_empty_string' );
+
+/* --------------------------------------- B2B: παλέτα & αποστολή */
+
+function ksilakia_cart_is_box( $item ) {
+	return isset( $item['variation']['attribute_pa_syskevasia'] )
+		&& 'kouta-10000' === $item['variation']['attribute_pa_syskevasia'];
+}
+
+// Pallet tier: 30+ boxes => box at −25% (extra −5% on top of the −20% wholesale price).
+add_action( 'woocommerce_cart_calculate_fees', function ( $cart ) {
+	if ( ! ksilakia_is_b2b() ) {
+		return;
+	}
+	$qty  = 0;
+	$disc = 0.0;
+	foreach ( $cart->get_cart() as $item ) {
+		if ( ksilakia_cart_is_box( $item ) ) {
+			$qty  += (int) $item['quantity'];
+			$net   = (float) wc_get_price_excluding_tax( $item['data'], array( 'price' => $item['data']->get_regular_price() ) );
+			$disc += $net * 0.05 * (int) $item['quantity'];
+		}
+	}
+	if ( $qty >= 30 && $disc > 0 ) {
+		$cart->add_fee( 'Έκπτωση παλέτας (κούτα −25%)', - round( $disc, 2 ), true );
+	}
+} );
+
+// B2B shipping: only transport company, cost set after quote.
+add_filter( 'woocommerce_package_rates', function ( $rates ) {
+	if ( ! ksilakia_is_b2b() ) {
+		return $rates;
+	}
+	return array(
+		'b2b_transport' => new WC_Shipping_Rate(
+			'b2b_transport',
+			'Αποστολή με μεταφορική εταιρία (κόστος κατόπιν προσφοράς/συνεννόησης)',
+			0,
+			array(),
+			'flat_rate',
+			0
+		),
+	);
+}, 20 );
+
+// B2B pricing note on product page and cart.
+add_action( 'woocommerce_single_product_summary', function () {
+	if ( ksilakia_is_b2b() ) {
+		echo '<p class="b2b-tier-note">Τιμή χονδρικής στην κούτα: <strong>−20%</strong> · για παλέτα (30+ κούτες): <strong>−25%</strong>. Αποστολή με μεταφορική εταιρία κατόπιν προσφοράς.</p>';
+	}
+}, 25 );
+
+add_action( 'woocommerce_before_cart', function () {
+	if ( ksilakia_is_b2b() ) {
+		wc_print_notice( 'Χονδρική: κούτα −20% · για παλέτα (30+ κούτες) η τιμή της κούτας γίνεται −25%. Η αποστολή γίνεται με μεταφορική εταιρία, κατόπιν προσφοράς και συνεννόησης.', 'notice' );
+	}
+} );
