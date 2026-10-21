@@ -935,6 +935,13 @@ add_filter( 'woocommerce_gateway_title', function ( $title, $id ) {
 	return $title;
 }, 10, 2 );
 
+add_filter( 'woocommerce_gateway_description', function ( $desc, $id ) {
+	if ( ksilakia_is_b2b() && 'bacs' === $id ) {
+		return '';
+	}
+	return $desc;
+}, 10, 2 );
+
 add_action( 'woocommerce_before_checkout_form', function () {
 	if ( ksilakia_is_b2b() ) {
 		wc_print_notice( 'Η παραγγελία καταχωρείται χωρίς πληρωμή. Θα λάβετε προσφορά με το κόστος μεταφορικής και το τελικό σύνολο.', 'notice' );
