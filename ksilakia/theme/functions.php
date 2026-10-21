@@ -951,9 +951,20 @@ add_action( 'woocommerce_before_checkout_form', function () {
 // B2B: hide PayPal express / card buttons, coupon field and free-shipping tag.
 add_action( 'wp_head', function () {
 	if ( ksilakia_is_b2b() ) {
-		echo '<style>.ppc-button-container,#ppc-button,#ppc-button-ppcp-gateway,.woocommerce-PayPal,.ppcp-card-button,div[id*="ppc-button"],.wc-proceed-to-checkout .ppc-button-container,.wc-block-components-totals-coupon,.wc-block-components-totals-coupon-link,.wc-block-components-totals-shipping .wc-block-components-formatted-money-amount,.wc-block-components-shipping-rates-control .wc-block-components-formatted-money-amount,.cart-collaterals .coupon{display:none!important}</style>';
+		echo '<style>.ppc-button-container,#ppc-button,#ppc-button-ppcp-gateway,.woocommerce-PayPal,.ppcp-card-button,div[id*="ppc-button"],.wc-proceed-to-checkout .ppc-button-container,.wc-block-components-express-payment,.wc-block-components-totals-coupon,.wc-block-components-totals-coupon-link,.wc-block-components-totals-shipping .wc-block-components-totals-item__value,.wc-block-components-shipping-rates-control .wc-block-components-radio-control__secondary-label,.wc-block-components-shipping-rates-control .wc-block-components-formatted-money-amount,.cart-collaterals .coupon{display:none!important}</style>';
 	}
 } );
+
+// B2B: prices shown net of VAT with «+ ΦΠΑ» suffix everywhere.
+add_filter( 'option_woocommerce_tax_display_shop', function ( $v ) {
+	return ksilakia_is_b2b() ? 'excl' : $v;
+} );
+add_filter( 'option_woocommerce_tax_display_cart', function ( $v ) {
+	return ksilakia_is_b2b() ? 'excl' : $v;
+} );
+add_filter( 'woocommerce_get_price_suffix', function ( $suffix, $product ) {
+	return ksilakia_is_b2b() ? ' +ΦΠΑ' : $suffix;
+}, 10, 2 );
 
 // B2B: no coupons (wholesale price is already discounted).
 add_filter( 'woocommerce_coupons_enabled', function ( $enabled ) {
