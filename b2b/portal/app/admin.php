@@ -29,6 +29,7 @@ function admin_dispatch(string $r): void
         'admin/status'           => admin_status(),
         'admin/users'            => admin_users(),
         'admin/order.csv'        => admin_order_csv(),
+        'admin/stock.csv'        => admin_stock_csv(),
         default                  => page_not_found(),
     };
 }
@@ -196,6 +197,25 @@ function admin_order_csv(): void
     fputcsv($out, ['code', 'qty', 'price', 'price_w', 'disc_pct']);
     while ($r = $st->fetch()) {
         fputcsv($out, [$r['code'], $r['qty'], $r['price'], $r['price_w'], $r['disc_pct']]);
+    }
+    fclose($out);
+    exit;
+}
+
+function admin_stock_csv(): void
+{
+    require_admin();
+    $db = db();
+    $at = (string)$db->query("SELECT MAX(synced_at) FROM sync_log WHERE dataset = 'items'")->fetchColumn();
+    $st = $db->query('SELECT code, stock, manufacturer FROM items ORDER BY code');
+
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="stock.csv"');
+    header('X-Items-Synced-At: ' . $at);
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['code', 'stock', 'manufacturer']);
+    while ($r = $st->fetch()) {
+        fputcsv($out, [$r['code'], $r['stock'], $r['manufacturer']]);
     }
     fclose($out);
     exit;
