@@ -1,0 +1,8 @@
+sales_items v1: OK 1884 γραμμές
+docs_overview v1: OK 151 γραμμές
+purchase_lines v1: OK 29 γραμμές
+purchase_items v1: OK 5600 γραμμές
+item_findata v1: ΣΦΑΛΜΑ ('42S02', "[42S02] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Invalid object name 'dbo.MTRLFINDATA'. (208) (SQLExecDirectW)")
+item_findata v2: ΣΦΑΛΜΑ ('42S02', "[42S02] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Invalid object name 'dbo.MTRLFINDATA'. (208) (SQLExecDirectW)")
+ledger_6x_7x v1: ΣΦΑΛΜΑ ('42S02', "[42S02] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Invalid object name 'dbo.ACNFINDATA'. (208) (SQLExecDirectW)")
+ledger_6x_7x v2: ΣΦΑΛΜΑ ('42S02', "[42S02] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Invalid object name 'dbo.ACNFINDATA'. (208) (SQLExecDirectW)")
