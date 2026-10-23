@@ -119,6 +119,102 @@ ORDER BY 1, 2, 3""",
 }
 
 
+NON_INVOICE_TYPES = {101, 104, 105, 154, 201, 202}
+LABELS = {"2025YTD": "2025 (1/1-23/10)", "2026YTD": "2026 (1/1-23/10)", "2025FULL": "2025 (όλο)"}
+
+
+def num(value) -> float:
+    return float(value or 0)
+
+
+def summarize(data: dict) -> str:
+    def rows(name):
+        header, body = data.get(name, ([], []))
+        return [dict(zip(header, r, strict=False)) for r in body]
+
+    findata = {}
+    for r in rows("item_findata"):
+        findata.setdefault(r["CODE"], []).append(
+            (int(r["FISCPRD"]), num(r["IMPQTY1"]), num(r["IMPVAL"]))
+        )
+    purchases = {}
+    for r in rows("purchase_items"):
+        if int(r["TFPRMS"] or 0) in NON_INVOICE_TYPES:
+            continue
+        purchases.setdefault(r["CODE"], []).append((int(r["YR"]), num(r["QTY"]), num(r["NETVAL"])))
+
+    def avg_cost(code, year):
+        for source in (findata, purchases):
+            qty = sum(q for y, q, _ in source.get(code, []) if y <= year)
+            val = sum(v for y, _, v in source.get(code, []) if y <= year)
+            if qty > 0 and val > 0:
+                return val / qty
+        return None
+
+    expenses = {}
+    for r in rows("purchase_lines"):
+        if int(r["SODTYPE"] or 0) != 51 and int(r["TFPRMS"] or 0) not in NON_INVOICE_TYPES:
+            expenses[r["P"]] = expenses.get(r["P"], 0.0) + num(r["NETVAL"])
+
+    ledger = {}
+    for r in rows("ledger_6x_7x"):
+        year, period, acn = int(r["FISCPRD"]), int(r["PERIOD"] or 0), str(r["ACN2"])
+        if not acn.startswith("6"):
+            continue
+        amount = num(r["DEBIT"]) - num(r["CREDIT"])
+        if year == 2025:
+            ledger["2025FULL"] = ledger.get("2025FULL", 0.0) + amount
+        if 1 <= period <= 10:
+            key = f"{year}YTD"
+            ledger[key] = ledger.get(key, 0.0) + amount
+
+    lines = [
+        "ΚΕΡΔΟΣ ΕΤΑΙΡΕΙΑΣ 3000 (ποσά χωρίς ΦΠΑ, €)",
+        "Περίοδος | Πωλήσεις | Κόστος πωληθέντων | Μικτό κέρδος | Μικτό % | "
+        "Έξοδα (παραστ. αγορών, όχι είδη) | Καθαρό (εκτίμηση) | Έξοδα 6x λογιστικής",
+    ]
+    missing_notes = []
+    for period in ("2025YTD", "2026YTD", "2025FULL"):
+        year = int(period[:4])
+        revenue = cogs = missing_value = 0.0
+        missing = 0
+        for r in rows("sales_items"):
+            if r["P"] != period:
+                continue
+            value = num(r["NETVAL"])
+            revenue += value
+            if int(r["SODTYPE"] or 0) != 51:
+                continue
+            cost = avg_cost(r["CODE"], year)
+            if cost is None:
+                missing += 1
+                missing_value += value
+            else:
+                cogs += cost * num(r["QTY"])
+        gross = revenue - cogs
+        margin = f"{gross / revenue * 100:.1f}%" if revenue else "-"
+        exp = expenses.get(period, 0.0)
+        led = f"{ledger[period]:.2f}" if period in ledger else "-"
+        lines.append(
+            f"{LABELS[period]} | {revenue:.2f} | {cogs:.2f} | {gross:.2f} | {margin} | "
+            f"{exp:.2f} | {gross - exp:.2f} | {led}"
+        )
+        missing_notes.append(
+            f"{LABELS[period]}: {missing} είδη χωρίς κόστος (πωλήσεις {missing_value:.2f} € χωρίς κόστος)"
+        )
+    lines.append("")
+    lines.extend(missing_notes)
+    lines.append("")
+    lines.append("Έξοδα ανά τύπο παραστατικού αγορών (όχι είδη):")
+    for r in rows("purchase_lines"):
+        if int(r["SODTYPE"] or 0) != 51:
+            lines.append(
+                f"  {r['P']} | {r['FPRMS_NAME']} (TFPRMS {r['TFPRMS']}) | SODTYPE {r['SODTYPE']} | "
+                f"{num(r['NETVAL']):.2f}"
+            )
+    return "\n".join(lines)
+
+
 def connect() -> pyodbc.Connection:
     password = os.environ["SQLCMDPASSWORD"]
     errors = []
@@ -139,6 +235,7 @@ def main() -> int:
     out_dir = Path(sys.argv[1] if len(sys.argv) > 1 else "data/profit")
     out_dir.mkdir(parents=True, exist_ok=True)
     log = []
+    data = {}
     conn = connect()
     try:
         for name, variants in QUERIES.items():
@@ -155,6 +252,7 @@ def main() -> int:
                     writer = csv.writer(fh, delimiter=";")
                     writer.writerow(header)
                     writer.writerows(["" if v is None else v for v in row] for row in rows)
+                data[name] = (header, rows)
                 log.append(f"{name} v{index}: OK {len(rows)} γραμμές")
                 break
     finally:
@@ -162,6 +260,10 @@ def main() -> int:
         conn.close()
     (out_dir / "run_log.txt").write_text("\n".join(log) + "\n", encoding="utf-8")
     print("\n".join(log))
+    report = summarize(data)
+    (out_dir / "summary.txt").write_text(report + "\n", encoding="utf-8")
+    print()
+    print(report)
     return 0
 
 
