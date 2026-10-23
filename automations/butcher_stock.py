@@ -1,12 +1,13 @@
 """Εβδομαδιαία ενημέρωση butcherequip.gr από απόθεμα 3000 (μέσω /admin/stock.csv της πύλης B2B).
 publish + απόθεμα<=0 -> draft (σημάδι meta _auto_stock_draft). draft με σημάδι + απόθεμα>0 -> publish.
-Χειροκίνητα drafts (χωρίς σημάδι) δεν αγγίζονται. Χρήση: python3 butcher_stock.py [--apply]"""
+Μόνο είδη των ομάδων GROUPS (MTRGROUP). Χειροκίνητα drafts (χωρίς σημάδι) δεν αγγίζονται. Χρήση: python3 butcher_stock.py [--apply]"""
 import csv, io, json, os, re, sys, time, datetime as dt
 import requests
 
 APPLY = '--apply' in sys.argv
 MAX_CHANGES = 40
 MAX_AGE_H = 36
+GROUPS = {int(x) for x in '''100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,149,150,151,153,154,155,156,157,158,160,161,162,163,164,165,166,167,168,169,176,180,192,193,194,195,196,197,198,199,200,201,202,203,204,205,206,207,208,209,210,211'''.split(',')}
 OUT = os.environ.get('OUT_DIR', '.')
 
 def portal_stock():
@@ -19,8 +20,10 @@ def portal_stock():
     r = s.get(b + '/admin/stock.csv', timeout=60)
     r.raise_for_status()
     at = r.headers.get('X-Items-Synced-At', '')
-    stock = {row['code']: float(row['stock']) for row in csv.DictReader(io.StringIO(r.text))}
-    return stock, at
+    stock = {row['code']: float(row['stock']) for row in csv.DictReader(io.StringIO(r.text))
+             if row['group_id'] and int(row['group_id']) in GROUPS}
+    known = {row['code'] for row in csv.DictReader(io.StringIO(r.text))}
+    return stock, known, at
 
 def wp_session():
     s, b = requests.Session(), 'https://butcherequip.gr'
@@ -51,15 +54,15 @@ def flag(p):
     return any(m['key'] == '_auto_stock_draft' and m['value'] for m in p.get('meta_data', []))
 
 def main():
-    stock, at = portal_stock()
+    stock, known, at = portal_stock()
     age_h = (dt.datetime.now() - dt.datetime.strptime(at, '%Y-%m-%d %H:%M:%S')).total_seconds() / 3600 if at else 999
-    # η πύλη δίνει ώρα Ελλάδας· το VM τρέχει UTC -> διορθώνουμε με TZ
+    # η πύλη δίνει ώρα Ελλάδας: τρέξε με TZ=Europe/Athens
     s, api = wp_session()
     prods = all_products(s, api)
     to_draft, to_pub, nostock = [], [], []
     for p in prods:
         sku = (p.get('sku') or '').strip()
-        if p['status'] == 'publish' and sku not in stock:
+        if p['status'] == 'publish' and sku not in known:
             nostock.append(p)
             continue
         if sku not in stock:

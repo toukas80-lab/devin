@@ -207,15 +207,16 @@ function admin_stock_csv(): void
     require_admin();
     $db = db();
     $at = (string)$db->query("SELECT MAX(synced_at) FROM sync_log WHERE dataset = 'items'")->fetchColumn();
-    $st = $db->query('SELECT code, stock, manufacturer FROM items ORDER BY code');
+    $st = $db->query('SELECT i.code, i.stock, i.manufacturer, i.group_id, g.name AS group_name
+                       FROM items i LEFT JOIN item_groups g ON g.id = i.group_id ORDER BY i.code');
 
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="stock.csv"');
     header('X-Items-Synced-At: ' . $at);
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['code', 'stock', 'manufacturer']);
+    fputcsv($out, ['code', 'stock', 'manufacturer', 'group_id', 'group_name']);
     while ($r = $st->fetch()) {
-        fputcsv($out, [$r['code'], $r['stock'], $r['manufacturer']]);
+        fputcsv($out, [$r['code'], $r['stock'], $r['manufacturer'], $r['group_id'], $r['group_name']]);
     }
     fclose($out);
     exit;
