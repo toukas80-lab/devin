@@ -1,0 +1,10 @@
+{
+  "from_address": "info@crazysouvle.gr",
+  "from_name": "CrazySouvle",
+  "smtp_host": "mail.crazysouvle.gr",
+  "smtp_port": 465,
+  "imap_host": "mail.crazysouvle.gr",
+  "imap_port": 993,
+  "imap_sent_folder": "INBOX.Sent",
+  "credential_target": "OutlookBridge:info@crazysouvle.gr"
+}
