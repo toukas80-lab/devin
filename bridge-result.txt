@@ -1,0 +1,46 @@
+59a673d outlook-bridge: safe uninstall (skip backups that contain the bridge), transcript
+**********************
+Windows PowerShell transcript start
+Start time: 20261024141628
+Username: KENTRIKO-SPITI\User
+RunAs User: KENTRIKO-SPITI\User
+Configuration Name: 
+Machine: KENTRIKO-SPITI (Microsoft Windows NT 10.0.26300.0)
+Host Application: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -ExecutionPolicy Bypass -File C:\Users\User\Documents\devin-bridge\tools\outlook-bridge\uninstall.ps1 -Machine
+Process ID: 6656
+PSVersion: 5.1.26100.9711
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.9711
+BuildVersion: 10.0.26100.9711
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+killed 11092
+removed HKCU:\Software\Classes\CLSID\{0006F03A-0000-0000-C000-000000000046}
+removed HKCU:\Software\Classes\WOW6432Node\CLSID\{0006F03A-0000-0000-C000-000000000046}
+
+deleted HKLM\SOFTWARE\Classes\CLSID\{0006F03A-0000-0000-C000-000000000046}
+skip C:\Users\User\AppData\Local\OutlookBridge\backup_hklm_clsid.reg (contains the bridge, not the original)
+
+deleted HKLM\SOFTWARE\Classes\WOW6432Node\CLSID\{0006F03A-0000-0000-C000-000000000046}
+The operation completed successfully.
+restored HKLM\SOFTWARE\Classes\WOW6432Node\CLSID\{0006F03A-0000-0000-C000-000000000046} from C:\Users\User\AppData\Local\OutlookBridge\backup_hklm_WOW6432Nodeclsid.reg
+--- HKLM\SOFTWARE\Classes\CLSID\{0006F03A-0000-0000-C000-000000000046}\LocalServer32:
+ERROR: The system was unable to find the specified registry key or value.
+--- HKLM\SOFTWARE\Classes\WOW6432Node\CLSID\{0006F03A-0000-0000-C000-000000000046}\LocalServer32:
+
+HKEY_LOCAL_MACHINE\SOFTWARE\Classes\WOW6432Node\CLSID\{0006F03A-0000-0000-C000-000000000046}\LocalServer32
+    (Default)    REG_SZ    C:\PROGRA~2\MICROS~2\Office12\OUTLOOK.EXE
+    LocalServer32    REG_MULTI_SZ    vUpAVX!!!!!!!!!MKKSkOUTLOOKFiles>tW{~$4Q]c@zPX6FxaTO5
+OK: bridge removed.
+**********************
+Windows PowerShell transcript end
+End time: 20261024141629
+**********************
+
+CMDKEY: Credential deleted successfully.
+Searching for Python versions matching: cpython-3.11-windows-x86-none
+Uninstalled Python 3.11.16 in 968ms
+ - cpython-3.11.16-windows-x86-none (python3.11.exe)
