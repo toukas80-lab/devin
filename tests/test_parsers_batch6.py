@@ -129,3 +129,15 @@ def test_batch6_rows_use_history_accounts() -> None:
     items = [row.split(";")[4] for row in result.purchase_rows]
     assert items == ["03819", "03829", "03828", "03830", "03920", "03822"]
     assert result.purchase_rows[1].split(";")[6] == "24,705"
+
+
+def test_jobfind_and_vn_remote_are_mapped() -> None:
+    config = load_config(DEFAULT_CONFIG)
+    invoices = [
+        JobfindParser().parse_text(Path("j.pdf"), load("jobfind_224867")),
+        VnParser().parse_text(Path("v.pdf"), load("vn_000319")),
+    ]
+    result = build_txt(invoices, config)
+    assert result.errors == ()
+    assert result.expense_rows[0].split(";")[2:5] == ["0049", "224867", "81013"]
+    assert result.purchase_rows[0].split(";")[3:6] == ["000319", "03918", "1"]
