@@ -68,38 +68,98 @@ DISPATCH_PROPERTYPUT = 4
 DISPATCH_PROPERTYPUTREF = 8
 
 
+_TLB = None
+_VTABLE_DONE = {}
+RET_VT = {}
+
+
+def _make_vtable(info):
+    """Register a universal-gateway vtable for one typelib interface; returns its IID."""
+    import pythoncom
+    import win32com.client.build
+    from win32com import universal
+
+    attr = info.GetTypeAttr()
+    if attr.typekind == pythoncom.TKIND_DISPATCH:
+        if not attr.wTypeFlags & pythoncom.TYPEFLAG_FDUAL:
+            return None
+        info = info.GetRefTypeInfo(info.GetRefTypeOfImplType(-1))
+        attr = info.GetTypeAttr()
+    key = str(attr.iid)
+    if key in _VTABLE_DONE:
+        return _VTABLE_DONE[key]
+    _VTABLE_DONE[key] = None
+    item = win32com.client.build.VTableItem(info, attr, info.GetDocumentation(-1))
+    universal._doCreateVTable(item.clsid, item.python_name, item.bIsDispatch, item.vtableFuncs)
+    for _names, dispid, desc in item.vtableFuncs:
+        outs = [
+            a[0] for a in desc[2] if a[1] & (pythoncom.PARAMFLAG_FOUT | pythoncom.PARAMFLAG_FRETVAL)
+        ]
+        if outs:
+            RET_VT.setdefault((dispid, desc[4]), outs[-1] & 0xFFF)
+    _VTABLE_DONE[key] = attr.iid
+    log(f"vtable {item.python_name} {attr.iid} funcs={len(item.vtableFuncs)}")
+    return attr.iid
+
+
 def _ensure_vtables():
     """Early-bound (vtable) support for Outlook dual interfaces, built from its typelib."""
-    global VTABLE_IIDS
+    global VTABLE_IIDS, _TLB
     if VTABLE_IIDS is not None:
         return VTABLE_IIDS
     VTABLE_IIDS = {}
     try:
         import pythoncom
-        import win32com.client.build
-        from win32com import universal
 
-        tlb = pythoncom.LoadRegTypeLib(OUTLOOK_TLB, 9, 0, 0)
-        log(f"typelib loaded {tlb.GetLibAttr()}")
-        comp = tlb.GetTypeComp()
+        _TLB = pythoncom.LoadRegTypeLib(OUTLOOK_TLB, 9, 0, 0)
+        log(f"typelib loaded {_TLB.GetLibAttr()}")
+        comp = _TLB.GetTypeComp()
         for kind, name in VTABLE_NAMES.items():
             try:
-                info = comp.BindType(name)[0]
-                attr = info.GetTypeAttr()
-                if attr.typekind == pythoncom.TKIND_DISPATCH:
-                    info = info.GetRefTypeInfo(info.GetRefTypeOfImplType(-1))
-                    attr = info.GetTypeAttr()
-                item = win32com.client.build.VTableItem(info, attr, info.GetDocumentation(-1))
-                universal._doCreateVTable(
-                    item.clsid, item.python_name, item.bIsDispatch, item.vtableFuncs
-                )
-                VTABLE_IIDS[kind] = attr.iid
-                log(f"vtable {name} {attr.iid} funcs={len(item.vtableFuncs)}")
+                iid = _make_vtable(comp.BindType(name)[0])
+                if iid:
+                    VTABLE_IIDS[kind] = iid
             except Exception:
                 log(f"vtable {name} FAILED " + traceback.format_exc())
     except Exception:
         log("typelib FAILED " + traceback.format_exc())
     return VTABLE_IIDS
+
+
+def _vtable_for_iid(iid):
+    """Any other Outlook interface (e.g. _NameSpace) on demand."""
+    key = str(iid)
+    if key in _VTABLE_DONE:
+        return _VTABLE_DONE[key] is not None
+    if _TLB is None:
+        return False
+    try:
+        info = _TLB.GetTypeInfoOfGuid(iid)
+    except Exception:
+        return False
+    try:
+        return _make_vtable(info) is not None
+    except Exception:
+        log(f"vtable {iid} FAILED " + traceback.format_exc())
+        return False
+
+
+def _coerce(result, dispid, invkind):
+    """A typed vtable return can't take our generic stub object; give a neutral value."""
+    import pythoncom
+
+    vt = RET_VT.get((dispid, invkind))
+    if vt is None or vt in (pythoncom.VT_DISPATCH, pythoncom.VT_UNKNOWN, pythoncom.VT_VARIANT):
+        return result
+    if result is not None and not isinstance(
+        result, pythoncom.PyIDispatchType | pythoncom.PyIUnknownType
+    ):
+        return result
+    if vt == pythoncom.VT_BSTR:
+        return ""
+    if vt == pythoncom.VT_BOOL:
+        return False
+    return 0
 
 
 try:
@@ -118,12 +178,21 @@ class BridgePolicy(_DynamicPolicy):
         iid = _ensure_vtables().get(getattr(ob, "kind", ""))
         self._com_interfaces_ = [iid] if iid else []
 
+    def _QueryInterface_(self, iid):
+        if iid in self._com_interfaces_:
+            return 1
+        if _vtable_for_iid(iid):
+            self._com_interfaces_.append(iid)
+            log(f"{getattr(self._obj_, 'kind', '?')} QI {iid} -> vtable")
+            return 1
+        return self._query_interface_(iid)
+
     def _invokeex_(self, dispid, lcid, wFlags, args, kwargs, serviceProvider):
         name = self._dispid_to_func_.get(dispid)
         if name is None:
             return super()._invokeex_(dispid, lcid, wFlags, args, kwargs, serviceProvider)
         try:
-            return self._obj_._dynamic_(name, lcid, wFlags, args)
+            return _coerce(self._obj_._dynamic_(name, lcid, wFlags, args), dispid, wFlags)
         except Exception:
             log(f"vtable call {name} FAILED " + traceback.format_exc())
             raise
