@@ -251,7 +251,9 @@ def serve():
     import win32api
     from win32com.server import factory
 
-    log(f"serve start exe={sys.executable}")
+    os.makedirs(DATA_DIR, exist_ok=True)
+    sys.stdout = sys.stderr = open(LOG_FILE, "a", encoding="utf-8", buffering=1)
+    log(f"serve start exe={sys.executable} argv={sys.argv}")
     pythoncom.EnableQuitMessage(win32api.GetCurrentThreadId())
     pythoncom.CoInitialize()
     infos = factory.RegisterClassFactories([CLSID])
@@ -439,6 +441,28 @@ def compose(job_path):
     root.mainloop()
 
 
+def comtest():
+    """Creates the COM object in-process exactly as COM would, without the registry launch."""
+    import pythoncom
+    import win32com.client
+    from win32com.server import policy
+
+    try:
+        disp = policy.CreateInstance(CLSID, pythoncom.IID_IDispatch)
+        app = win32com.client.Dispatch(disp)
+        item = app.CreateItem(0)
+        item.To = "test@example.com"
+        item.Subject = "comtest"
+        print(f"comtest OK to={item.To!r} subject={item.Subject!r}")
+        log("comtest OK")
+        return 0
+    except Exception:
+        tb = traceback.format_exc()
+        print("comtest FAILED\n" + tb)
+        log("comtest FAILED " + tb)
+        return 1
+
+
 def main(argv):
     if len(argv) >= 2 and argv[1] == "--serve" or "-Embedding" in argv or "/Embedding" in argv:
         serve()
@@ -454,6 +478,8 @@ def main(argv):
 
         log(f"selftest OK exe={sys.executable}")
         return 0
+    if len(argv) >= 2 and argv[1] == "--comtest":
+        return comtest()
     if len(argv) >= 2 and argv[1] == "--check":
         return check(load_config())
     print(__doc__)

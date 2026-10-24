@@ -48,3 +48,5 @@ foreach ($root in $roots) {
   Set-Item "$root\Outlook.Application\CLSID" $clsid
 }
 Write-Host "OK: bridge registered ($($roots -join ', ')). Server: $server"
+Write-Host '--- comtest (in-process) ---'
+& "$venv\Scripts\python.exe" "$dir\bridge.py" --comtest
