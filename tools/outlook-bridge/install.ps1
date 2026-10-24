@@ -37,7 +37,7 @@ foreach ($root in $roots) {
     New-Item -Force $k | Out-Null
     Set-Item $k 'Outlook Bridge (SoftOne)'
     foreach ($pair in @(@('LocalServer32', $server), @('PythonCOM', 'bridge.OutlookApplication'),
-                        @('PythonCOMPath', $dir), @('PythonCOMPolicy', 'win32com.server.policy.DynamicPolicy'),
+                        @('PythonCOMPath', $dir), @('PythonCOMPolicy', 'bridge.BridgePolicy'),
                         @('ProgID', 'Outlook.Application'))) {
       New-Item -Force "$k\$($pair[0])" | Out-Null
       Set-Item "$k\$($pair[0])" $pair[1]

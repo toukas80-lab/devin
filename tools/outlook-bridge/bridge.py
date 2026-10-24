@@ -34,7 +34,19 @@ if os.path.isdir(_VENV_SITE):
     import site
 
     site.addsitedir(_VENV_SITE)
+if __name__ == "__main__":
+    sys.modules.setdefault("bridge", sys.modules[__name__])
 CLSID = "{0006F03A-0000-0000-C000-000000000046}"
+OUTLOOK_TLB = "{00062FFF-0000-0000-C000-000000000046}"
+VTABLE_NAMES = {
+    "Application": "_Application",
+    "MailItem": "_MailItem",
+    "Recipients": "Recipients",
+    "Recipient": "Recipient",
+    "Attachments": "Attachments",
+    "Attachment": "Attachment",
+}
+VTABLE_IIDS = None
 DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA", tempfile.gettempdir()), "OutlookBridge")
 LOG_FILE = os.path.join(DATA_DIR, "bridge.log")
 
@@ -56,11 +68,71 @@ DISPATCH_PROPERTYPUT = 4
 DISPATCH_PROPERTYPUTREF = 8
 
 
+def _ensure_vtables():
+    """Early-bound (vtable) support for Outlook dual interfaces, built from its typelib."""
+    global VTABLE_IIDS
+    if VTABLE_IIDS is not None:
+        return VTABLE_IIDS
+    VTABLE_IIDS = {}
+    try:
+        import pythoncom
+        import win32com.client.build
+        from win32com import universal
+
+        tlb = pythoncom.LoadRegTypeLib(OUTLOOK_TLB, 9, 0, 0)
+        log(f"typelib loaded {tlb.GetLibAttr()}")
+        comp = tlb.GetTypeComp()
+        for kind, name in VTABLE_NAMES.items():
+            try:
+                info = comp.BindType(name)[0]
+                attr = info.GetTypeAttr()
+                if attr.typekind == pythoncom.TKIND_DISPATCH:
+                    info = info.GetRefTypeInfo(info.GetRefTypeOfImplType(-1))
+                    attr = info.GetTypeAttr()
+                item = win32com.client.build.VTableItem(info, attr, info.GetDocumentation(-1))
+                universal._doCreateVTable(
+                    item.clsid, item.python_name, item.bIsDispatch, item.vtableFuncs
+                )
+                VTABLE_IIDS[kind] = attr.iid
+                log(f"vtable {name} {attr.iid} funcs={len(item.vtableFuncs)}")
+            except Exception:
+                log(f"vtable {name} FAILED " + traceback.format_exc())
+    except Exception:
+        log("typelib FAILED " + traceback.format_exc())
+    return VTABLE_IIDS
+
+
+try:
+    from win32com.server.policy import DynamicPolicy as _DynamicPolicy
+except ImportError:
+    _DynamicPolicy = object
+
+
+class BridgePolicy(_DynamicPolicy):
+    """DynamicPolicy plus vtable calls (dispids from the typelib) for SoftOne's early binding."""
+
+    def _wrap_(self, ob):
+        super()._wrap_(ob)
+        self._next_dynamic_ = self._min_dynamic_ = 0x7F000000
+        self._dispid_to_func_ = {}
+        iid = _ensure_vtables().get(getattr(ob, "kind", ""))
+        self._com_interfaces_ = [iid] if iid else []
+
+    def _invokeex_(self, dispid, lcid, wFlags, args, kwargs, serviceProvider):
+        name = self._dispid_to_func_.get(dispid)
+        if name is None:
+            return super()._invokeex_(dispid, lcid, wFlags, args, kwargs, serviceProvider)
+        try:
+            return self._obj_._dynamic_(name, lcid, wFlags, args)
+        except Exception:
+            log(f"vtable call {name} FAILED " + traceback.format_exc())
+            raise
+
+
 def _wrap(obj):
-    from win32com.server.policy import DynamicPolicy
     from win32com.server.util import wrap
 
-    return wrap(obj, usePolicy=DynamicPolicy)
+    return wrap(obj, usePolicy=BridgePolicy)
 
 
 class _Dyn:
@@ -479,11 +551,13 @@ def comtest():
     from win32com.server import policy
 
     try:
+        _ensure_vtables()
         disp = policy.CreateInstance(CLSID, pythoncom.IID_IDispatch)
         app = win32com.client.Dispatch(disp)
         item = app.CreateItem(0)
         item.To = "test@example.com"
         item.Subject = "comtest"
+        print(f"vtables={VTABLE_IIDS}")
         print(f"comtest OK to={item.To!r} subject={item.Subject!r}")
         log("comtest OK")
         return 0
