@@ -29,6 +29,11 @@ import traceback
 from email.message import EmailMessage
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+_VENV_SITE = os.path.join(HERE, ".venv", "Lib", "site-packages")
+if os.path.isdir(_VENV_SITE):
+    import site
+
+    site.addsitedir(_VENV_SITE)
 CLSID = "{0006F03A-0000-0000-C000-000000000046}"
 DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA", tempfile.gettempdir()), "OutlookBridge")
 LOG_FILE = os.path.join(DATA_DIR, "bridge.log")
@@ -443,6 +448,12 @@ def main(argv):
         return 0
     if len(argv) >= 2 and argv[1] == "--set-password":
         return set_password(load_config())
+    if len(argv) >= 2 and argv[1] == "--selftest":
+        import pythoncom  # noqa: F401
+        import win32cred  # noqa: F401
+
+        log(f"selftest OK exe={sys.executable}")
+        return 0
     if len(argv) >= 2 and argv[1] == "--check":
         return check(load_config())
     print(__doc__)
