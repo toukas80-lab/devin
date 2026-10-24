@@ -71,6 +71,10 @@ class _Dyn:
     def __init__(self):
         self.props = {}
 
+    def _query_interface_(self, iid):
+        log(f"{self.kind} QI {iid} -> not supported")
+        return 0
+
     def _dynamic_(self, name, lcid, wflags, args):
         lname = name.lower()
         args = list(args)
