@@ -13,13 +13,32 @@ function money(mixed $v): string
 
 const B2B_DISC = 40.0;
 
-function price_info(float $pr): array
+function cust_disc(): float
 {
-    $disc = 0.0;
+    static $d = null;
+    if ($d === null) {
+        $d = B2B_DISC;
+        $u = user();
+        if ($u !== null) {
+            $st = db()->prepare('SELECT disc FROM customers WHERE id = ?');
+            $st->execute([$u['customer_id']]);
+            $v = $st->fetchColumn();
+            if ($v !== false && $v !== null && (float)$v > 0 && (float)$v < 100) {
+                $d = (float)$v;
+            }
+        }
+    }
+    return $d;
+}
+
+function price_info(float $pr, ?float $disc = null): array
+{
+    $disc ??= cust_disc();
     $eff  = 0.0;
     if ($pr > 0) {
-        $disc = B2B_DISC;
-        $eff  = round($pr * (1 - $disc / 100), 2);
+        $eff = round($pr * (1 - $disc / 100), 2);
+    } else {
+        $disc = 0.0;
     }
     return ['w' => $pr, 'disc' => $disc, 'eff' => $eff];
 }

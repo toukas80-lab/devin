@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS customers (
   afm     VARCHAR(9)    NOT NULL DEFAULT '',
   payment INT           NULL,
   balance DECIMAL(14,2) NOT NULL DEFAULT 0,
+  disc    DECIMAL(5,2)  NULL,
   KEY idx_customers_email (email),
   KEY idx_customers_afm (afm)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

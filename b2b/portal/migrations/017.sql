@@ -1,0 +1,1 @@
+ALTER TABLE customers ADD COLUMN disc DECIMAL(5,2) NULL;

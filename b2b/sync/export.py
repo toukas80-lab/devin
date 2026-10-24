@@ -94,7 +94,7 @@ ORDER BY g.NAME
 Q_CUSTOMERS = f"""
 SELECT t.TRDR AS id, t.CODE AS code, t.NAME AS name,
        ISNULL(t.EMAIL,'') AS email, ISNULL(t.AFM,'') AS afm,
-       t.PAYMENT AS payment
+       t.PAYMENT AS payment, t.DISCOUNT AS disc
 FROM dbo.TRDR t
 WHERE t.COMPANY={COMPANY} AND t.SODTYPE=13 AND t.ISACTIVE=1
 ORDER BY t.CODE
