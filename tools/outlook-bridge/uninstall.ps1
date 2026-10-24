@@ -14,4 +14,6 @@ if ($Machine) {
     if (Test-Path $f) { & reg import $f }
   }
 }
+Remove-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' 'OutlookBridge' -ErrorAction SilentlyContinue
+Get-CimInstance Win32_Process -Filter "Name='pythonw.exe'" | Where-Object { $_.CommandLine -match 'bridge\.py.*--serve' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 Write-Host 'OK: bridge removed. Outlook is used again.'

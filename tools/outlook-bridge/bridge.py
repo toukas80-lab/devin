@@ -258,8 +258,14 @@ def serve():
     os.makedirs(DATA_DIR, exist_ok=True)
     sys.stdout = sys.stderr = open(LOG_FILE, "a", encoding="utf-8", buffering=1)
     log(f"serve start exe={sys.executable} argv={sys.argv}")
+    import win32event
+    import winerror
+
+    mutex = win32event.CreateMutex(None, False, "Local\\OutlookBridgeServer")
+    if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
+        log("serve: already running, exit")
+        return
     try:
-        pythoncom.EnableQuitMessage(win32api.GetCurrentThreadId())
         pythoncom.CoInitialize()
         infos = factory.RegisterClassFactories([CLSID])
         pythoncom.CoResumeClassObjects()
@@ -270,6 +276,7 @@ def serve():
     except Exception:
         log("serve FAILED " + traceback.format_exc())
     log("serve stop")
+    del mutex
 
 
 # ------------------------------------------------------------ password store

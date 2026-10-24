@@ -14,6 +14,8 @@ Get-Process | Where-Object { $_.Path -match 'soft|xplorer' } | ForEach-Object { 
 foreach ($k in @("HKCU\Software\Classes\CLSID\$clsid\LocalServer32", "HKCU\Software\Classes\WOW6432Node\CLSID\$clsid\LocalServer32", "HKLM\SOFTWARE\Classes\CLSID\$clsid\LocalServer32", "HKLM\SOFTWARE\Classes\WOW6432Node\CLSID\$clsid\LocalServer32")) {
   "$k = " + ((& reg query $k /ve 2>&1) -join ' ' -replace '\s+', ' ')
 }
+"--- HKLM WOW6432Node Outlook key (all values):"; & reg query "HKLM\SOFTWARE\Classes\WOW6432Node\CLSID\$clsid" /s 2>&1
+"--- resident bridge server:"; Get-CimInstance Win32_Process -Filter "Name='pythonw.exe'" | Where-Object { $_.CommandLine -match 'bridge' } | ForEach-Object { "$($_.ProcessId) $($_.CommandLine)" }
 $pdf = Join-Path $env:TEMP 'bridge_test.pdf'
 Set-Content -Path $pdf -Value '%PDF-1.4 bridge test' -Encoding Ascii
 $code = "`$ErrorActionPreference = 'Stop'; `$s = 'start'; try { `$o = New-Object -ComObject Outlook.Application; `$s = 'created name=' + `$o.Name + ' ver=' + `$o.Version; `$m = `$o.CreateItem(0); `$m.To = 'toukas80@gmail.com'; `$m.Subject = 'Bridge test'; `$m.Body = 'test'; [void]`$m.Attachments.Add('$pdf'); `$s += ' subj=' + `$m.Subject; `$m.Display(); 'COM call OK: ' + `$s } catch { 'COM call FAILED after [' + `$s + ']: ' + `$_.Exception.Message }"

@@ -47,6 +47,10 @@ foreach ($root in $roots) {
   New-Item -Force "$root\Outlook.Application\CLSID" | Out-Null
   Set-Item "$root\Outlook.Application\CLSID" $clsid
 }
+Get-CimInstance Win32_Process -Filter "Name='pythonw.exe'" | Where-Object { $_.CommandLine -match 'bridge\.py.*--serve' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+Set-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' 'OutlookBridge' $server
+Start-Process $pyw -ArgumentList "`"$dir\bridge.py`" --serve"
+Start-Sleep 3
 Write-Host "OK: bridge registered ($($roots -join ', ')). Server: $server"
 Write-Host '--- comtest (in-process) ---'
 & "$venv\Scripts\python.exe" "$dir\bridge.py" --comtest
