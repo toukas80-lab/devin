@@ -234,6 +234,10 @@ class OutlookApplication(_Dyn):
     _reg_clsid_ = CLSID
     _reg_progid_ = "Outlook.Application"
 
+    def __init__(self):
+        super().__init__()
+        log(f"Application created pid={os.getpid()}")
+
     def call(self, lname, args):
         if lname == "createitem":
             return _wrap(MailItem())
@@ -254,13 +258,17 @@ def serve():
     os.makedirs(DATA_DIR, exist_ok=True)
     sys.stdout = sys.stderr = open(LOG_FILE, "a", encoding="utf-8", buffering=1)
     log(f"serve start exe={sys.executable} argv={sys.argv}")
-    pythoncom.EnableQuitMessage(win32api.GetCurrentThreadId())
-    pythoncom.CoInitialize()
-    infos = factory.RegisterClassFactories([CLSID])
-    pythoncom.CoResumeClassObjects()
-    pythoncom.PumpMessages()
-    factory.RevokeClassFactories(infos)
-    pythoncom.CoUninitialize()
+    try:
+        pythoncom.EnableQuitMessage(win32api.GetCurrentThreadId())
+        pythoncom.CoInitialize()
+        infos = factory.RegisterClassFactories([CLSID])
+        pythoncom.CoResumeClassObjects()
+        log("serve factory registered")
+        pythoncom.PumpMessages()
+        factory.RevokeClassFactories(infos)
+        pythoncom.CoUninitialize()
+    except Exception:
+        log("serve FAILED " + traceback.format_exc())
     log("serve stop")
 
 
