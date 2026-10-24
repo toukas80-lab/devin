@@ -145,9 +145,41 @@ function DevinMakeHead(fileName) {
         '\n' + log.join('\n');
 }
 
+// FINCODEs of the HEAD file the wizard just imported. AddLines edits only these documents, so
+// an older document (possibly corrected by hand) is never touched again.
+function DevinHeadFincodes(headName) {
+    var keys = {};
+    if (DevinFileProblem(headName)) return keys;
+    var f = X.EXEC('CODE:PILib.OpenText', headName, 28597);
+    try {
+        while (!X.EXEC('CODE:PILib.EOF', f)) {
+            var p = String(X.EXEC('CODE:PILib.ReadLine', f)).split(';');
+            if (p.length > 3) keys[p[3].replace(/^\s+|\s+$/g, '')] = 1;
+        }
+    }
+    finally {
+        X.EXEC('CODE:PILib.CloseText', f);
+    }
+    return keys;
+}
+
+// Documents of the txt that are not in the HEAD file: read-only report, never edited.
+function DevinNotInHead(id, have, d, fincode) {
+    if (have < d.lines.length)
+        return 'WARN ' + fincode + ' -> FINDOC ' + id + ': ' + have + ' of ' + d.lines.length + ' lines but not in the HEAD file - NOT touched, check manually';
+    return 'SKIP ' + fincode + ' -> FINDOC ' + id + ' (not in this HEAD file, not touched)';
+}
+
+// Extra charges (έξοδα) make SUMAMNT <> NETAMNT + VATAMNT; the invoice total would then be counted twice.
+function DevinExtraCharges(now) {
+    var extra = DevinNum(now.SUMAMNT) - DevinNum(now.NETAMNT) - DevinNum(now.VATAMNT);
+    return Math.abs(extra) >= 0.005 ? ' - total has ' + extra.toFixed(2) + ' extra charges, check the document' : '';
+}
+
 function DevinAddLines(fileName) {
     if (!fileName) fileName = 'C:\\Soft1\\DEVIN-IMPORT.txt';
     var docs = DevinGroup(DevinReadRows(fileName));
+    var inHead = DevinHeadFincodes(fileName.replace(/DEVIN-IMPORT\.txt$/i, 'DEVIN-HEAD.txt'));
     var out = ['File: ' + fileName, 'Docs in file: ' + docs.length];
     for (var i = 0; i < docs.length; i++) {
         var d = docs[i], fincode = DevinFincode(d);
@@ -159,6 +191,7 @@ function DevinAddLines(fileName) {
             if (ds.RECORDCOUNT > 1) { out.push('ERR  ' + fincode + ': ' + ds.RECORDCOUNT + ' documents with this code for the supplier - check manually'); continue; }
             var id = parseInt(ds.FINDOC, 10);
             var have = parseInt(X.SQL('SELECT COUNT(*) FROM MTRLINES WHERE FINDOC=:1', id), 10);
+            if (!inHead[fincode]) { out.push(DevinNotInHead(id, have, d, fincode)); continue; }
             var addLines = have < d.lines.length;
             var fixVat = DevinExpVatFixes(id, d.lines);
             if (!addLines && fixVat.length == 0) { out.push('SKIP ' + fincode + ' -> FINDOC ' + id + ' (already ' + have + ' lines)'); continue; }
@@ -211,8 +244,9 @@ function DevinAddLines(fileName) {
             var did = parts.join(', ');
             if (String(now.FINCODE) != fincode) { out.push('ERR  ' + fincode + ' -> FINDOC ' + id + ': ' + did + ' but the number changed to "' + now.FINCODE + '" - fix it in the form'); continue; }
             var left = DevinExpVatFixes(id, d.lines);
-            out.push((left.length ? 'WARN ' : 'OK   ') + fincode + ' -> FINDOC ' + id + ': ' + did + ', now ' + now.JSON +
-                (left.length ? ' - ' + left.length + ' line(s) still with wrong VAT - fix in the form' : ''));
+            var extra = DevinExtraCharges(now);
+            out.push((left.length || extra ? 'WARN ' : 'OK   ') + fincode + ' -> FINDOC ' + id + ': ' + did + ', now ' + now.JSON +
+                (left.length ? ' - ' + left.length + ' line(s) still with wrong VAT - fix in the form' : '') + extra);
         }
         catch (e) {
             out.push('ERR  ' + fincode + ': ' + e.message);
@@ -436,6 +470,7 @@ function DevinExpMakeHead(fileName) {
 function DevinExpAddLines(fileName) {
     if (!fileName) fileName = 'C:\\Soft1\\DEVIN-EXP.txt';
     var docs = DevinGroup(DevinExpReadRows(fileName));
+    var inHead = DevinHeadFincodes(fileName.replace(/DEVIN-EXP\.txt$/i, 'DEVIN-EXPHEAD.txt'));
     var out = ['File: ' + fileName, 'Docs in file: ' + docs.length];
     for (var i = 0; i < docs.length; i++) {
         var d = docs[i], fincode = DevinFincode(d);
@@ -447,6 +482,7 @@ function DevinExpAddLines(fileName) {
             if (ds.RECORDCOUNT > 1) { out.push('ERR  ' + fincode + ': ' + ds.RECORDCOUNT + ' documents with this code for the creditor - check manually'); continue; }
             var id = parseInt(ds.FINDOC, 10);
             var have = parseInt(X.SQL('SELECT COUNT(*) FROM MTRLINES WHERE FINDOC=:1', id), 10);
+            if (!inHead[fincode]) { out.push(DevinNotInHead(id, have, d, fincode)); continue; }
             // the wizard fills only the line comment; the header "Αιτιολογία" (shown in the list) gets the 1st line's text
             var headComment = String(X.SQL("SELECT ISNULL(COMMENTS,'') FROM FINDOC WHERE FINDOC=:1", id) || '');
             var wantComment = String(d.lines[0].comment || '');
@@ -526,7 +562,8 @@ function DevinExpAddLines(fileName) {
             var left = DevinExpVatFixes(id, d.lines);
             var expVat = d.docvat != null ? d.docvat : DevinExpExpectedVat(d.lines);
             var vatOk = left.length == 0 && Math.abs(DevinNum(now.VATAMNT) - expVat) < 0.005;
-            out.push((vatOk ? 'OK   ' : 'WARN ') + fincode + ' -> FINDOC ' + id + ': ' + did + ', now ' + now.JSON +
+            var extra = DevinExtraCharges(now);
+            out.push((vatOk && !extra ? 'OK   ' : 'WARN ') + fincode + ' -> FINDOC ' + id + ': ' + did + ', now ' + now.JSON + extra +
                 (vatOk ? '' : ' - VAT expected ' + expVat.toFixed(2) + (left.length ? ', ' + left.length + ' line(s) still wrong - fix in the form' : ' - fix the VAT amount in the form')));
         }
         catch (e) {
