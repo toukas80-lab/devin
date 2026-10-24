@@ -1,0 +1,90 @@
+                                                                            Fatura / Invoice                          Data /              Moeda /
+                                                                                                                      Date                Currency
+                                                                            FT 2026/44                                2026-10-06          EUR
+                                                                            ATCUD:J6ZNSV3T-44                         Data de Vencimento /
+                                                                                                                      Due date
+                                                                            Original                                  2026-10-06
+                                                                            Ref. de doc. original /
+                                                                            Original doc. ref.
+AEGImesh, Lda                                                               FP 2026/41
+Rua dos Tordos A3
+Quinta da Bicuda                                                            Cliente / Customer
+2750-712 Cascais, Portugal
+Tlf: +351211644316                                                          Crazysouvle
+Email: geral@aegimesh.com                                                   Morada / Address                                      NIF / Tax Reg. Nr.
+Sociedade por Quotas                                                                                                              EL802313849
+NIF: PT515294640                                                            EL 802313849
+CS:     10000,00 Eur                                                        570 13 Oreokastro Thessaloni,
+www.aegimesh.com                                                            Greece
+
+
+                                                                                                                          Página / Page        1  /   1
+Código / Code    Descrição / Description                        Qtd. / Qt. Uni. /   Preço uni. / Un.   IVA /       % Desc. /      Valor sem iva / Net
+                                                                           Un.                  Price   VAT         Discount                   amount
+                 Importado da FP 2026/41 de
+                 06/10/2026
+U1321L19         U-Safe EasyClean-Extended Cuff                      6.00  un                  49.40      0%                                    296.40
+                 19-Blue                                                                                  (*)
+
+(*) Isento artigo 14.º do RITI
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ATCUD:J6ZNSV3T-44
+
+
+
+                                                 Pagamento por transferência bancária para o / Payment by bank transfer to IBAN:
+                                                                  BCP: PT50 0033 0000 45563137306 05 (BCOMPTPL)
+
+
+
+
+
+
+
+
+
+
+                                                             k/wm - Processado por programa certificado nº 1662/AT - TOConline
+
+Taxa / Tax              Base / Incidence         Valor / Amount             Total IVA / VAT                                                      0.00
+0%                               296.40                      0.00
+
+                                                                            Descontos de linha / Item                                            0.00
+                                                                            Discounts
+
+
+                                                                            Total Líquido / Net Total                                        296.40
+
+
+                                                                            Total                                                       296.40
+
+
+                                                                            Bank expenses at customer responsability
+
+
+
+
+
+Os artigos/serviços faturados foram colocados à
+disposição do adquirente na data do documento (Alínea f
+do N.º 5 do Art.º 36 CIVA). / Articles/services billed were
+made ​​available to the buyer on the date of the document
+(Paragraph f of Nº 5 of Article 36 CIVA).

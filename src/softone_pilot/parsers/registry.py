@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from softone_pilot.models import InvoiceData
+from softone_pilot.parsers.aegimesh import AegimeshParser
 from softone_pilot.parsers.base import PdfParseError, SupplierParser, extract_pdf_text
 from softone_pilot.parsers.brevo import BrevoParser
 from softone_pilot.parsers.cargobook import CargoBookParser
@@ -12,15 +13,19 @@ from softone_pilot.parsers.digitalsupport import DigitalSupportParser
 from softone_pilot.parsers.egnatia import EgnatiaOdosParser
 from softone_pilot.parsers.elta import EltaCourierParser
 from softone_pilot.parsers.enartia import EnartiaParser
+from softone_pilot.parsers.faros import GtFarosParser, TziastidisFarosParser
 from softone_pilot.parsers.fedex import FedexParser
 from softone_pilot.parsers.finloup import FinloupLeasing1Parser, FinloupLeasing2Parser
 from softone_pilot.parsers.goldair import GoldairCargoParser
 from softone_pilot.parsers.hellenicshipping import HellenicShippingParser
+from softone_pilot.parsers.iliadis import IliadisCargoParser
+from softone_pilot.parsers.jobfind import JobfindParser
 from softone_pilot.parsers.karasoulis import KarasoulisParser
 from softone_pilot.parsers.kerbl import KerblParser
 from softone_pilot.parsers.malinis import MalinisParser
 from softone_pilot.parsers.prometal import PrometalParser
 from softone_pilot.parsers.reiko import ReikoParser
+from softone_pilot.parsers.salvador import SalvadorParser
 from softone_pilot.parsers.samson import GrSamsonParser
 from softone_pilot.parsers.sfakianakis import SfakianakisParser
 from softone_pilot.parsers.technomatic import TechnomaticParser
@@ -38,6 +43,7 @@ PARSERS: tuple[SupplierParser, ...] = (
     GrSamsonParser(),
     EltaCourierParser(),
     CargoBookParser(),
+    IliadisCargoParser(),
     HellenicShippingParser(),
     DigitalSupportParser(),
     GoldairCargoParser(),
@@ -49,6 +55,11 @@ PARSERS: tuple[SupplierParser, ...] = (
     VnParser(),
     MalinisParser(),
     ReikoParser(),
+    SalvadorParser(),
+    GtFarosParser(),
+    TziastidisFarosParser(),
+    JobfindParser(),
+    AegimeshParser(),
 )
 
 

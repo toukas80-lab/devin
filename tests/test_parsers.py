@@ -1085,7 +1085,7 @@ def test_parse_vn_discount_lines() -> None:
     parser = VnParser()
     assert parser.matches(VN_TEXT.replace(" ", "").upper())
     invoice = parser.parse_text(Path("vn.pdf"), VN_TEXT)
-    assert invoice.document_number == "01024"
+    assert invoice.document_number == "000306"
     assert invoice.document_date == date(2026, 9, 30)
     assert (invoice.net_value, invoice.vat_value, invoice.vat_pct) == (
         Decimal("80369.10"),

@@ -10,16 +10,22 @@ from softone_pilot.parsers.base import PdfParseError, SupplierParser, parse_amou
 # VN FOOD PROCESSING EQUIPMENT Snc (IT) - intra-community purchase, VAT code NI41 (art. 41, 0%).
 # Italian amounts with 3 decimals (154.800,000). In the layout text the discount is often glued
 # to the price ("477,00010" = 477,000 at 10%) and a code may be glued to its description
-# ("0311KIT SKEWER ..."). Lines without a numeric item code (MANUALE, CE) are free of charge and
+# ("0311KIT SKEWER ..."). Skewer codes look like "240-4-SSP-BM PADDLE" (possibly glued to the
+# description) and services carry a text code ("COLLEGAM-REMOTO SM"). The header row is
+# "<customer code> <invoice number> <date> <page>". Lines without a numeric item code
+# (MANUALE, CE) are free of charge and
 # are skipped; the lines-vs-net check guarantees nothing with a value is lost.
 
 LINE_RE = re.compile(
-    r"^\s*(?P<code>\d{4}(?:-[A-Z0-9]+)?)\s*(?P<desc>\S.*?)\s{2,}(?P<qty>\d+,\d{2})\s+N\.?\s+"
+    r"^\s*(?:(?P<code>\d{4}(?:-[A-Z0-9]+)?"
+    r"|\d{3}-[\d.]+-SSP-BM(?: PADDLE| PADD\+LOGO?)?)\s*"
+    r"|(?P<tcode>[A-Z][A-Z0-9-]{3,}(?: [A-Z0-9]{1,3})?)\s{2,})"
+    r"(?P<desc>\S.*?)\s{2,}(?P<qty>\d+,\d{2})\s+N\.?\s+"
     r"(?P<price>[\d.]+,\d{3})\s*(?P<disc>\d{1,3})?\s+(?P<amount>[\d.]+,\d{3})\s+(?P<vat>[A-Z0-9]+)\s*$"
 )
 ROW_LIKE_RE = re.compile(r"\s\d+,\d{2}\s+N\.?\s+[\d.]+,\d{3}")
 HEADER_RE = re.compile(
-    r"^\s*(?P<number>\d+)\s+(?P<cust>\d{6})\s+(?P<date>\d{2}/\d{2}/\d{4})\s+\d+\s*$", re.M
+    r"^\s*(?P<cust>\d+)\s+(?P<number>\d{6})\s+(?P<date>\d{2}/\d{2}/\d{4})\s+\d+\s*$", re.M
 )
 TOTALS_RE = re.compile(
     r"^(?P<vat>[A-Z0-9]+)\s+Cessioni CEE.*?\s(?P<net>[\d.]+,\d{3})\s+"
@@ -63,7 +69,7 @@ class VnParser(SupplierParser):
         if abs(lines_sum - net) > Decimal("0.02"):
             raise PdfParseError(f"Άθροισμα γραμμών {lines_sum:.2f} != καθαρή αξία {net:.2f}")
 
-        number = header["number"].zfill(5)
+        number = header["number"]
         return InvoiceData(
             source_path=source_path,
             supplier_name=self.name,
@@ -86,23 +92,29 @@ class VnParser(SupplierParser):
             match = LINE_RE.match(raw)
             if not match:
                 continue
+            code = match["code"] or match["tcode"]
             if match["vat"] != "NI41":
-                raise PdfParseError(f"VN {match['code']}: κωδικός ΦΠΑ {match['vat']} (όχι NI41)")
+                raise PdfParseError(f"VN {code}: κωδικός ΦΠΑ {match['vat']} (όχι NI41)")
             desc = [match["desc"].strip()]
             for follow in rows[i + 1 : i + 4]:
-                if not follow.strip() or ROW_LIKE_RE.search(follow) or "IVA /" in follow:
+                if (
+                    not follow.strip()
+                    or ROW_LIKE_RE.search(follow)
+                    or "IVA /" in follow
+                    or follow.strip().startswith(("Scadenze", "Scostamenti"))
+                ):
                     break
                 desc.append(follow.strip())
             qty = parse_amount(match["qty"])
-            price = parse_amount(match["price"])
+            price = Decimal(match["price"].replace(".", "").replace(",", "."))
             disc = Decimal(match["disc"] or "0")
             value = parse_amount(match["amount"])
             expected = qty * price * (Decimal("100") - disc) / Decimal("100")
             if abs(expected - value) > Decimal("0.02"):
-                raise PdfParseError(f"VN {match['code']}: {qty} x {price} -{disc}% != {value}")
+                raise PdfParseError(f"VN {code}: {qty} x {price} -{disc}% != {value}")
             lines.append(
                 InvoiceLine(
-                    code=match["code"],
+                    code=code,
                     description=" ".join(desc),
                     quantity=qty,
                     unit_price=price,

@@ -40,6 +40,12 @@ def fmt(value: Decimal) -> str:
     return re.sub(r",?0+$", "", text) if "," in text else text
 
 
+def fmt_price(value: Decimal) -> str:
+    """Unit prices keep up to 3 decimals (VN 24,705) so SoftOne recomputes the exact line value."""
+    text = f"{value:.3f}".replace(".", ",")
+    return re.sub(r",?0+$", "", text)
+
+
 def fmt_vat(pct: Decimal, vat_ids: dict[str, str]) -> str:
     """`ID:n` when the percent is mapped to a SoftOne VAT id (e.g. 0% is ambiguous), else the %."""
     vat_id = vat_ids.get(fmt(pct))
@@ -80,7 +86,7 @@ def build_rows(
                         number,
                         item,
                         fmt(line.quantity),
-                        fmt(line.unit_price),
+                        fmt_price(line.unit_price),
                         fmt_vat(line.vat_pct, vat_ids),
                         fmt(line.discount_pct),
                     )

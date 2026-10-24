@@ -202,7 +202,13 @@
         "0311": "02809",
         "1265": "03824",
         "1800-326": "03872",
-        "0743-20": "03875"
+        "0743-20": "03875",
+        "240-4-SSP-BM PADDLE": "03819",
+        "240-4-SSP-BM PADD+LOG": "03822",
+        "215-4-SSP-BM": "03829",
+        "215-3.2-SSP-BM": "03828",
+        "240-4-SSP-BM": "03830",
+        "220-3.7-SSP-BM": "03920"
       }
     },
     "094475355": {
@@ -262,6 +268,42 @@
       "item_map": {
         "10007": "02852",
         "VersandEG": "02340"
+      }
+    },
+    "997996290": {
+      "name": "ΗΛΙΑΔΗΣ ΚΑΡΓΚΟ Α.Ε.",
+      "kind": "expense",
+      "trdr_code": "0025",
+      "series_code": "ΤΙΜΔ",
+      "line_code": "81004",
+      "payment_method": "1003",
+      "settlement": false
+    },
+    "801643693": {
+      "name": "G.T. FAROS Α.Ε.",
+      "kind": "expense",
+      "trdr_code": "0191",
+      "series_code": "ΤΙΜΔ",
+      "line_code": "",
+      "payment_method": "1003",
+      "settlement": false,
+      "line_codes": {
+        "722": "10033",
+        "1": "10034"
+      }
+    },
+    "041321205": {
+      "name": "ΤΖΙΑΣΤΙΔΗΣ ΓΕΩΡΓΙΟΣ ΧΡΗΣΤΟΣ ΦΑΡΟΣ",
+      "kind": "expense",
+      "trdr_code": "0212",
+      "series_code": "ΤΙΜΔ",
+      "line_code": "",
+      "payment_method": "1003",
+      "settlement": false,
+      "line_codes": {
+        "14": "10034",
+        "11": "10001",
+        "21": "10009"
       }
     }
   }

@@ -31,6 +31,7 @@ class EnartiaParser(SupplierParser):
             text,
             (
                 r"\b((?:ΤΠΥ|ΑΠΥ)-[A-ZΑ-Ω0-9]+-\d+)\b",
+                r"Τιμολόγιο Παροχής Υπηρεσιών\s+(\d{6,})\s+\d{1,2}/\d{1,2}/\d{4}",
                 r"(?:Αριθμός|Invoice\s*(?:No|Number))\s*:?\s*([A-ZΑ-Ω0-9][\w/-]+)",
             ),
         )
