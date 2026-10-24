@@ -261,15 +261,27 @@ def serve():
     import win32event
     import winerror
 
-    mutex = win32event.CreateMutex(None, False, "Local\\OutlookBridgeServer")
-    if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
-        log("serve: already running, exit")
-        return
+    embedded = any(a.lower() in ("-embedding", "/embedding") for a in sys.argv)
+    mutex = None
+    if not embedded:
+        mutex = win32event.CreateMutex(None, False, "Local\\OutlookBridgeServer")
+        if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
+            log("serve: already running, exit")
+            return
     try:
         pythoncom.CoInitialize()
         infos = factory.RegisterClassFactories([CLSID])
         pythoncom.CoResumeClassObjects()
-        log("serve factory registered")
+        log(f"serve factory registered embedded={embedded}")
+        if embedded:
+            import threading
+
+            import win32con
+
+            tid = win32api.GetCurrentThreadId()
+            threading.Timer(
+                900, lambda: win32api.PostThreadMessage(tid, win32con.WM_QUIT, 0, 0)
+            ).start()
         pythoncom.PumpMessages()
         factory.RevokeClassFactories(infos)
         pythoncom.CoUninitialize()

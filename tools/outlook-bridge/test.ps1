@@ -18,10 +18,25 @@ foreach ($k in @("HKCU\Software\Classes\CLSID\$clsid\LocalServer32", "HKCU\Softw
 "--- resident bridge server:"; Get-CimInstance Win32_Process -Filter "Name='pythonw.exe'" | Where-Object { $_.CommandLine -match 'bridge' } | ForEach-Object { "$($_.ProcessId) $($_.CommandLine)" }
 $pdf = Join-Path $env:TEMP 'bridge_test.pdf'
 Set-Content -Path $pdf -Value '%PDF-1.4 bridge test' -Encoding Ascii
-$code = "`$ErrorActionPreference = 'Stop'; `$s = 'start'; try { `$o = New-Object -ComObject Outlook.Application; `$s = 'created name=' + `$o.Name + ' ver=' + `$o.Version; `$m = `$o.CreateItem(0); `$m.To = 'toukas80@gmail.com'; `$m.Subject = 'Bridge test'; `$m.Body = 'test'; [void]`$m.Attachments.Add('$pdf'); `$s += ' subj=' + `$m.Subject; `$m.Display(); 'COM call OK: ' + `$s } catch { 'COM call FAILED after [' + `$s + ']: ' + `$_.Exception.Message }"
-"--- 64-bit:"; & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -Command $code
+$vbs = Join-Path $env:TEMP 'bridge_test.vbs'
+@"
+On Error Resume Next
+s = "start"
+Set o = CreateObject("Outlook.Application")
+If Err.Number <> 0 Then WScript.Echo "COM call FAILED create: " & Hex(Err.Number) & " " & Err.Description : WScript.Quit
+s = "name=" & o.Name & " ver=" & o.Version
+Set m = o.CreateItem(0)
+m.To = "toukas80@gmail.com"
+m.Subject = "Bridge test"
+m.Body = "test"
+m.Attachments.Add "$pdf"
+s = s & " subj=" & m.Subject
+m.Display
+If Err.Number <> 0 Then WScript.Echo "COM call FAILED after [" & s & "]: " & Hex(Err.Number) & " " & Err.Description Else WScript.Echo "COM call OK: " & s
+"@ | Set-Content -Path $vbs -Encoding Ascii
+"--- 64-bit (ver 16.0.0.0 = bridge, 12.x = real Outlook):"; & "$env:WINDIR\System32\cscript.exe" //nologo $vbs
 Start-Sleep 3
-"--- 32-bit:"; & "$env:WINDIR\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -Command $code
+"--- 32-bit like SoftOne (ver 16.0.0.0 = bridge, 12.x = real Outlook):"; & "$env:WINDIR\SysWOW64\cscript.exe" //nologo $vbs
 Start-Sleep 3
 "--- OUTLOOK processes after:"; Get-Process OUTLOOK -ErrorAction SilentlyContinue | ForEach-Object { "$($_.Id) $($_.Path)" }
 "--- bridge.log:"; if (Test-Path $log) { Get-Content $log -Tail 40 }
