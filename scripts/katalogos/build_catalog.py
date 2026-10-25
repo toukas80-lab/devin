@@ -31,7 +31,7 @@ UNITS = {"ΤΕΜ": "Τεμ.", "ΚΙΛ": "Κιλά", "ΚΙΒ": "Κιβ."}
 
 SQL_DOC = """SELECT f.FINDOC, f.COMMENTS FROM FINDOC f
 WHERE f.COMPANY=3000 AND f.SOSOURCE=1351 AND f.FINCODE=? AND CAST(f.TRNDATE AS date)=? AND f.ISCANCEL=0"""
-SQL_LINES = """SELECT m.CODE, m.NAME, u.NAME AS UNIT, l.PRICE
+SQL_LINES = """SELECT m.CODE, m.NAME, u.NAME AS UNIT, l.PRICE, l.COMMENTS, l.COMMENTS1
 FROM MTRLINES l
 JOIN MTRL m ON m.MTRL=l.MTRL AND m.COMPANY=3000
 LEFT JOIN MTRUNIT u ON u.MTRUNIT=m.MTRUNIT1 AND u.COMPANY=m.COMPANY
@@ -73,11 +73,20 @@ def load_sql(fincode, date):
     if len(docs) != 1:
         sys.exit(f"ΣΤΟΠ: βρέθηκαν {len(docs)} παραστατικά {fincode} με ημερομηνία {date}")
     findoc, comments = docs[0]
-    rows = [
-        {"CODE": c, "NAME": n, "UNIT": unit_label(u), "PRICE": float(p or 0)}
-        for c, n, u, p in cn.execute(SQL_LINES, findoc).fetchall()
-    ]
-    return comments, rows
+    lines = cn.execute(SQL_LINES, findoc).fetchall()
+    rows = [{"CODE": c, "NAME": n, "UNIT": unit_label(u), "PRICE": float(p or 0)} for c, n, u, p, *_ in lines]
+    return comments, sort_by_remarks(rows, [ln[4:] for ln in lines])
+
+
+def sort_by_remarks(rows, remarks):
+    """Σειρά = αριθμός στις «Παρατηρήσεις» της γραμμής (00, 01, ...)· αλλιώς σειρά γραμμών."""
+    for i, field in enumerate(("COMMENTS", "COMMENTS1")):
+        vals = [(r[i] or "").strip() for r in remarks]
+        if vals and all(v.isdigit() for v in vals):
+            print(f"ΣΕΙΡΑ=MTRLINES.{field}")
+            return [row for _, row in sorted(zip((int(v) for v in vals), rows), key=lambda t: t[0])]
+    print("ΣΕΙΡΑ=LINENUM (οι Παρατηρήσεις δεν είναι όλες αριθμοί)")
+    return rows
 
 
 def load_csv(path):
