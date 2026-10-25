@@ -26,12 +26,33 @@ RED = (0xD1 / 255, 0x1A / 255, 0x1A / 255)
 DOT = (0.82, 0.10, 0.10)
 ROW_TOP, ROW_H, ROW_BOTTOM = 107, 46, 805
 IMG_X0, IMG_X1, IMG_MAX_H = 28, 134, 40
-FOOTER = "ΦΟΥΝΤΟΥΚΑΣ ΘΕΟΔΩΡΟΣ ΜΟΝ. ΙΚΕ ∙ 2310 227 642 ∙ info@crazysouvle.gr"
 UNITS = {"ΤΕΜ": "Τεμ.", "ΚΙΛ": "Κιλά", "ΚΙΒ": "Κιβ."}
+LABELS = {
+    "gr": {
+        "title": "ΤΙΜΟΚΑΤΑΛΟΓΟΣ ΧΟΝΔΡΙΚΗΣ 2027",
+        "vat": "Τιμές χωρίς ΦΠΑ",
+        "cols": ("ΕΙΚΟΝΑ", "ΚΩΔΙΚΟΣ", "ΠΕΡΙΓΡΑΦΗ ΕΙΔΟΥΣ", "Μ.Μ.", "ΤΙΜΗ €"),
+        "cont": " (συνέχεια)",
+        "dot": "= καλύτερη τιμή ποσότητας",
+        "page": "Σελ.",
+        "footer": "ΦΟΥΝΤΟΥΚΑΣ ΘΕΟΔΩΡΟΣ ΜΟΝ. ΙΚΕ ∙ 2310 227 642 ∙ info@crazysouvle.gr",
+        "units": {},
+    },
+    "en": {
+        "title": "WHOLESALE PRICE LIST 2027",
+        "vat": "Prices excl. VAT",
+        "cols": ("PHOTO", "CODE", "DESCRIPTION", "UNIT", "PRICE €"),
+        "cont": " (continued)",
+        "dot": "= better price for quantity",
+        "page": "Page",
+        "footer": "FOUNTOUKAS THEODOROS SMPC ∙ +30 2310 227 642 ∙ info@crazysouvle.gr",
+        "units": {"Τεμ.": "pcs", "Κιλά": "kg", "Κιβ.": "box"},
+    },
+}
 
 SQL_DOC = """SELECT f.FINDOC, f.COMMENTS FROM FINDOC f
 WHERE f.COMPANY=3000 AND f.SOSOURCE=1351 AND f.FINCODE=? AND CAST(f.TRNDATE AS date)=? AND f.ISCANCEL=0"""
-SQL_LINES = """SELECT m.CODE, m.NAME, u.NAME AS UNIT, l.PRICE, l.COMMENTS, l.COMMENTS1
+SQL_LINES = """SELECT m.CODE, m.{name}, u.NAME AS UNIT, l.PRICE, l.COMMENTS, l.COMMENTS1
 FROM MTRLINES l
 JOIN MTRL m ON m.MTRL=l.MTRL AND m.COMPANY=3000
 LEFT JOIN MTRUNIT u ON u.MTRUNIT=m.MTRUNIT1 AND u.COMPANY=m.COMPANY
@@ -62,7 +83,9 @@ def unit_label(name):
     return name or "Τεμ."
 
 
-def load_sql(fincode, date):
+def load_sql(fincode, date, name_field="NAME"):
+    if not name_field.replace("_", "").isalnum():
+        sys.exit(f"Λάθος --name-field: {name_field}")
     import pyodbc
 
     cn = pyodbc.connect(
@@ -73,7 +96,7 @@ def load_sql(fincode, date):
     if len(docs) != 1:
         sys.exit(f"ΣΤΟΠ: βρέθηκαν {len(docs)} παραστατικά {fincode} με ημερομηνία {date}")
     findoc, comments = docs[0]
-    lines = cn.execute(SQL_LINES, findoc).fetchall()
+    lines = cn.execute(SQL_LINES.format(name=name_field), findoc).fetchall()
     rows = [{"CODE": c, "NAME": n, "UNIT": unit_label(u), "PRICE": float(p or 0)} for c, n, u, p, *_ in lines]
     return comments, sort_by_remarks(rows, [ln[4:] for ln in lines])
 
@@ -131,10 +154,10 @@ def text(c, x, top, s, font, size, color=INK, align="l"):
     (c.drawRightString if align == "r" else c.drawString)(x, y, s)
 
 
-def page_frame(c, title, section, page_no, pages, logo, legend):
+def page_frame(c, t, title, section, page_no, pages, logo, legend):
     c.drawImage(logo, L, H - 55, 137.5, 44, mask="auto")
     text(c, 566.8, 18.2, title, "AB", 13, align="r")
-    text(c, 566.9, 37.9, "Τιμές χωρίς ΦΠΑ", "AR", 9, RED, "r")
+    text(c, 566.9, 37.9, t["vat"], "AR", 9, RED, "r")
     c.setStrokeColorRGB(*INK)
     c.setLineWidth(0.8)
     c.line(L, H - 60, R, H - 60)
@@ -145,21 +168,22 @@ def page_frame(c, title, section, page_no, pages, logo, legend):
     c.setStrokeColorRGB(0, 0, 0)
     c.setLineWidth(1)
     c.rect(L, H - 105, R - L, 15, stroke=1, fill=1)
-    for x, s in ((58, "ΕΙΚΟΝΑ"), (140, "ΚΩΔΙΚΟΣ"), (186, "ΠΕΡΙΓΡΑΦΗ ΕΙΔΟΥΣ"), (464, "Μ.Μ.")):
+    for x, s in zip((58, 140, 186, 464), t["cols"]):
         text(c, x, 93.2, s, "AB", 7.5)
-    text(c, 562, 93.2, "ΤΙΜΗ €", "AB", 7.5, align="r")
+    text(c, 562, 93.2, t["cols"][4], "AB", 7.5, align="r")
     c.setStrokeColorRGB(0.6, 0.6, 0.6)
     c.setLineWidth(0.4)
     c.line(L, H - 808, R, H - 808)
-    text(c, L, 813.7, FOOTER, "AR", 7)
+    text(c, L, 813.7, t["footer"], "AR", 7)
     if legend:
         c.setFillColorRGB(*DOT)
         c.circle(352, H - 817.5, 3, stroke=0, fill=1)
-        text(c, 358, 813.7, "= καλύτερη τιμή ποσότητας", "AR", 7, RED)
-    text(c, 567, 813.2, f"Σελ. {page_no} / {pages}", "AB", 7.5, align="r")
+        text(c, 358, 813.7, t["dot"], "AR", 7, RED)
+    text(c, 567, 813.2, f"{t['page']} {page_no} / {pages}", "AB", 7.5, align="r")
 
 
-def build(rows, out, title, section, photos, dots):
+def build(rows, out, title, section, photos, dots, lang="gr"):
+    t = LABELS[lang]
     register_fonts()
     logo = ImageReader(str(HERE / "logo.png"))
     per_page = (ROW_BOTTOM - ROW_TOP) // ROW_H
@@ -169,8 +193,8 @@ def build(rows, out, title, section, photos, dots):
     c.setAuthor("ΦΟΥΝΤΟΥΚΑΣ ΘΕΟΔΩΡΟΣ ΜΟΝ. ΙΚΕ")
     missing = []
     for n, chunk in enumerate(chunks, 1):
-        sec = section if n == 1 else section + " (συνέχεια)"
-        page_frame(c, title, sec, n, len(chunks), logo, bool(dots))
+        sec = section if n == 1 else section + t["cont"]
+        page_frame(c, t, title, sec, n, len(chunks), logo, bool(dots))
         for i, r in enumerate(chunk):
             top = ROW_TOP + i * ROW_H
             mid = top + ROW_H / 2
@@ -190,7 +214,7 @@ def build(rows, out, title, section, photos, dots):
                 c.circle(175, H - mid + 0.5, 3.6, stroke=0, fill=1)
                 c.linkAbsolute("", "p1", (170, H - mid - 4.5, 180, H - mid + 5.5))
             text(c, 186, mid - 3.7, r["NAME"], "AR", 8.5)
-            text(c, 464, mid - 3.7, r["UNIT"], "AR", 8.5)
+            text(c, 464, mid - 3.7, t["units"].get(r["UNIT"], r["UNIT"]), "AR", 8.5)
             text(c, 562, mid - 4.1, price_text(r["PRICE"]), "AB", 9, align="r")
             c.setStrokeColorRGB(0.8, 0.8, 0.8)
             c.setLineWidth(0.5)
@@ -209,7 +233,9 @@ def main():
     a.add_argument("--date", help="YYYY-MM-DD")
     a.add_argument("--csv")
     a.add_argument("--section", help="π.χ. «02. ΜΑΧΑΙΡΙΑ DICK ΓΕΡΜΑΝΙΑΣ» (αλλιώς το σχόλιο του παραστατικού)")
-    a.add_argument("--title", default="ΤΙΜΟΚΑΤΑΛΟΓΟΣ ΧΟΝΔΡΙΚΗΣ 2027")
+    a.add_argument("--title", help="αλλιώς ο τίτλος της γλώσσας")
+    a.add_argument("--lang", choices=sorted(LABELS), default="gr")
+    a.add_argument("--name-field", default="NAME", help="πεδίο MTRL για την περιγραφή (π.χ. το αγγλικό)")
     a.add_argument("--photos")
     a.add_argument("--dots", default="", help="κωδικοί με κόκκινη βούλα, χωρισμένοι με κόμμα")
     a.add_argument("--out", required=True)
@@ -217,14 +243,18 @@ def main():
     if o.csv:
         comments, rows = None, load_csv(o.csv)
     else:
-        comments, rows = load_sql(o.fincode, o.date)
+        comments, rows = load_sql(o.fincode, o.date, o.name_field)
         with open(Path(o.out).with_suffix(".csv"), "w", encoding="utf-8-sig", newline="") as f:
             w = csv.DictWriter(f, ["CODE", "NAME", "UNIT", "PRICE"], delimiter=";")
             w.writeheader()
             w.writerows(rows)
     section = o.section or (comments or "").replace(".", ". ", 1)
     dots = {d.strip() for d in o.dots.split(",") if d.strip()}
-    pages, missing = build(rows, o.out, o.title, section, o.photos, dots)
+    empty = [r["CODE"] for r in rows if not (r["NAME"] or "").strip()]
+    if empty:
+        sys.exit(f"ΣΤΟΠ: χωρίς περιγραφή στο {o.name_field}: {empty}")
+    title = o.title or LABELS[o.lang]["title"]
+    pages, missing = build(rows, o.out, title, section, o.photos, dots, o.lang)
     codes = [r["CODE"] for r in rows]
     print(f"ΕΙΔΗ={len(rows)} ΣΕΛΙΔΕΣ={pages} ΔΙΠΛΟΙ={len(codes) - len(set(codes))} ΧΩΡΙΣ_ΦΩΤΟ={missing}")
 
