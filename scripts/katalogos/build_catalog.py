@@ -52,10 +52,11 @@ LABELS = {
 
 SQL_DOC = """SELECT f.FINDOC, f.COMMENTS FROM FINDOC f
 WHERE f.COMPANY=3000 AND f.SOSOURCE=1351 AND f.FINCODE=? AND CAST(f.TRNDATE AS date)=? AND f.ISCANCEL=0"""
-SQL_LINES = """SELECT m.CODE, m.{name}, u.NAME AS UNIT, l.PRICE, l.COMMENTS, l.COMMENTS1
+SQL_LINES = """SELECT m.CODE, {name}, u.NAME AS UNIT, l.PRICE, l.COMMENTS, l.COMMENTS1
 FROM MTRLINES l
 JOIN MTRL m ON m.MTRL=l.MTRL AND m.COMPANY=3000
 LEFT JOIN MTRUNIT u ON u.MTRUNIT=m.MTRUNIT1 AND u.COMPANY=m.COMPANY
+LEFT JOIN MTREXTRA x ON x.MTRL=m.MTRL AND x.COMPANY=m.COMPANY
 WHERE l.FINDOC=? ORDER BY l.LINENUM"""
 
 
@@ -84,8 +85,10 @@ def unit_label(name):
 
 
 def load_sql(fincode, date, name_field="NAME"):
-    if not name_field.replace("_", "").isalnum():
+    table, _, col = name_field.upper().rpartition(".")
+    if table not in ("", "MTRL", "MTREXTRA") or not col.replace("_", "").isalnum():
         sys.exit(f"Λάθος --name-field: {name_field}")
+    name_expr = ("x." if table == "MTREXTRA" else "m.") + col
     import pyodbc
 
     cn = pyodbc.connect(
@@ -96,7 +99,7 @@ def load_sql(fincode, date, name_field="NAME"):
     if len(docs) != 1:
         sys.exit(f"ΣΤΟΠ: βρέθηκαν {len(docs)} παραστατικά {fincode} με ημερομηνία {date}")
     findoc, comments = docs[0]
-    lines = cn.execute(SQL_LINES.format(name=name_field), findoc).fetchall()
+    lines = cn.execute(SQL_LINES.format(name=name_expr), findoc).fetchall()
     rows = [{"CODE": c, "NAME": n, "UNIT": unit_label(u), "PRICE": float(p or 0)} for c, n, u, p, *_ in lines]
     return comments, sort_by_remarks(rows, [ln[4:] for ln in lines])
 
@@ -235,7 +238,7 @@ def main():
     a.add_argument("--section", help="π.χ. «02. ΜΑΧΑΙΡΙΑ DICK ΓΕΡΜΑΝΙΑΣ» (αλλιώς το σχόλιο του παραστατικού)")
     a.add_argument("--title", help="αλλιώς ο τίτλος της γλώσσας")
     a.add_argument("--lang", choices=sorted(LABELS), default="gr")
-    a.add_argument("--name-field", default="NAME", help="πεδίο MTRL για την περιγραφή (π.χ. το αγγλικό)")
+    a.add_argument("--name-field", default="NAME", help="πεδίο περιγραφής: NAME ή MTREXTRA.<στήλη> (Ελεύθερα πεδία, π.χ. Αγγλ.Περιγραφή)")
     a.add_argument("--photos")
     a.add_argument("--dots", default="", help="κωδικοί με κόκκινη βούλα, χωρισμένοι με κόμμα")
     a.add_argument("--out", required=True)
