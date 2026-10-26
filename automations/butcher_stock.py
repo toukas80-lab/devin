@@ -1,5 +1,5 @@
 """Εβδομαδιαία ενημέρωση butcherequip.gr από απόθεμα 3000 (μέσω /admin/stock.csv της πύλης B2B).
-publish + απόθεμα<=0 -> draft (σημάδι meta _auto_stock_draft). draft με σημάδι + απόθεμα>0 -> publish.
+publish + απόθεμα<=0 -> draft (σημάδι meta _auto_stock_draft). draft με σημάδι ή pending + απόθεμα>0 -> publish.
 Μόνο είδη των ομάδων GROUPS (MTRGROUP), εκτός κατασκευαστών EXCLUDE_MANUF και κωδικών EXCLUDE_CODES. Χειροκίνητα drafts (χωρίς σημάδι) δεν αγγίζονται. Χρήση: python3 butcher_stock.py [--apply]"""
 import csv, io, json, os, re, sys, time, datetime as dt
 import requests
@@ -42,7 +42,7 @@ def wp_session():
 
 def all_products(s, api):
     out = []
-    for status in ('publish', 'draft'):
+    for status in ('publish', 'draft', 'pending'):
         page = 1
         while True:
             r = s.get(f'{api}/products', params={'status': status, 'per_page': 100, 'page': page}, timeout=60)
@@ -74,7 +74,7 @@ def main():
         q = stock[sku]
         if p['status'] == 'publish' and q <= 0:
             to_draft.append((p, q))
-        elif p['status'] == 'draft' and flag(p) and q > 0:
+        elif ((p['status'] == 'draft' and flag(p)) or p['status'] == 'pending') and q > 0:
             to_pub.append((p, q))
     ts = time.strftime('%Y%m%d_%H%M')
     path = os.path.join(OUT, f'butcher_stock_{ts}.csv')
