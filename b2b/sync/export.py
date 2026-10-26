@@ -67,7 +67,8 @@ SELECT m.MTRL AS id, m.CODE AS code, m.NAME AS name, m.MTRGROUP AS group_id,
                       AND s.CODE=m.CODE
                     ORDER BY d.FISCPRD DESC),0) AS float) AS stock,
        ISNULL(mf.NAME,'') AS manufacturer,
-       ISNULL(m.WEBPAGE,'') AS webpage
+       ISNULL(m.WEBPAGE,'') AS webpage,
+       m.VAT AS vat_code, m.MTRUNIT1 AS mtrunit
 FROM dbo.MTRL m
 LEFT JOIN dbo.MTRUNIT u ON u.MTRUNIT=m.MTRUNIT1 AND u.COMPANY=m.COMPANY
 LEFT JOIN dbo.VAT v ON v.VAT=m.VAT
@@ -92,7 +93,8 @@ ORDER BY g.NAME
 
 Q_CUSTOMERS = f"""
 SELECT t.TRDR AS id, t.CODE AS code, t.NAME AS name,
-       ISNULL(t.EMAIL,'') AS email, ISNULL(t.AFM,'') AS afm
+       ISNULL(t.EMAIL,'') AS email, ISNULL(t.AFM,'') AS afm,
+       t.PAYMENT AS payment, t.DISCOUNT AS disc
 FROM dbo.TRDR t
 WHERE t.COMPANY={COMPANY} AND t.SODTYPE=13 AND t.ISACTIVE=1
 ORDER BY t.CODE
@@ -166,6 +168,35 @@ FROM dbo.TRDBALSHEET b
 WHERE b.COMPANY={COMPANY}
 GROUP BY b.TRDR
 """
+
+# B2B-49: ΠΑΡ σειράς 7021 με COMMENTS 'B2B W-######' → κατάσταση παραγγελίας πύλης.
+Q_ORDER_STATUS = f"""
+SELECT f.COMMENTS AS comments, f.FINCODE AS fincode, f.FULLYTRANSF AS fullytransf
+FROM dbo.FINDOC f
+WHERE f.COMPANY={COMPANY} AND f.SOSOURCE=1351 AND f.SERIES=7021 AND f.ISCANCEL=0
+  AND f.TRNDATE >= '2026-10-14' AND f.COMMENTS LIKE 'B2B W-%'
+"""
+
+WNO_RE = re.compile(r"W-\d{6}")
+
+
+def order_status_rows(raw):
+    """FINDOC γραμμές -> [{order_no, fincode, done}].
+
+    done=1 αν έστω ένα FINDOC του order_no έχει FULLYTRANSF=1.
+    """
+    ostat = {}
+    for r in raw:
+        m = WNO_RE.search(str(r.get("comments") or ""))
+        if not m:
+            continue
+        e = ostat.setdefault(m.group(0),
+                             {"order_no": m.group(0), "fincode": "", "done": 0})
+        if r.get("fincode"):
+            e["fincode"] = r["fincode"]
+        if r.get("fullytransf"):
+            e["done"] = 1
+    return list(ostat.values())
 
 
 DRIVE_ID_RE = re.compile(r"(?:/d/|[?&]id=)([A-Za-z0-9_-]{20,})")
@@ -288,6 +319,9 @@ def main():
             r[k] = round(r[k], 2)
         r["einv_url"] = einv_url(r["einv_url"])
     out.append(dump("invoices", invoices))
+
+    out.append(dump("order_status",
+                    order_status_rows(rows(cur, Q_ORDER_STATUS))))
 
     sample = random.Random().sample(sorted(cust_ids), min(3, len(cust_ids)))
     bs = {r["id"]: r["bal"] for r in rows(cur, Q_BALSHEET)}
