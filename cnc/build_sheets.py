@@ -147,6 +147,7 @@ base=[p for p in parts(os.path.join(A.cdr_dir,'02536.cdr')) if p['kind']=='base'
 # ---- custom machines «100-25x25x185» = pieces (n×n) - piece a×b - skewer length ----
 # box length = skewer+55 (≤155) / +60 (>155); panels from 00657 (box ≤210) or 00034 (box >210);
 # plates from 00657 (Ø11, top with the 7 mm edge triangles); base from 02536; margins kept in mm, grid Π = n·piece.
+WEDGE_DOWN=1.5  # custom: wedges 1.5 mm lower than in the templates (towards the slit start)
 CUSTOM=re.compile(r'^(\d+)-([\d.]+)x([\d.]+)x([\d.]+)$')
 def cnorm(t): return re.sub(r'[χΧ×*]','x',t.strip().lower()).replace(',','.')
 def circle(cx,cy,r): return ([('A',(cx+r,cy),(cx,cy+r),(cx-r,cy)),('A',(cx-r,cy),(cx,cy-r),(cx+r,cy))],True)
@@ -170,7 +171,7 @@ def custom_parts(spec):
                 out.append(circle(cx,cy,r))
             elif b_[2]-b_[0]>W0-1: out.append(tf(c,lambda x,y:(pw(x,W0/2,P-P0),pw(y,L0/2,L-L0))))
         for k in range(1,n):
-            dx=15+k*d-x0; out+=[tf(c,lambda x,y,dx=dx:(x+dx,y)) for c in [sl[0]]+wd]
+            dx=15+k*d-x0; out+=[tf(sl[0],lambda x,y,dx=dx:(x+dx,y))]+[tf(c,lambda x,y,dx=dx:(x+dx,y-WEDGE_DOWN)) for c in wd]
         return dict(kind='panel',w=P+15,h=L,cts=out,texts=[])
     pl={q['kind']:q for q in parts(M['00657'])}
     def plate(top):
