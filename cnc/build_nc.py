@@ -10,11 +10,20 @@ A=ap.parse_args()
 TR=1.25; SAFE=5.0; Z1=1.0; ZIG=8.0
 def levels(z0,depth,n): return [z0+(depth-z0)*(k+1)/n for k in range(n)] if z0<0 else [depth*(k+1)/n for k in range(n)]
 # ---------- read DXF (LAYER_1 only: XARAXI text not cut for now) ----------
-doc=ezdxf.readfile(A.dxf); C=[]; CL=[]; OP=[]
+doc=ezdxf.readfile(A.dxf); C=[]; CL=[]; OP=[]; TAPS=[]
 def flat(e): return [(v.x,v.y) for v in epath.make_path(e).flattening(.01)]
 sh=[flat(e) for e in doc.modelspace() if e.dxf.layer=='SHEET' and e.dxftype()!='CIRCLE']  # his Corel DXFs: sheet centred on 0,0 -> move to bottom-left
 OX,OY=(min(p[0] for p in sh[0]),min(p[1] for p in sh[0])) if sh else (0,0)
+def circ_of(e,pts):
+    if e.dxftype()=='CIRCLE': return (e.dxf.center.x-OX,e.dxf.center.y-OY,e.dxf.radius)
+    if len(pts)>=13 and math.dist(pts[0],pts[-1])<.01:
+        g=Polygon(pts); c=g.centroid; rr=[math.dist(q,(c.x,c.y)) for q in pts]
+        if max(rr)-min(rr)<.02 and max(rr)<30: return (c.x,c.y,sum(rr)/len(rr))
 for e in doc.modelspace():
+    if e.dxf.layer=='LAYER_10':  # τάπες (Ø7.65 plugs): his 01.nc cuts them last, outside, helical 4x3.775 through, F1800, CW
+        c=circ_of(e,[(x-OX,y-OY) for x,y in flat(e)] if e.dxftype()!='CIRCLE' else [])
+        if c: TAPS.append(c)
+        continue
     if e.dxf.layer!='LAYER_1': continue
     if e.dxftype()=='CIRCLE': C.append((e.dxf.center.x-OX,e.dxf.center.y-OY,e.dxf.radius)); continue
     pts=[(x-OX,y-OY) for x,y in flat(e)]
@@ -82,14 +91,14 @@ def ring(poly,off,ccw):
     g=g.simplify(.02)
     g=orient(g,1 if ccw else -1); P=list(g.exterior.coords)
     k=min(range(len(P)-1),key=lambda i:(P[i][1],P[i][0])); P=P[k:-1]+P[:k+1]; return P
-def helix(cx,cy,rp,lv,f,z0=Z1,cw=True):
+def helix(cx,cy,rp,lv,f,z0=Z1,cw=True,outside=False):
     sx=cx+rp; rapid_to(sx,cy)
     if z0<0: emit('G00',z=Z1); enter(z0,f)
     else: enter(z0,f)
-    z=z0; sg=-1 if cw else 1; N=24
+    z=z0; sg=-1 if cw else 1; N=24; rv=rp/math.cos(math.pi/N) if outside else rp  # outside cut: chords must not cut into the part
     for d in lv:
         for k in range(1,N+1):
-            a=sg*2*math.pi*k/N; emit('G01',x=cx+rp*math.cos(a),y=cy+rp*math.sin(a),z=z+(d-z)*k/N)
+            a=sg*2*math.pi*k/N; r_=rp if k==N else rv; emit('G01',x=cx+r_*math.cos(a),y=cy+r_*math.sin(a),z=z+(d-z)*k/N)
         z=d
     g='G02' if cw else 'G03'
     emit(g,x=cx-rp,y=cy,extra='I%+.3fJ%+.3f'%(-rp,0)); emit(g,x=sx,y=cy,extra='I%+.3fJ%+.3f'%(rp,0))
@@ -136,6 +145,7 @@ for p in nn(slots,c0): helix_ring(ring(p,-TR,False),levels(0,-15.1,11),6000.0)
 for p in nn(pockets,c0): pocket(p,levels(0,-7.0,5),6000.0)
 for c in nn(pkc,lambda c:c[:2]): helix(c[0],c[1],c[2]-TR,[-9.7,-12.4,-15.1],1800.0,z0=-6.0)
 for o in nn(outers,c0): ring_cut(ring(o,TR,True),levels(0,-14.1,10),6000.0)
+for c in nn(TAPS,lambda c:c[:2]): helix(c[0],c[1],c[2]+TR,levels(0,-15.1,4),1800.0,outside=True)
 hz=f3(A.home_z)
 out=['N0G00 G21 G17 G90','N10G00 G40 G49 G80','N20G71','N30T1M6','N40G43Z%sH1M8'%hz,'S15000M03','X0.000Y0.000']
 L[1]=L[1]+'Z5.000' if L[1].startswith('G00X') else L[1]
@@ -144,4 +154,4 @@ out+=['N%d%s'%(70+10*i,s) for i,s in enumerate(body)]
 fn=A.out or os.path.splitext(A.dxf)[0]+'.nc'
 open(fn,'w',newline='\r\n').write('\n'.join(out)+'\n')
 print('NC',fn,'lines',len(out),'| slits',len(slits),'wedges',len(wedges),'cb Ø7+Ø3',len(cb),'holes',len(holes),
-      'slots',len(slots),'pockets',len(pockets),'pocket-circles',len(pkc),'outlines',len(outers),'| home Z',hz)
+      'slots',len(slots),'pockets',len(pockets),'pocket-circles',len(pkc),'outlines',len(outers),'taps',len(TAPS),'| home Z',hz)
