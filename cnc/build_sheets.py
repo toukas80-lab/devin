@@ -13,7 +13,7 @@ ap=argparse.ArgumentParser(description=__doc__)
 ap.add_argument('--cdr-dir',required=True); ap.add_argument('--out-dir',required=True)
 ap.add_argument('--order',help='ΚΩΔΙΚΟΣ:ΤΕΜ[:κομμάτια], με κόμμα. Custom: ΤΕΜΑΧΙΑ-ΑxΒxΜΗΚΟΣ αντί για κωδικό, π.χ. 100-25x25x185:1. Κομμάτια: κιβώτιο (4 πλαϊνά), άνω, κάτω, βάση, με + (κενό = ολόκληρη μηχανή). 4ο πεδίο ναι/όχι = εξωλκέας για τη βάση αυτής της μηχανής (αλλιώς --exolkeas). Π.χ. "00034:12:κιβώτιο,00030:3,00033:2:άνω+κάτω,00019:1::όχι"')
 ap.add_argument('--exolkeas',default='όχι',help='βάσεις για εξωλκέα: ναι (με τους κύκλους Ø90/Ø66 στη μέση) / όχι (χωρίς, προεπιλογή).')
-ap.add_argument('--fill',help='ΚΩΔΙΚΟΣ:ΠΑΧΟΣ, με κόμμα: γεμίζει τον κενό χώρο του τελευταίου φύλλου αυτού του πάχους με όσα κομμάτια του CDR χωράνε (π.χ. "03923:20")')
+ap.add_argument('--fill',help='ΚΩΔΙΚΟΣ:ΠΑΧΟΣ, με κόμμα: γεμίζει ΟΛΑ τα κενά σε κάθε φύλλο αυτού του πάχους (με 11 mm περιμετρικά) με όσα κομμάτια του CDR χωράνε, και στραμμένα 90° (π.χ. "03839:20,03923:15")')
 ap.add_argument('--diag',help='κωδικοί με κόμμα: τυπώνει τα κομμάτια του CDR (διαστάσεις, κύκλοι ανά Ø, μικρά σχήματα) και σταματά')
 ap.add_argument('--ena-dxf',action='store_true',help='όλα τα κομμάτια σε ένα DXF (για έλεγχο)')
 ap.add_argument('--version',default='v1'); ap.add_argument('--cdr2xhtml',default=shutil.which('cdr2xhtml') or 'cdr2xhtml')
@@ -301,13 +301,35 @@ for it in (A.fill.split(',') if A.fill else []):
     if not fp: sys.exit('--fill: το %s δεν έχει κλειστά κομμάτια'%fs[0])
     FILL[th]=FILL.get(th,[])+fp
 if A.ena_dxf: sheets={'ola':[p for v in sheets.values() for p in v]}; GAP['ola']=max(GAP.values())
-for th,fp in FILL.items():  # add fill copies while the sheet count of that thickness stays the same
-    key='ola' if A.ena_dxf else th; base_items=sheets.get(key,[]); n0=len(pack(base_items,GAP[key])) if base_items else 1; k=0
-    while k<2000 and len(pack(base_items+fp*(k+1),GAP[key]))==n0: k+=1
-    print('fill',th,'mm:',k,'×',len(fp),'κομμάτια'); sheets[key]=base_items+fp*k
-for th,items in sheets.items():
-  if not items: continue
-  packs=pack(items,GAP[th])
+def rot(p):
+    f=lambda x,y,h=p['h']:(h-y,x)
+    return dict(p,w=p['h'],h=p['w'],cts=[tf(c,f) for c in p['cts']],texts=[tf(c,f) for c in p['texts']])
+def fill_sheet(pl,fps,gap):  # maxrects: drop fill parts (both orientations) into every free gap, keeping S mm at the edges
+    mind=min(min(p['w'],p['h']) for p in fps)+gap; free=[(S,S,SW-S+gap,SH-S+gap)]; n=0
+    def occupy(x0,y0,x1,y1):
+        nf=[]
+        for f in free:
+            a0,b0,a1,b1=f
+            if x0>=a1 or x1<=a0 or y0>=b1 or y1<=b0: nf.append(f); continue
+            if x0>a0: nf.append((a0,b0,x0,b1))
+            if x1<a1: nf.append((x1,b0,a1,b1))
+            if y0>b0: nf.append((a0,b0,a1,y0))
+            if y1<b1: nf.append((a0,y1,a1,b1))
+        nf=list(dict.fromkeys(f for f in nf if f[2]-f[0]>=mind-1e-6 and f[3]-f[1]>=mind-1e-6))
+        free[:]=[f for f in nf if not any(g is not f and g[0]<=f[0] and g[1]<=f[1] and g[2]>=f[2] and g[3]>=f[3] for g in nf)]
+    for p,x,y in pl: occupy(x,y,x+p['w']+gap,y+p['h']+gap)
+    for q in sorted(fps,key=lambda p:-p['w']*p['h']):
+        vs=[q]+([rot(q)] if abs(q['w']-q['h'])>.01 else [])
+        while True:
+            c=min(((f[1],f[0],i) for f in free for i,v in enumerate(vs) if f[2]-f[0]>=v['w']+gap-1e-6 and f[3]-f[1]>=v['h']+gap-1e-6),default=None)
+            if not c: break
+            y,x,i=c; v=vs[i]; pl.append((v,x,y)); occupy(x,y,x+v['w']+gap,y+v['h']+gap); n+=1
+    return n
+packs_by={th:pack(items,GAP[th]) for th,items in sheets.items() if items}
+for th,fp in FILL.items():
+    key='ola' if A.ena_dxf else th; pk=packs_by.setdefault(key,[[]])
+    print('fill',th,'mm:',sum(fill_sheet(pl,fp,GAP[key]) for pl in pk),'κομμάτια σε',len(pk),'φύλλα')
+for th,packs in packs_by.items():
   for si,pl in enumerate(packs,1):
       doc=ezdxf.new('R2000'); doc.units=ezdxf.units.MM; m=doc.modelspace()
       for L in ('SHEET','LAYER_1','XARAXI'): doc.layers.add(L)
