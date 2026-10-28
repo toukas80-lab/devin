@@ -156,6 +156,8 @@ def fix200(p):  # 00033 bottom plate drawn 200.0 -> 199.7 (corrected by user)
     if abs(p['w']-200)<.05:
         s=199.7/200; p=dict(p,w=199.7,h=199.7,cts=[tf(c,lambda x,y:(x*s,y*s)) for c in p['cts']])
     return p
+import datetime
+if not A.diag: A.out_dir=os.path.join(A.out_dir,datetime.date.today().isoformat())  # every run goes to a dated subfolder
 os.makedirs(A.out_dir,exist_ok=True)
 M={}
 for f in sorted(glob.glob(os.path.join(A.cdr_dir,'**','*.cdr'),recursive=True)):  # also in sub-folders
