@@ -11,8 +11,9 @@ FONT=FontProperties(family=['Arial','Liberation Sans','DejaVu Sans'])
 K=2.83465
 ap=argparse.ArgumentParser(description=__doc__)
 ap.add_argument('--cdr-dir',required=True); ap.add_argument('--out-dir',required=True)
-ap.add_argument('--order',help='ΚΩΔΙΚΟΣ:ΤΕΜ[:κομμάτια], με κόμμα. Custom: ΤΕΜΑΧΙΑ-ΑxΒxΜΗΚΟΣ αντί για κωδικό, π.χ. 100-25x25x185:1. Κομμάτια: κιβώτιο (4 πλαϊνά), άνω, κάτω, βάση, με + (χωρίς = ολόκληρη μηχανή). Π.χ. "00034:12:κιβώτιο,00030:3,00033:2:άνω+κάτω"')
+ap.add_argument('--order',help='ΚΩΔΙΚΟΣ:ΤΕΜ[:κομμάτια], με κόμμα. Custom: ΤΕΜΑΧΙΑ-ΑxΒxΜΗΚΟΣ αντί για κωδικό, π.χ. 100-25x25x185:1. Κομμάτια: κιβώτιο (4 πλαϊνά), άνω, κάτω, βάση, με + (κενό = ολόκληρη μηχανή). 4ο πεδίο ναι/όχι = εξωλκέας για τη βάση αυτής της μηχανής (αλλιώς --exolkeas). Π.χ. "00034:12:κιβώτιο,00030:3,00033:2:άνω+κάτω,00019:1::όχι"')
 ap.add_argument('--exolkeas',default='όχι',help='βάσεις για εξωλκέα: ναι (με τους κύκλους Ø90/Ø66 στη μέση) / όχι (χωρίς, προεπιλογή).')
+ap.add_argument('--fill',help='ΚΩΔΙΚΟΣ:ΠΑΧΟΣ, με κόμμα: γεμίζει τον κενό χώρο του τελευταίου φύλλου αυτού του πάχους με όσα κομμάτια του CDR χωράνε (π.χ. "03923:20")')
 ap.add_argument('--diag',help='κωδικοί με κόμμα: τυπώνει τα κομμάτια του CDR (διαστάσεις, κύκλοι ανά Ø, μικρά σχήματα) και σταματά')
 ap.add_argument('--ena-dxf',action='store_true',help='όλα τα κομμάτια σε ένα DXF (για έλεγχο)')
 ap.add_argument('--version',default='v1'); ap.add_argument('--cdr2xhtml',default=shutil.which('cdr2xhtml') or 'cdr2xhtml')
@@ -118,9 +119,9 @@ def load(path):
         b=bb([p for c in tc for p in sample(c)])
         texts+=[tf(c,lambda px,py:(px-b[0]+bx,py-b[1]+by)) for c in tc]
   return cts,texts
-def parts(fn):
+def parts(fn,lo=50,hi=320):
     cts,texts=load(fn); out=[]; B=[(c,bb(sample(c))) for c in cts]; TB=[(c,bb(sample(c))) for c in texts]
-    big=[(c,b) for c,b in B if 50<b[2]-b[0]<320 and 50<b[3]-b[1]<320]
+    big=[(c,b) for c,b in B if lo<b[2]-b[0]<hi and lo<b[3]-b[1]<hi]
     big=[(c,b) for c,b in big if not any(o is not c and ob[0]<=b[0]+.01 and ob[1]<=b[1]+.01 and ob[2]>=b[2]-.01 and ob[3]>=b[3]-.01 and (ob[2]-ob[0])>(b[2]-b[0])+.01 for o,ob in big)]
     inside=lambda c,b,t:c[0]>=b[0]-t and c[1]>=b[1]-t and c[2]<=b[2]+t and c[3]<=b[3]+t
     for _,b in big:
@@ -175,11 +176,11 @@ def cnorm(t): return re.sub(r'[χΧ×*]','x',t.strip().lower()).replace(',','.')
 def circle(cx,cy,r): return ([('A',(cx+r,cy),(cx,cy+r),(cx-r,cy)),('A',(cx-r,cy),(cx,cy-r),(cx+r,cy))],True)
 def cbb(c): return bb(sample(c))
 def pw(v,mid,d): return v+d if v>mid else v   # stretch: everything past the middle moves by d
-def base_for(Px,Py):  # every base: 02536 (Π=200) stretched to grid Π, margins kept in mm, circles Ø90/Ø66 unchanged, centred
+def base_for(Px,Py,exo=None):  # every base: 02536 (Π=200) stretched to grid Π, margins kept in mm, circles Ø90/Ø66 unchanged, centred
     dx,dy=Px-200,Py-200; m0=base['w']/2; out=[]
     for c in base['cts']:
         cr=as_circle(c)
-        if cr and not EXOLK: continue  # no extractor: no centre circles
+        if cr and not (EXOLK if exo is None else exo): continue  # no extractor: no centre circles
         out.append(circle(cr[0][0]+dx/2,cr[0][1]+dy/2,cr[1]) if cr else tf(c,lambda x,y:(pw(x,m0,dx),pw(y,m0,dy))))
     return dict(kind='base',w=base['w']+dx,h=base['h']+dy,cts=out,texts=[])
 def custom_parts(spec):
@@ -233,18 +234,23 @@ norm=lambda w:''.join(c for c in unicodedata.normalize('NFD',w.strip().lower()) 
 order=[]
 for it in (A.order.split(',') if A.order else [c+':1' for c in M]):
     f=it.strip().split(':'); code=cnorm(f[0]); code=code if CUSTOM.match(code) else code.zfill(5); q=int(f[1]) if len(f)>1 else 1
-    want=[ALIAS.get(norm(w),norm(w)) for w in f[2].split('+')] if len(f)>2 else list(PARTS)
+    want=[ALIAS.get(norm(w),norm(w)) for w in f[2].split('+')] if len(f)>2 and f[2].strip() else list(PARTS)
+    exo=None
+    if len(f)>3:
+        v=norm(f[3])
+        if v not in ('ναι','οχι','nai','oxi','yes','no'): sys.exit('εξωλκέας στο %r: γράψε ναι ή όχι'%it)
+        exo=v in ('ναι','nai','yes')
     if code not in M and not CUSTOM.match(code): sys.exit('no CDR template for %s (have: %s)'%(code,', '.join(M)))
     if set(want)-set(PARTS): sys.exit('άγνωστο κομμάτι στο %r, γράψε: κιβώτιο / άνω / κάτω / βάση'%it)
-    order.append((code,q,want))
+    order.append((code,q,want,exo))
 EXOLK=None
-if any('vasi' in w for _,_,w in order):
+if any('vasi' in w for _,_,w,_ in order):
     v=norm(A.exolkeas)
     if v not in ('ναι','οχι','nai','oxi','yes','no'): sys.exit('--exolkeas: γράψε ναι (με τρύπα στη μέση) ή όχι (χωρίς).')
     EXOLK=v in ('ναι','nai','yes')
-print('order:',[(c,q,'+'.join(w)) for c,q,w in order])
+print('order:',[(c,q,'+'.join(w))+(() if e is None else ('εξωλκέας' if e else 'χωρίς εξωλκέα',)) for c,q,w,e in order])
 sheets={15:[],20:[],25:[]}; cache={}; skipped=[]
-for code,q,want in order:
+for code,q,want,exo in order:
     if code not in cache and CUSTOM.match(code): cache[code]=custom_parts(code)
     if code not in cache:
         ps=parts(M[code]); pan=[p for p in ps if p['kind'] in ('panel','base')]; one=lambda k:[p for p in ps if p['kind']==k]
@@ -253,9 +259,12 @@ for code,q,want in order:
             print('ΠΡΟΣΟΧΗ: %s παραλείπεται, το CDR δεν έχει 1 άνω + 1 κάτω + 1-2 πλαϊνά: %s'%(code,[p['kind'] for p in ps])); skipped.append(code); continue
         bt=fix200(one('bottom')[0])
         cache[code]=dict(kivotio=[dict(rot_ccw(p),code=code) for p in (pan*4 if len(pan)==1 else pan*2)],
-                         kato=[dict(bt,code=code)],vasi=[dict(base_for(bt['w']+.3,bt['h']+.3),code=code+' base')],
+                         kato=[dict(bt,code=code)],vasi=[dict(base_for(bt['w']+.3,bt['h']+.3),code=code+' base')],Px=bt['w']+.3,Py=bt['h']+.3,
                          ano=[dict(one('top')[0],code=code)])
-    for k in want: sheets[PARTS[k]]+=cache[code][k]*q
+    for k in want:
+        ps_=cache[code][k]
+        if k=='vasi' and exo is not None and 'Px' in cache[code]: ps_=[dict(base_for(cache[code]['Px'],cache[code]['Py'],exo),code=code+' base')]
+        sheets[PARTS[k]]+=ps_*q
 GAP={15:2.6,20:3.275,25:3.275}; SW,SH,S=1015,2020,11
 def pack(items,gap):  # shelf packing; opens a new sheet when full
     items=sorted(items,key=lambda p:(-p['h'],p['code'])); out=[[]]; x=y=S; rowh=0
@@ -265,9 +274,23 @@ def pack(items,gap):  # shelf packing; opens a new sheet when full
         if y+p['h']>SH-S+1e-6: out.append([]); x=y=S; rowh=0
         out[-1].append((p,x,y)); x+=p['w']+gap; rowh=max(rowh,p['h'])
     return out
-tag='_'.join('%sx%d%s'%(c,q,'' if len(w)==len(PARTS) else '-'+'+'.join(w)) for c,q,w in order) if A.order else '%dmixanes'%(len(M)-len(skipped))
-if EXOLK is not None: tag+='_exolkeas' if EXOLK else '_xoris-exolkea'
+tag='_'.join('%sx%d%s%s'%(c,q,'' if len(w)==len(PARTS) else '-'+'+'.join(w),'' if e is None else ('-exo' if e else '-xoris')) for c,q,w,e in order) if A.order else '%dmixanes'%(len(M)-len(skipped))
+if EXOLK is not None and all(e is None for *_,e in order): tag+='_exolkeas' if EXOLK else '_xoris-exolkea'
+if len(tag)>80: tag='%dkodikoi_%s'%(len(order),'-'.join(c for c,*_ in order))[:80]
+FILL={}
+for it in (A.fill.split(',') if A.fill else []):
+    c,th=it.strip().split(':'); c=c.zfill(5); th=int(th)
+    fs=[f for f in glob.glob(os.path.join(A.cdr_dir,'**','*.cdr'),recursive=True) if os.path.basename(f).startswith(c)]
+    if not fs: sys.exit('--fill: δεν βρέθηκε CDR που να αρχίζει με %s'%c)
+    fp=[dict(p,code=c) for p in parts(fs[0],5,1000)]
+    print('fill',c,os.path.basename(fs[0]),th,'mm, κομμάτια:',', '.join('%.1fx%.1f'%(p['w'],p['h']) for p in fp))
+    if not fp: sys.exit('--fill: το %s δεν έχει κλειστά κομμάτια'%fs[0])
+    FILL[th]=FILL.get(th,[])+fp
 if A.ena_dxf: sheets={'ola':[p for v in sheets.values() for p in v]}; GAP['ola']=max(GAP.values())
+for th,fp in FILL.items():  # add fill copies while the sheet count of that thickness stays the same
+    key='ola' if A.ena_dxf else th; base_items=sheets.get(key,[]); n0=len(pack(base_items,GAP[key])) if base_items else 1; k=0
+    while k<2000 and len(pack(base_items+fp*(k+1),GAP[key]))==n0: k+=1
+    print('fill',th,'mm:',k,'×',len(fp),'κομμάτια'); sheets[key]=base_items+fp*k
 for th,items in sheets.items():
   if not items: continue
   packs=pack(items,GAP[th])
