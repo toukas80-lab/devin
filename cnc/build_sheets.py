@@ -12,7 +12,7 @@ K=2.83465
 ap=argparse.ArgumentParser(description=__doc__)
 ap.add_argument('--cdr-dir',required=True); ap.add_argument('--out-dir',required=True)
 ap.add_argument('--order',help='ΚΩΔΙΚΟΣ:ΤΕΜ[:κομμάτια], με κόμμα. Custom: ΤΕΜΑΧΙΑ-ΑxΒxΜΗΚΟΣ αντί για κωδικό, π.χ. 100-25x25x185:1. Κομμάτια: κιβώτιο (4 πλαϊνά), άνω, κάτω, βάση, με + (χωρίς = ολόκληρη μηχανή). Π.χ. "00034:12:κιβώτιο,00030:3,00033:2:άνω+κάτω"')
-ap.add_argument('--exolkeas',help='βάσεις για εξωλκέα: ναι (με τους κύκλους Ø90/Ø66 στη μέση) / όχι (χωρίς). Υποχρεωτικό όταν υπάρχουν βάσεις.')
+ap.add_argument('--exolkeas',default='όχι',help='βάσεις για εξωλκέα: ναι (με τους κύκλους Ø90/Ø66 στη μέση) / όχι (χωρίς, προεπιλογή).')
 ap.add_argument('--diag',help='κωδικοί με κόμμα: τυπώνει τα κομμάτια του CDR (διαστάσεις, κύκλοι ανά Ø, μικρά σχήματα) και σταματά')
 ap.add_argument('--ena-dxf',action='store_true',help='όλα τα κομμάτια σε ένα DXF (για έλεγχο)')
 ap.add_argument('--version',default='v1'); ap.add_argument('--cdr2xhtml',default=shutil.which('cdr2xhtml') or 'cdr2xhtml')
@@ -239,8 +239,8 @@ for it in (A.order.split(',') if A.order else [c+':1' for c in M]):
     order.append((code,q,want))
 EXOLK=None
 if any('vasi' in w for _,_,w in order):
-    v=norm(A.exolkeas or '')
-    if v not in ('ναι','οχι','nai','oxi','yes','no'): sys.exit('Υπάρχουν βάσεις: είναι για εξωλκέα; Γράψε --exolkeas ναι (με τρύπα στη μέση) ή --exolkeas όχι (χωρίς).')
+    v=norm(A.exolkeas)
+    if v not in ('ναι','οχι','nai','oxi','yes','no'): sys.exit('--exolkeas: γράψε ναι (με τρύπα στη μέση) ή όχι (χωρίς).')
     EXOLK=v in ('ναι','nai','yes')
 print('order:',[(c,q,'+'.join(w)) for c,q,w in order])
 sheets={15:[],20:[],25:[]}; cache={}; skipped=[]
