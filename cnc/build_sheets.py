@@ -124,7 +124,7 @@ def parts(fn):
     for _,b in big:
         ins=[(c,cb) for c,cb in B if inside(cb,b,.6)]; tx=[c for c,cb in TB if inside(cb,b,0)]
         w,h=b[2]-b[0],b[3]-b[1]
-        tri=sum(1 for _,cb in ins if 6.5<cb[2]-cb[0]<7.5 and cb[3]-cb[1]<7.5)
+        tri=sum(1 for c,cb in ins if 6.5<cb[2]-cb[0]<7.5 and cb[3]-cb[1]<7.5 and not as_circle(c))  # 7 mm edge triangles (not Ø7 holes)
         nc=sum(1 for c,_ in ins if as_circle(c))
         kind=('top' if tri>8 else 'bottom') if abs(w-h)<1 and nc>=16 else 'base' if abs(w-h)<1 else 'panel'
         mv=lambda x,y:(x-b[0],y-b[1])
@@ -218,13 +218,14 @@ for it in (A.order.split(',') if A.order else [c+':1' for c in M]):
     if set(want)-set(PARTS): sys.exit('άγνωστο κομμάτι στο %r, γράψε: κιβώτιο / άνω / κάτω / βάση'%it)
     order.append((code,q,want))
 print('order:',[(c,q,'+'.join(w)) for c,q,w in order])
-sheets={15:[],20:[],25:[]}; cache={}
+sheets={15:[],20:[],25:[]}; cache={}; skipped=[]
 for code,q,want in order:
     if code not in cache and CUSTOM.match(code): cache[code]=custom_parts(code)
     if code not in cache:
         ps=parts(M[code]); pan=[p for p in ps if p['kind']=='panel']; one=lambda k:[p for p in ps if p['kind']==k]
         print(code,'κομμάτια CDR:',', '.join('%s %.1fx%.1f'%(p['kind'],p['w'],p['h']) for p in ps))
-        assert len(one('top'))==1 and len(one('bottom'))==1 and len(pan) in (1,2),(code,[p['kind'] for p in ps])
+        if not (len(one('top'))==1 and len(one('bottom'))==1 and len(pan) in (1,2)):
+            print('ΠΡΟΣΟΧΗ: %s παραλείπεται, το CDR δεν έχει 1 άνω + 1 κάτω + 1-2 πλαϊνά: %s'%(code,[p['kind'] for p in ps])); skipped.append(code); continue
         bt=fix200(one('bottom')[0])
         cache[code]=dict(kivotio=[dict(rot_ccw(p),code=code) for p in (pan*4 if len(pan)==1 else pan*2)],
                          kato=[dict(bt,code=code)],vasi=[dict(base_for(bt['w']+.3,bt['h']+.3),code=code+' base')],
@@ -239,7 +240,7 @@ def pack(items,gap):  # shelf packing; opens a new sheet when full
         if y+p['h']>SH-S+1e-6: out.append([]); x=y=S; rowh=0
         out[-1].append((p,x,y)); x+=p['w']+gap; rowh=max(rowh,p['h'])
     return out
-tag='_'.join('%sx%d%s'%(c,q,'' if len(w)==len(PARTS) else '-'+'+'.join(w)) for c,q,w in order) if A.order else '%dmixanes'%len(M)
+tag='_'.join('%sx%d%s'%(c,q,'' if len(w)==len(PARTS) else '-'+'+'.join(w)) for c,q,w in order) if A.order else '%dmixanes'%(len(M)-len(skipped))
 if A.ena_dxf: sheets={'ola':[p for v in sheets.values() for p in v]}; GAP['ola']=max(GAP.values())
 for th,items in sheets.items():
   if not items: continue
