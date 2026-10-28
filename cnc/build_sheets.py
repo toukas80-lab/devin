@@ -1,7 +1,7 @@
 """CDR (CorelDRAW) machine templates -> nested DXF sheets 15/20/25 mm.
 Geometry is kept as true CIRCLE / LWPOLYLINE(+bulge arcs) / SPLINE entities, like CorelDRAW's own DXF export."""
 import re, os, sys, glob, math, shutil, subprocess, argparse, ezdxf
-from svgpathtools import parse_path, Line, Arc, QuadraticBezier, CubicBezier
+from svgpathtools import parse_path, Line, Arc, QuadraticBezier
 import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.textpath import TextPath
@@ -11,6 +11,7 @@ FONT=FontProperties(family=['Arial','Liberation Sans','DejaVu Sans'])
 K=2.83465
 ap=argparse.ArgumentParser(description=__doc__)
 ap.add_argument('--cdr-dir',required=True); ap.add_argument('--out-dir',required=True)
+ap.add_argument('--order',help='CODE:QTY[:parts] comma-separated, parts = kivotio+ano+kato+vasi (default all), e.g. "00034:3,00030:2:kivotio". Default: 1 whole machine of every template')
 ap.add_argument('--version',default='v1'); ap.add_argument('--cdr2xhtml',default=shutil.which('cdr2xhtml') or 'cdr2xhtml')
 A=ap.parse_args()
 
@@ -130,35 +131,50 @@ for f in sorted(glob.glob(os.path.join(A.cdr_dir,'*.cdr'))):
     if re.match(r'\d{5}',n) and 'ΑΝΩ' in n and 'ΚΑΤΩ' in n: M[n[:5]]=f
 print('machines:',{k:os.path.basename(v) for k,v in M.items()})
 base=[p for p in parts(os.path.join(A.cdr_dir,'02536.cdr')) if p['kind']=='base'][0]
-sheets={15:[],20:[],25:[]}
-for code,fn in M.items():
-    ps=parts(fn); pan=[p for p in ps if p['kind']=='panel']; one=lambda k:[p for p in ps if p['kind']==k]
-    assert len(one('top'))==1 and len(one('bottom'))==1 and len(pan) in (1,2),(code,[p['kind'] for p in ps])
-    pan=pan*4 if len(pan)==1 else pan*2
-    sheets[15]+=[dict(rot_ccw(p),code=code) for p in pan]
-    sheets[20]+=[dict(fix200(one('bottom')[0]),code=code),dict(base,code=code+' base')]
-    sheets[25]+=[dict(one('top')[0],code=code)]
+PARTS={'kivotio':15,'kato':20,'vasi':20,'ano':25}  # kivotio = the 4 side panels
+order=[]
+for it in (A.order.split(',') if A.order else [c+':1' for c in M]):
+    f=it.strip().split(':'); code=f[0].zfill(5); q=int(f[1]) if len(f)>1 else 1
+    want=f[2].lower().split('+') if len(f)>2 else list(PARTS)
+    if code not in M: sys.exit('no CDR template for %s (have: %s)'%(code,', '.join(M)))
+    if set(want)-set(PARTS): sys.exit('unknown part in %r, use: %s'%(it,'+'.join(PARTS)))
+    order.append((code,q,want))
+print('order:',[(c,q,'+'.join(w)) for c,q,w in order])
+sheets={15:[],20:[],25:[]}; cache={}
+for code,q,want in order:
+    if code not in cache:
+        ps=parts(M[code]); pan=[p for p in ps if p['kind']=='panel']; one=lambda k:[p for p in ps if p['kind']==k]
+        assert len(one('top'))==1 and len(one('bottom'))==1 and len(pan) in (1,2),(code,[p['kind'] for p in ps])
+        cache[code]=dict(kivotio=[dict(rot_ccw(p),code=code) for p in (pan*4 if len(pan)==1 else pan*2)],
+                         kato=[dict(fix200(one('bottom')[0]),code=code)],vasi=[dict(base,code=code+' base')],
+                         ano=[dict(one('top')[0],code=code)])
+    for k in want: sheets[PARTS[k]]+=cache[code][k]*q
 GAP={15:2.6,20:3.275,25:3.275}; SW,SH,S=1015,2020,11
-def pack(items,gap):
-    items=sorted(items,key=lambda p:(-p['h'],p['code'])); x=y=S; rowh=0; pl=[]
+def pack(items,gap):  # shelf packing; opens a new sheet when full
+    items=sorted(items,key=lambda p:(-p['h'],p['code'])); out=[[]]; x=y=S; rowh=0
     for p in items:
+        assert p['w']<=SW-2*S and p['h']<=SH-2*S,'part bigger than sheet'
         if x+p['w']>SW-S+1e-6: x=S; y+=rowh+gap; rowh=0
-        assert y+p['h']<=SH-S,'does not fit'
-        pl.append((p,x,y)); x+=p['w']+gap; rowh=max(rowh,p['h'])
-    return pl
+        if y+p['h']>SH-S+1e-6: out.append([]); x=y=S; rowh=0
+        out[-1].append((p,x,y)); x+=p['w']+gap; rowh=max(rowh,p['h'])
+    return out
+tag='_'.join('%sx%d%s'%(c,q,'' if len(w)==len(PARTS) else '-'+'+'.join(w)) for c,q,w in order) if A.order else '%dmixanes'%len(M)
 for th,items in sheets.items():
-    pl=pack(items,GAP[th]); doc=ezdxf.new('R2000'); doc.units=ezdxf.units.MM; m=doc.modelspace()
-    for L in ('SHEET','LAYER_1','XARAXI'): doc.layers.add(L)
-    m.add_lwpolyline([(0,0),(SW,0),(SW,SH),(0,SH)],close=True,dxfattribs={'layer':'SHEET'})
-    fig,ax=plt.subplots(figsize=(6,12)); ax.plot([0,SW,SW,0,0],[0,0,SH,SH,0],'k-',lw=.6)
-    used=0; maxy=0
-    for p,x,y in pl:
-        used+=p['w']*p['h']; maxy=max(maxy,y+p['h']); mv=lambda a,b:(x+a,y+b)
-        for lay,col,cs in (('LAYER_1','k',p['cts']),('XARAXI','b',p['texts'])):
-            for c in cs:
-                c=tf(c,mv); write(m,c,lay); xs,ys=zip(*sample(c)); ax.plot(xs,ys,col+'-',lw=.25)
-        ax.text(x+p['w']/2,y+3,p['code'],fontsize=4,color='r',ha='center')
-    fn=os.path.join(A.out_dir,f'fyllo_{th}mm_{len(M)}mixanes_{A.version}')
-    doc.saveas(fn+'.dxf'); ax.set_aspect('equal'); ax.set_title(f'{th}mm 1015x2020 - {len(pl)} kommatia',fontsize=8)
-    fig.savefig(fn+'.png',dpi=200,bbox_inches='tight'); plt.close(fig)
-    print(th,'mm:',len(pl),'parts, gap',GAP[th],'used height to',round(maxy,1),'fill %.0f%%'%(100*used/(SW*SH)))
+  if not items: continue
+  packs=pack(items,GAP[th])
+  for si,pl in enumerate(packs,1):
+      doc=ezdxf.new('R2000'); doc.units=ezdxf.units.MM; m=doc.modelspace()
+      for L in ('SHEET','LAYER_1','XARAXI'): doc.layers.add(L)
+      m.add_lwpolyline([(0,0),(SW,0),(SW,SH),(0,SH)],close=True,dxfattribs={'layer':'SHEET'})
+      fig,ax=plt.subplots(figsize=(6,12)); ax.plot([0,SW,SW,0,0],[0,0,SH,SH,0],'k-',lw=.6)
+      used=0; maxy=0
+      for p,x,y in pl:
+          used+=p['w']*p['h']; maxy=max(maxy,y+p['h']); mv=lambda a,b:(x+a,y+b)
+          for lay,col,cs in (('LAYER_1','k',p['cts']),('XARAXI','b',p['texts'])):
+              for c in cs:
+                  c=tf(c,mv); write(m,c,lay); xs,ys=zip(*sample(c)); ax.plot(xs,ys,col+'-',lw=.25)
+          ax.text(x+p['w']/2,y+3,p['code'],fontsize=4,color='r',ha='center')
+      fn=os.path.join(A.out_dir,f'fyllo_{th}mm_{tag}'+(f'_f{si}of{len(packs)}' if len(packs)>1 else '')+f'_{A.version}')
+      doc.saveas(fn+'.dxf'); ax.set_aspect('equal'); ax.set_title(f'{th}mm 1015x2020 - {len(pl)} kommatia',fontsize=8)
+      fig.savefig(fn+'.png',dpi=200,bbox_inches='tight'); plt.close(fig)
+      print(os.path.basename(fn)+'.dxf',th,'mm:',len(pl),'parts, gap',GAP[th],'used height to',round(maxy,1),'fill %.0f%%'%(100*used/(SW*SH)))
