@@ -125,7 +125,8 @@ def parts(fn):
         ins=[(c,cb) for c,cb in B if inside(cb,b,.6)]; tx=[c for c,cb in TB if inside(cb,b,0)]
         w,h=b[2]-b[0],b[3]-b[1]
         tri=sum(1 for _,cb in ins if 6.5<cb[2]-cb[0]<7.5 and cb[3]-cb[1]<7.5)
-        kind='panel' if abs(w-215)<.5 else ('top' if tri>8 else 'bottom') if abs(w-h)<1 and w<201 else 'base' if abs(w-239)<.5 else 'other'
+        nc=sum(1 for c,_ in ins if as_circle(c))
+        kind=('top' if tri>8 else 'bottom') if abs(w-h)<1 and nc>=16 else 'base' if abs(w-h)<1 else 'panel'
         mv=lambda x,y:(x-b[0],y-b[1])
         out.append(dict(kind=kind,w=w,h=h,cts=[tf(c,mv) for c,_ in ins],texts=[tf(c,mv) for c in tx]))
     return out
@@ -153,6 +154,12 @@ def cnorm(t): return re.sub(r'[χΧ×*]','x',t.strip().lower()).replace(',','.')
 def circle(cx,cy,r): return ([('A',(cx+r,cy),(cx,cy+r),(cx-r,cy)),('A',(cx-r,cy),(cx,cy-r),(cx+r,cy))],True)
 def cbb(c): return bb(sample(c))
 def pw(v,mid,d): return v+d if v>mid else v   # stretch: everything past the middle moves by d
+def base_for(Px,Py):  # every base: 02536 (Π=200) stretched to grid Π, margins kept in mm, circles Ø90/Ø66 unchanged, centred
+    dx,dy=Px-200,Py-200; m0=base['w']/2; out=[]
+    for c in base['cts']:
+        cr=as_circle(c)
+        out.append(circle(cr[0][0]+dx/2,cr[0][1]+dy/2,cr[1]) if cr else tf(c,lambda x,y:(pw(x,m0,dx),pw(y,m0,dy))))
+    return dict(kind='base',w=base['w']+dx,h=base['h']+dy,cts=out,texts=[])
 def custom_parts(spec):
     N,a,b,sk=CUSTOM.match(spec).groups(); N=int(N); a,b,sk=float(a),float(b),float(sk); n=math.isqrt(N)
     if n*n!=N: sys.exit('custom %s: τα τεμάχια πρέπει να είναι n×n (π.χ. 100=10×10)'%spec)
@@ -195,15 +202,9 @@ def custom_parts(spec):
                     if abs(cx-(e+20))>4: continue
                     out+=[tf(c,lambda x,y,k=k:(x+k*a-20,pw(y,100,Py-P0))) for k in range(1,n)]
         return dict(kind='top' if top else 'bottom',w=Px-0.3,h=Py-0.3,cts=out,texts=[])
-    def base_c():
-        dx,dy=n*a-P0,n*b-P0; m0=base['w']/2; out=[]
-        for c in base['cts']:
-            cr=as_circle(c)
-            out.append(circle(cr[0][0]+dx/2,cr[0][1]+dy/2,cr[1]) if cr else tf(c,lambda x,y:(pw(x,m0,dx),pw(y,m0,dy))))
-        return dict(kind='base',w=base['w']+dx,h=base['h']+dy,cts=out,texts=[])
     pa,pb=panel(a),panel(b)
     return dict(kivotio=[dict(rot_ccw(q),code=spec) for q in (pa,pa,pb,pb)],kato=[dict(plate(False),code=spec)],
-                vasi=[dict(base_c(),code=spec+' base')],ano=[dict(plate(True),code=spec)])
+                vasi=[dict(base_for(n*a,n*b),code=spec+' base')],ano=[dict(plate(True),code=spec)])
 PARTS={'kivotio':15,'kato':20,'vasi':20,'ano':25}  # kivotio = the 4 side panels
 ALIAS={'κιβωτιο':'kivotio','κατω':'kato','βαση':'vasi','ανω':'ano'}
 norm=lambda w:''.join(c for c in unicodedata.normalize('NFD',w.strip().lower()) if not unicodedata.combining(c))
@@ -220,9 +221,11 @@ for code,q,want in order:
     if code not in cache and CUSTOM.match(code): cache[code]=custom_parts(code)
     if code not in cache:
         ps=parts(M[code]); pan=[p for p in ps if p['kind']=='panel']; one=lambda k:[p for p in ps if p['kind']==k]
+        print(code,'κομμάτια CDR:',', '.join('%s %.1fx%.1f'%(p['kind'],p['w'],p['h']) for p in ps))
         assert len(one('top'))==1 and len(one('bottom'))==1 and len(pan) in (1,2),(code,[p['kind'] for p in ps])
+        bt=fix200(one('bottom')[0])
         cache[code]=dict(kivotio=[dict(rot_ccw(p),code=code) for p in (pan*4 if len(pan)==1 else pan*2)],
-                         kato=[dict(fix200(one('bottom')[0]),code=code)],vasi=[dict(base,code=code+' base')],
+                         kato=[dict(bt,code=code)],vasi=[dict(base_for(bt['w']+.3,bt['h']+.3),code=code+' base')],
                          ano=[dict(one('top')[0],code=code)])
     for k in want: sheets[PARTS[k]]+=cache[code][k]*q
 GAP={15:2.6,20:3.275,25:3.275}; SW,SH,S=1015,2020,11
