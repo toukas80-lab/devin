@@ -79,7 +79,7 @@ def write(m,ct,layer):
 def svg_of(path):
     r=subprocess.run([A.cdr2xhtml,path],capture_output=True); t=r.stdout.decode('utf-8','replace')
     if '<svg:svg' not in t: sys.exit('cdr2xhtml failed on %s: %s'%(path,r.stderr.decode('utf-8','replace')[:300]))
-    return t[t.index('<svg:svg'):t.rindex('</svg:svg>')+10].replace('svg:','')
+    return [g.replace('svg:','') for g in re.findall(r'<svg:svg.*?</svg:svg>',t,re.S)]  # one SVG per CDR page
 def text_contours(t,size):
     out=[]; cur=[]; start=last=None
     for v,code in TextPath((0,0),t,size=size,prop=FONT).iter_segments(curves=True,simplify=False):
@@ -97,8 +97,9 @@ def text_contours(t,size):
     if cur: out.append((cur,False))
     return out
 def load(path):
-    s=svg_of(path); H=float((re.search(r'viewBox="[\d.\s-]*?([\d.]+)"',s) or re.search(r'height="([\d.]+)',s))[1]); P=lambda z:(z.real/K,(H-z.imag)/K)  # libcdr 0.1.9: viewBox in pt, height in "in"; older: height in pt
-    cts=[]
+  cts=[]; texts=[]
+  for pg,s in enumerate(svg_of(path)):  # pages placed 5 m apart in x so parts of different pages never overlap
+    H=float((re.search(r'viewBox="[\d.\s-]*?([\d.]+)"',s) or re.search(r'height="([\d.]+)',s))[1]); X0=pg*5000; P=lambda z,H=H,X0=X0:(z.real/K+X0,(H-z.imag)/K)  # libcdr 0.1.9: viewBox in pt, height in "in"; older: height in pt
     for d in re.findall(r'<path d="([^"]*)"',s):
         for sp in parse_path(d.replace('\n',' ')).continuous_subpaths():
             segs=[]
@@ -109,15 +110,14 @@ def load(path):
                     a,q,e=g.start,g.control,g.end; segs.append(('C',P(a),P(a+2/3*(q-a)),P(e+2/3*(q-e)),P(e)))
                 else: segs.append(('C',P(g.start),P(g.control1),P(g.control2),P(g.end)))
             cts.append((segs,sp.isclosed()))
-    texts=[]
     for x,y,fs,t in re.findall(r'<text x="([\d.]+)" y="([\d.]+)">\s*<tspan[^>]*font-size="([\d.]+)"[^>]*>\s*([^<]*?)\s*</tspan>',s):
         # libcdr drops text rotation; in the templates the label is vertical, reading bottom->top,
         # filling the text frame whose bottom-left corner is (x,y)
-        bx,by=float(x)/K,(H-float(y))/K
+        bx,by=float(x)/K+X0,(H-float(y))/K
         tc=[tf(c,lambda px,py:(-py,px)) for c in text_contours(t,float(fs)/K)]
         b=bb([p for c in tc for p in sample(c)])
         texts+=[tf(c,lambda px,py:(px-b[0]+bx,py-b[1]+by)) for c in tc]
-    return cts,texts
+  return cts,texts
 def parts(fn):
     cts,texts=load(fn); out=[]; B=[(c,bb(sample(c))) for c in cts]; TB=[(c,bb(sample(c))) for c in texts]
     big=[(c,b) for c,b in B if 50<b[2]-b[0]<320 and 50<b[3]-b[1]<320]
