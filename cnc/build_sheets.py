@@ -11,7 +11,7 @@ FONT=FontProperties(family=['Arial','Liberation Sans','DejaVu Sans'])
 K=2.83465
 ap=argparse.ArgumentParser(description=__doc__)
 ap.add_argument('--cdr-dir',required=True); ap.add_argument('--out-dir',required=True)
-ap.add_argument('--order',help='ΚΩΔΙΚΟΣ:ΤΕΜ[:κομμάτια], με κόμμα. Custom: ΤΕΜΑΧΙΑ-ΑxΒxΜΗΚΟΣ αντί για κωδικό, π.χ. 100-25x25x185:1. Κομμάτια: κιβώτιο (4 πλαϊνά), άνω, κάτω, βάση, με + (κενό = ολόκληρη μηχανή). 4ο πεδίο ναι/όχι = εξωλκέας για τη βάση αυτής της μηχανής (αλλιώς --exolkeas). Π.χ. "00034:12:κιβώτιο,00030:3,00033:2:άνω+κάτω,00019:1::όχι"')
+ap.add_argument('--order',help='ΚΩΔΙΚΟΣ:ΤΕΜ[:κομμάτια], με κόμμα. ΤΕΜ=φύλλο: όσα χωράνε σε ολόκληρο φύλλο (π.χ. 00019:φύλλο:άνω). Custom: ΤΕΜΑΧΙΑ-ΑxΒxΜΗΚΟΣ αντί για κωδικό, π.χ. 100-25x25x185:1. Κομμάτια: κιβώτιο (4 πλαϊνά), άνω, κάτω, βάση, με + (κενό = ολόκληρη μηχανή). 4ο πεδίο ναι/όχι = εξωλκέας για τη βάση αυτής της μηχανής (αλλιώς --exolkeas). Π.χ. "00034:12:κιβώτιο,00030:3,00033:2:άνω+κάτω,00019:1::όχι"')
 ap.add_argument('--exolkeas',default='όχι',help='βάσεις για εξωλκέα: ναι (με τους κύκλους Ø90/Ø66 στη μέση) / όχι (χωρίς, προεπιλογή).')
 ap.add_argument('--fill',help='ΚΩΔΙΚΟΣ:ΠΑΧΟΣ, με κόμμα: γεμίζει ΟΛΑ τα κενά σε κάθε φύλλο αυτού του πάχους (με 11 mm περιμετρικά) με όσα κομμάτια του CDR χωράνε, και στραμμένα 90° (π.χ. "03839:20,03923:15")')
 ap.add_argument('--diag',help='κωδικοί με κόμμα: τυπώνει τα κομμάτια του CDR (διαστάσεις, κύκλοι ανά Ø, μικρά σχήματα) και σταματά')
@@ -245,9 +245,9 @@ def custom_parts(spec):
 PARTS={'kivotio':15,'kato':20,'vasi':20,'ano':25}  # kivotio = the 4 side panels
 ALIAS={'κιβωτιο':'kivotio','κατω':'kato','βαση':'vasi','ανω':'ano'}
 norm=lambda w:''.join(c for c in unicodedata.normalize('NFD',w.strip().lower()) if not unicodedata.combining(c))
-order=[]
+order=[]; FULL={}
 for it in (A.order.split(',') if A.order else [c+':1' for c in M]):
-    f=it.strip().split(':'); code=cnorm(f[0]); code=code if CUSTOM.match(code) else code.zfill(5); q=int(f[1]) if len(f)>1 else 1
+    f=it.strip().split(':'); code=cnorm(f[0]); code=code if CUSTOM.match(code) else code.zfill(5); q=(0 if norm(f[1]) in ('φυλλο','fyllo','fullo') else int(f[1])) if len(f)>1 else 1
     want=[ALIAS.get(norm(w),norm(w)) for w in f[2].split('+')] if len(f)>2 and f[2].strip() else list(PARTS)
     exo=None
     if len(f)>3:
@@ -278,7 +278,8 @@ for code,q,want,exo in order:
     for k in want:
         ps_=cache[code][k]
         if k=='vasi' and exo is not None and 'Px' in cache[code]: ps_=[dict(base_for(cache[code]['Px'],cache[code]['Py'],exo),code=code+' base')]
-        sheets[PARTS[k]]+=ps_*q
+        if q: sheets[PARTS[k]]+=ps_*q
+        else: FULL[PARTS[k]]=FULL.get(PARTS[k],[])+ps_  # ΤΕΜ=φύλλο: as many as fit on a whole sheet
 GAP={15:2.6,20:3.275,25:3.275}; SW,SH,S=1015,2020,11
 def pack(items,gap):  # shelf packing; opens a new sheet when full
     items=sorted(items,key=lambda p:(-p['h'],p['code'])); out=[[]]; x=y=S; rowh=0
@@ -288,7 +289,7 @@ def pack(items,gap):  # shelf packing; opens a new sheet when full
         if y+p['h']>SH-S+1e-6: out.append([]); x=y=S; rowh=0
         out[-1].append((p,x,y)); x+=p['w']+gap; rowh=max(rowh,p['h'])
     return out
-tag='_'.join('%sx%d%s%s'%(c,q,'' if len(w)==len(PARTS) else '-'+'+'.join(w),'' if e is None else ('-exo' if e else '-xoris')) for c,q,w,e in order) if A.order else '%dmixanes'%(len(M)-len(skipped))
+tag='_'.join('%sx%s%s%s'%(c,q or 'fyllo','' if len(w)==len(PARTS) else '-'+'+'.join(w),'' if e is None else ('-exo' if e else '-xoris')) for c,q,w,e in order) if A.order else '%dmixanes'%(len(M)-len(skipped))
 if EXOLK is not None and all(e is None for *_,e in order): tag+='_exolkeas' if EXOLK else '_xoris-exolkea'
 if len(tag)>80: tag='%dkodikoi_%s'%(len(order),'-'.join(c for c,*_ in order))[:80]
 FILL={}
@@ -300,11 +301,14 @@ for it in (A.fill.split(',') if A.fill else []):
     print('fill',c,os.path.basename(fs[0]),th,'mm, κομμάτια:',', '.join('%.1fx%.1f'%(p['w'],p['h']) for p in fp))
     if not fp: sys.exit('--fill: το %s δεν έχει κλειστά κομμάτια'%fs[0])
     FILL[th]=FILL.get(th,[])+fp
+for th,v in FULL.items(): FILL[th]=v+FILL.get(th,[])
 if A.ena_dxf: sheets={'ola':[p for v in sheets.values() for p in v]}; GAP['ola']=max(GAP.values())
 def rot(p):
     f=lambda x,y,h=p['h']:(h-y,x)
     return dict(p,w=p['h'],h=p['w'],cts=[tf(c,f) for c in p['cts']],texts=[tf(c,f) for c in p['texts']])
-def fill_sheet(pl,fps,gap):  # maxrects: drop fill parts (both orientations) into every free gap, keeping S mm at the edges
+def fill_sheet(pl,fps,gap):  # try preferring 0° and 90°, keep the one that fits more
+    best=max((fill_try(list(pl),fps,gap,fl) for fl in (False,True)),key=len); n=len(best)-len(pl); pl[:]=best; return n
+def fill_try(pl,fps,gap,flip):  # maxrects: drop fill parts (both orientations) into every free gap, keeping S mm at the edges
     mind=min(min(p['w'],p['h']) for p in fps)+gap; free=[(S,S,SW-S+gap,SH-S+gap)]; n=0
     def occupy(x0,y0,x1,y1):
         nf=[]
@@ -320,12 +324,12 @@ def fill_sheet(pl,fps,gap):  # maxrects: drop fill parts (both orientations) int
     for p,x,y in pl:  # real extents: some library lines stick out of the outline by a few 0.1 mm
         e=[bb(sample(c)) for c in p['cts']]; occupy(x+min(min(b[0] for b in e),0),y+min(min(b[1] for b in e),0),x+max(max(b[2] for b in e),p['w'])+gap,y+max(max(b[3] for b in e),p['h'])+gap)
     for q in sorted(fps,key=lambda p:-p['w']*p['h']):
-        vs=[q]+([rot(q)] if abs(q['w']-q['h'])>.01 else [])
+        vs=[q]+([rot(q)] if abs(q['w']-q['h'])>.01 else []); vs=vs[::-1] if flip else vs
         while True:
             c=min(((f[1],f[0],i) for f in free for i,v in enumerate(vs) if f[2]-f[0]>=v['w']+gap-1e-6 and f[3]-f[1]>=v['h']+gap-1e-6),default=None)
             if not c: break
-            y,x,i=c; v=vs[i]; pl.append((v,x,y)); occupy(x,y,x+v['w']+gap,y+v['h']+gap); n+=1
-    return n
+            y,x,i=c; v=vs[i]; pl.append((v,x,y)); occupy(x,y,x+v['w']+gap,y+v['h']+gap)
+    return pl
 packs_by={th:pack(items,GAP[th]) for th,items in sheets.items() if items}
 for th,fp in FILL.items():
     key='ola' if A.ena_dxf else th; pk=packs_by.setdefault(key,[[]])
