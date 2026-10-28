@@ -11,12 +11,19 @@ TR=1.25; SAFE=5.0; Z1=1.0; ZIG=8.0
 def levels(z0,depth,n): return [z0+(depth-z0)*(k+1)/n for k in range(n)] if z0<0 else [depth*(k+1)/n for k in range(n)]
 # ---------- read DXF (LAYER_1 only: XARAXI text not cut for now) ----------
 doc=ezdxf.readfile(A.dxf); C=[]; CL=[]; OP=[]
+def flat(e): return [(v.x,v.y) for v in epath.make_path(e).flattening(.01)]
+sh=[flat(e) for e in doc.modelspace() if e.dxf.layer=='SHEET' and e.dxftype()!='CIRCLE']  # his Corel DXFs: sheet centred on 0,0 -> move to bottom-left
+OX,OY=(min(p[0] for p in sh[0]),min(p[1] for p in sh[0])) if sh else (0,0)
 for e in doc.modelspace():
     if e.dxf.layer!='LAYER_1': continue
-    if e.dxftype()=='CIRCLE': C.append((e.dxf.center.x,e.dxf.center.y,e.dxf.radius)); continue
-    pts=[(v.x,v.y) for v in epath.make_path(e).flattening(.01)]
+    if e.dxftype()=='CIRCLE': C.append((e.dxf.center.x-OX,e.dxf.center.y-OY,e.dxf.radius)); continue
+    pts=[(x-OX,y-OY) for x,y in flat(e)]
+    closed=bool(getattr(e,'closed',False) or (e.dxftype()=='POLYLINE' and e.is_closed) or math.dist(pts[0],pts[-1])<.01)
+    if closed and pts[0]!=pts[-1]: pts.append(pts[0])
+    if closed and len(pts)>=13:  # polyline drawn circle (Corel export)
+        g=Polygon(pts); c=g.centroid; rr=[math.dist(q,(c.x,c.y)) for q in pts]
+        if max(rr)-min(rr)<.02 and max(rr)<30: C.append((c.x,c.y,sum(rr)/len(rr))); continue
     pts=list(LineString(pts).simplify(.02).coords)
-    closed=(e.dxftype()=='LWPOLYLINE' and e.closed) or (e.dxftype()=='SPLINE' and e.closed) or math.dist(pts[0],pts[-1])<.01
     if closed and len(pts)>3: CL.append(Polygon(pts).buffer(0))
     else: OP.append(LineString(pts))
 outers=[p for p in CL if not any(q is not p and q.area>p.area and q.contains(p) for q in CL)]
