@@ -11,7 +11,7 @@ FONT=FontProperties(family=['Arial','Liberation Sans','DejaVu Sans'])
 K=2.83465
 ap=argparse.ArgumentParser(description=__doc__)
 ap.add_argument('--cdr-dir',required=True); ap.add_argument('--out-dir',required=True)
-ap.add_argument('--order',help='ΚΩΔΙΚΟΣ:ΤΕΜ[:κομμάτια], με κόμμα. ΤΕΜ=φύλλο: όσα χωράνε σε ολόκληρο φύλλο (π.χ. 00019:φύλλο:άνω). Custom: ΤΕΜΑΧΙΑ-ΑxΒxΜΗΚΟΣ αντί για κωδικό, π.χ. 100-25x25x185:1. Κομμάτια: κιβώτιο (4 πλαϊνά), άνω, κάτω, βάση, με + (κενό = ολόκληρη μηχανή). 4ο πεδίο ναι/όχι = εξωλκέας για τη βάση αυτής της μηχανής (αλλιώς --exolkeas). Π.χ. "00034:12:κιβώτιο,00030:3,00033:2:άνω+κάτω,00019:1::όχι"')
+ap.add_argument('--order',help='ΚΩΔΙΚΟΣ:ΤΕΜ[:κομμάτια], με κόμμα. ΤΕΜ=φύλλο: όσα χωράνε σε ολόκληρο φύλλο (π.χ. 00019:φύλλο:άνω). Custom: ΤΕΜΑΧΙΑ-ΑxΒxΜΗΚΟΣ αντί για κωδικό, π.χ. 100-25x25x185:1. Κομμάτια: κιβώτιο (4 πλαϊνά), πλαϊνό (το/τα διαφορετικά πλαϊνά μία φορά), άνω, κάτω, βάση, με + (κενό = ολόκληρη μηχανή). 4ο πεδίο ναι/όχι = εξωλκέας για τη βάση αυτής της μηχανής (αλλιώς --exolkeas). Π.χ. "00034:12:κιβώτιο,00030:3,00033:2:άνω+κάτω,00019:1::όχι"')
 ap.add_argument('--exolkeas',default='όχι',help='βάσεις για εξωλκέα: ναι (με τους κύκλους Ø90/Ø66 στη μέση) / όχι (χωρίς, προεπιλογή).')
 ap.add_argument('--fill',help='ΚΩΔΙΚΟΣ:ΠΑΧΟΣ, με κόμμα: γεμίζει ΟΛΑ τα κενά σε κάθε φύλλο αυτού του πάχους (με 11 mm περιμετρικά) με όσα κομμάτια του CDR χωράνε, και στραμμένα 90° (π.χ. "03839:20,03923:15")')
 ap.add_argument('--diag',help='κωδικοί με κόμμα: τυπώνει τα κομμάτια του CDR (διαστάσεις, κύκλοι ανά Ø, μικρά σχήματα) και σταματά')
@@ -242,22 +242,25 @@ def custom_parts(spec):
                     out+=[tf(c,lambda x,y,k=k:(x+k*a-20,pw(y,100,Py-P0))) for k in range(1,n)]
         return dict(kind='top' if top else 'bottom',w=Px-0.3,h=Py-0.3,cts=out,texts=[])
     pa,pb=panel(a),panel(b)
-    return dict(kivotio=[dict(rot_ccw(q),code=spec) for q in (pa,pa,pb,pb)],kato=[dict(plate(False),code=spec)],
+    return dict(kivotio=[dict(rot_ccw(q),code=spec) for q in (pa,pa,pb,pb)],
+                plai=[dict(rot_ccw(q),code=spec) for q in [pa]+([pb] if (pa['w'],pa['h'])!=(pb['w'],pb['h']) else [])],
+                kato=[dict(plate(False),code=spec)],
                 vasi=[dict(base_for(n*a,n*b),code=spec+' base')],ano=[dict(plate(True),code=spec)])
-PARTS={'kivotio':15,'kato':20,'vasi':20,'ano':25}  # kivotio = the 4 side panels
-ALIAS={'κιβωτιο':'kivotio','κατω':'kato','βαση':'vasi','ανω':'ano'}
+PARTS={'kivotio':15,'plai':15,'kato':20,'vasi':20,'ano':25}  # kivotio = the 4 side panels; plai = each distinct side once
+ALL=[k for k in PARTS if k!='plai']  # κομπλέ (κενό πεδίο κομματιών) = χωρίς πλαϊνό
+ALIAS={'κιβωτιο':'kivotio','πλαινο':'plai','κατω':'kato','βαση':'vasi','ανω':'ano'}
 norm=lambda w:''.join(c for c in unicodedata.normalize('NFD',w.strip().lower()) if not unicodedata.combining(c))
 order=[]; FULL={}
 for it in (A.order.split(',') if A.order else [c+':1' for c in M]):
     f=it.strip().split(':'); code=cnorm(f[0]); code=code if CUSTOM.match(code) else code.zfill(5); q=(0 if norm(f[1]) in ('φυλλο','fyllo','fullo') else int(f[1])) if len(f)>1 else 1
-    want=[ALIAS.get(norm(w),norm(w)) for w in f[2].split('+')] if len(f)>2 and f[2].strip() else list(PARTS)
+    want=[ALIAS.get(norm(w),norm(w)) for w in f[2].split('+')] if len(f)>2 and f[2].strip() else list(ALL)
     exo=None
     if len(f)>3:
         v=norm(f[3])
         if v not in ('ναι','οχι','nai','oxi','yes','no'): sys.exit('εξωλκέας στο %r: γράψε ναι ή όχι'%it)
         exo=v in ('ναι','nai','yes')
     if code not in M and not CUSTOM.match(code): sys.exit('no CDR template for %s (have: %s)'%(code,', '.join(M)))
-    if set(want)-set(PARTS): sys.exit('άγνωστο κομμάτι στο %r, γράψε: κιβώτιο / άνω / κάτω / βάση'%it)
+    if set(want)-set(PARTS): sys.exit('άγνωστο κομμάτι στο %r, γράψε: κιβώτιο / πλαϊνό / άνω / κάτω / βάση'%it)
     order.append((code,q,want,exo))
 EXOLK=None
 if any('vasi' in w for _,_,w,_ in order):
@@ -275,6 +278,7 @@ for code,q,want,exo in order:
             print('ΠΡΟΣΟΧΗ: %s παραλείπεται, το CDR δεν έχει 1 άνω + 1 κάτω + 1-2 πλαϊνά: %s'%(code,[p['kind'] for p in ps])); skipped.append(code); continue
         bt=fix200(one('bottom')[0])
         cache[code]=dict(kivotio=[dict(rot_ccw(p),code=code) for p in (pan*4 if len(pan)==1 else pan*2)],
+                         plai=[dict(rot_ccw(p),code=code) for p in pan],
                          kato=[dict(bt,code=code)],vasi=[dict(base_for(bt['w']+.3,bt['h']+.3),code=code+' base')],Px=bt['w']+.3,Py=bt['h']+.3,
                          ano=[dict(one('top')[0],code=code)])
     for k in want:
@@ -291,7 +295,7 @@ def pack(items,gap):  # shelf packing; opens a new sheet when full
         if y+p['h']>SH-S+1e-6: out.append([]); x=y=S; rowh=0
         out[-1].append((p,x,y)); x+=p['w']+gap; rowh=max(rowh,p['h'])
     return out
-tag='_'.join('%sx%s%s%s'%(c,q or 'fyllo','' if len(w)==len(PARTS) else '-'+'+'.join(w),'' if e is None else ('-exo' if e else '-xoris')) for c,q,w,e in order) if A.order else '%dmixanes'%(len(M)-len(skipped))
+tag='_'.join('%sx%s%s%s'%(c,q or 'fyllo','' if set(ALL)<=set(w) else '-'+'+'.join(w),'' if e is None else ('-exo' if e else '-xoris')) for c,q,w,e in order) if A.order else '%dmixanes'%(len(M)-len(skipped))
 if EXOLK is not None and all(e is None for *_,e in order): tag+='_exolkeas' if EXOLK else '_xoris-exolkea'
 if len(tag)>80: tag='%dkodikoi_%s'%(len(order),'-'.join(c for c,*_ in order))[:80]
 FILL={}
