@@ -1,6 +1,9 @@
 import re, os, sys, glob, shutil, subprocess, argparse, ezdxf
 from svgpathtools import parse_path, Line
 import matplotlib; matplotlib.use('Agg')
+from matplotlib.textpath import TextPath
+from matplotlib.font_manager import FontProperties
+FONT=FontProperties(family=['Arial','Liberation Sans','DejaVu Sans'])
 import matplotlib.pyplot as plt
 K=2.83465
 ap=argparse.ArgumentParser(description='CDR (CorelDRAW) machine templates -> nested DXF sheets 15/20/25 mm')
@@ -27,7 +30,12 @@ def load(path):
             polys.append((pts,closed))
     texts=[]
     for x,y,fs,t in re.findall(r'<text x="([\d.]+)" y="([\d.]+)">\s*<tspan[^>]*font-size="([\d.]+)"[^>]*>\s*([^<]*?)\s*</tspan>',s):
-        texts.append((float(x)/K,(H-float(y))/K,float(fs)/K,t))
+        # libcdr drops text rotation; in the templates the label is vertical, reading bottom->top,
+        # filling the text frame whose bottom-left corner is (x,y)
+        bx,by=float(x)/K,(H-float(y))/K
+        tp=[[(-py,px) for px,py in poly] for poly in TextPath((0,0),t,size=float(fs)/K,prop=FONT).to_polygons()]
+        mx=min(p[0] for q in tp for p in q); my=min(p[1] for q in tp for p in q)
+        texts+=[[(px-mx+bx,py-my+by) for px,py in q] for q in tp]
     return polys,texts
 def bb(pts):
     xs=[p[0] for p in pts]; ys=[p[1] for p in pts]; return min(xs),min(ys),max(xs),max(ys)
@@ -38,18 +46,18 @@ def parts(fn):
     big=[(pl,b) for pl,b in big if not any(o is not pl and o[1][0]<=b[0]+.01 and o[1][1]<=b[1]+.01 and o[1][2]>=b[2]-.01 and o[1][3]>=b[3]-.01 and (o[1][2]-o[1][0])>(b[2]-b[0])+.01 for o in big)]
     for pl,b in big:
         ins=[q for q in polys if (lambda c:c[0]>=b[0]-.6 and c[1]>=b[1]-.6 and c[2]<=b[2]+.6 and c[3]<=b[3]+.6)(bb(q[0]))]
-        tx=[t for t in texts if b[0]<=t[0]<=b[2] and b[1]<=t[1]<=b[3]]
+        tx=[q for q in texts if (lambda c:c[0]>=b[0] and c[1]>=b[1] and c[2]<=b[2] and c[3]<=b[3])(bb(q))]
         w,h=b[2]-b[0],b[3]-b[1]
         tri=sum(1 for q in ins if 6.5<bb(q[0])[2]-bb(q[0])[0]<7.5 and bb(q[0])[3]-bb(q[0])[1]<7.5)
         kind='panel' if abs(w-215)<.5 else ('top' if tri>8 else 'bottom') if abs(w-h)<1 and w<201 else 'base' if abs(w-239)<.5 else 'other'
         ins=[([(x-b[0],y-b[1]) for x,y in q[0]],q[1]) for q in ins]
-        tx=[(x-b[0],y-b[1],fs,t) for x,y,fs,t in tx]
+        tx=[[(x-b[0],y-b[1]) for x,y in q] for q in tx]
         out.append(dict(kind=kind,w=w,h=h,polys=ins,texts=tx,rot=0,src=fn))
     return out
 def rot_ccw(p):  # 90 CCW, keep bottom-left at 0
     W,H=p['w'],p['h']
     f=lambda x,y:(H-y,x)
-    return dict(p,w=H,h=W,polys=[([f(x,y) for x,y in q],c) for q,c in p['polys']],texts=[(*f(x,y),fs,t) for x,y,fs,t in p['texts']],rot=90)
+    return dict(p,w=H,h=W,polys=[([f(x,y) for x,y in q],c) for q,c in p['polys']],texts=[[f(x,y) for x,y in q] for q in p['texts']],rot=90)
 def fix200(p):  # 00033 bottom plate drawn 200.0 -> 199.7 (corrected by user)
     if abs(p['w']-200)<.05:
         s=199.7/200; p=dict(p,w=199.7,h=199.7,polys=[([(x*s,y*s) for x,y in q],c) for q,c in p['polys']])
@@ -90,9 +98,11 @@ for th,items in sheets.items():
             if c and pts[0]==pts[-1]: pts=pts[:-1]
             m.add_polyline2d(pts,close=c,dxfattribs={'layer':'LAYER_1'})
             xs,ys=zip(*(pts+[pts[0]] if c else pts)); ax.plot(xs,ys,'k-',lw=.25)
-        for a,b,fs,t in p['texts']:
-            m.add_text(t,dxfattribs={'layer':'XARAXI','height':round(fs*0.716,2),'insert':(x+a,y+b),'rotation':p['rot']})
-            ax.text(x+a,y+b,t,fontsize=3,rotation=p['rot'],color='b')
+        for q in p['texts']:
+            pts=[(x+a,y+b) for a,b in q]
+            if pts[0]==pts[-1]: pts=pts[:-1]
+            m.add_polyline2d(pts,close=True,dxfattribs={'layer':'XARAXI'})
+            xs,ys=zip(*(pts+[pts[0]])); ax.plot(xs,ys,'b-',lw=.25)
         ax.text(x+p['w']/2,y+3,p['code'],fontsize=4,color='r',ha='center')
     fn=os.path.join(A.out_dir,f'fyllo_{th}mm_{len(M)}mixanes_{V}')
     doc.saveas(fn+'.dxf'); ax.set_aspect('equal'); ax.set_title(f'{th}mm 1015x2020 - {len(pl)} kommatia',fontsize=8)
