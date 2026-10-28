@@ -183,17 +183,17 @@ def custom_parts(spec):
             out.append(([('L',(e+k*a,e),(e+k*a,e+Py))],False)); out.append(([('L',(e,e+k*b),(e+Px,e+k*b))],False))
         for i in range(n):
             for j in range(n): out.append(circle(e+(i+.5)*a,e+(j+.5)*b,5.5))
-        if top:  # triangles of the first grid line on each edge, repeated on every line
+        if top:  # 00657 triangles of its first grid line (at 20) on each edge, centred on every new grid line
             for c in t['cts']:
                 b_=cbb(c)
                 if c[1] or max(b_[2]-b_[0],b_[3]-b_[1])>10: continue
                 cx,cy=(b_[0]+b_[2])/2,(b_[1]+b_[3])/2
                 if cx<10 or cx>190:   # left/right edge: along y
                     if abs(cy-(e+20))>4: continue
-                    out+=[tf(c,lambda x,y,k=k:(pw(x,100,Px-P0),y+(k-1)*b)) for k in range(1,n)]
+                    out+=[tf(c,lambda x,y,k=k:(pw(x,100,Px-P0),y+k*b-20)) for k in range(1,n)]
                 else:
                     if abs(cx-(e+20))>4: continue
-                    out+=[tf(c,lambda x,y,k=k:(x+(k-1)*a,pw(y,100,Py-P0))) for k in range(1,n)]
+                    out+=[tf(c,lambda x,y,k=k:(x+k*a-20,pw(y,100,Py-P0))) for k in range(1,n)]
         return dict(kind='top' if top else 'bottom',w=Px-0.3,h=Py-0.3,cts=out,texts=[])
     def base_c():
         dx,dy=n*a-P0,n*b-P0; m0=base['w']/2; out=[]
