@@ -48,6 +48,16 @@ def as_circle(ct):
     if not cr: return None
     (c,r)=cr
     if all(abs(math.hypot(p[0]-c[0],p[1]-c[1])-r)<1e-3 for s in segs for p in s[1:]) and abs(abs(sum(sweep(s) for s in segs))-2*math.pi)<1e-3: return c,r
+def to_bez(s):
+    if s[0]=='C': return [s[1:]]
+    if s[0]=='L' or not circ3(*s[1:]):
+        p0,p1=s[1],s[-1]; d=(p1[0]-p0[0],p1[1]-p0[1]); return [(p0,(p0[0]+d[0]/3,p0[1]+d[1]/3),(p0[0]+2*d[0]/3,p0[1]+2*d[1]/3),p1)]
+    (c,r)=circ3(*s[1:]); a0=math.atan2(s[1][1]-c[1],s[1][0]-c[0]); sw=sweep(s); k=max(1,math.ceil(abs(sw)/(math.pi/2)-1e-9)); d=sw/k
+    h=4/3*math.tan(d/4); out=[]; P=lambda t:(c[0]+r*math.cos(t),c[1]+r*math.sin(t))
+    for i in range(k):
+        t0,t1=a0+i*d,a0+(i+1)*d; p0,p1=P(t0),P(t1)
+        out.append((p0,(p0[0]-h*r*math.sin(t0),p0[1]+h*r*math.cos(t0)),(p1[0]+h*r*math.sin(t1),p1[1]-h*r*math.cos(t1)),p1))
+    return out
 def write(m,ct,layer):
     a={'layer':layer,'color':250}; c=as_circle(ct)  # same entity colour as CorelDRAW's DXF export
     if c: m.add_circle(c[0],c[1],dxfattribs=a); return
@@ -58,10 +68,11 @@ def write(m,ct,layer):
         if not close: pts.append((run[-1][-1][0],run[-1][-1][1],0))
         m.add_lwpolyline(pts,format='xyb',close=close,dxfattribs=a); run.clear()
     if all(s[0] in 'LA' for s in segs): run+=segs; flush(close=closed); return
-    for s in segs:
-        if s[0]=='C': flush(); m.add_open_spline([s[1],s[2],s[3],s[4]],degree=3,dxfattribs=a)
-        else: run.append(s)
-    flush()
+    # one SPLINE for the whole contour (never broken), Bezier pieces like CorelDRAW: 4 control points each, knots x4
+    bz=[q for s in segs for q in to_bez(s)]; n=len(bz)
+    sp=m.add_spline(dxfattribs=a); sp.dxf.degree=3
+    sp.control_points=[p for q in bz for p in q]; sp.knots=[i/n for i in range(n+1) for _ in range(4)]
+    sp.dxf.flags=11 if closed else 8
 def svg_of(path):
     r=subprocess.run([A.cdr2xhtml,path],capture_output=True); t=r.stdout.decode('utf-8','replace')
     if '<svg:svg' not in t: sys.exit('cdr2xhtml failed on %s: %s'%(path,r.stderr.decode('utf-8','replace')[:300]))
