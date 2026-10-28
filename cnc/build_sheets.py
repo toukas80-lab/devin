@@ -317,7 +317,8 @@ def fill_sheet(pl,fps,gap):  # maxrects: drop fill parts (both orientations) int
             if y1<b1: nf.append((a0,y1,a1,b1))
         nf=list(dict.fromkeys(f for f in nf if f[2]-f[0]>=mind-1e-6 and f[3]-f[1]>=mind-1e-6))
         free[:]=[f for f in nf if not any(g is not f and g[0]<=f[0] and g[1]<=f[1] and g[2]>=f[2] and g[3]>=f[3] for g in nf)]
-    for p,x,y in pl: occupy(x,y,x+p['w']+gap,y+p['h']+gap)
+    for p,x,y in pl:  # real extents: some library lines stick out of the outline by a few 0.1 mm
+        e=[bb(sample(c)) for c in p['cts']]; occupy(x+min(min(b[0] for b in e),0),y+min(min(b[1] for b in e),0),x+max(max(b[2] for b in e),p['w'])+gap,y+max(max(b[3] for b in e),p['h'])+gap)
     for q in sorted(fps,key=lambda p:-p['w']*p['h']):
         vs=[q]+([rot(q)] if abs(q['w']-q['h'])>.01 else [])
         while True:
