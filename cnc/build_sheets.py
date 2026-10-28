@@ -12,6 +12,8 @@ K=2.83465
 ap=argparse.ArgumentParser(description=__doc__)
 ap.add_argument('--cdr-dir',required=True); ap.add_argument('--out-dir',required=True)
 ap.add_argument('--order',help='ΚΩΔΙΚΟΣ:ΤΕΜ[:κομμάτια], με κόμμα. Custom: ΤΕΜΑΧΙΑ-ΑxΒxΜΗΚΟΣ αντί για κωδικό, π.χ. 100-25x25x185:1. Κομμάτια: κιβώτιο (4 πλαϊνά), άνω, κάτω, βάση, με + (χωρίς = ολόκληρη μηχανή). Π.χ. "00034:12:κιβώτιο,00030:3,00033:2:άνω+κάτω"')
+ap.add_argument('--exolkeas',help='βάσεις για εξωλκέα: ναι (με τους κύκλους Ø90/Ø66 στη μέση) / όχι (χωρίς). Υποχρεωτικό όταν υπάρχουν βάσεις.')
+ap.add_argument('--diag',help='κωδικοί με κόμμα: τυπώνει τα κομμάτια του CDR (διαστάσεις, κύκλοι ανά Ø, μικρά σχήματα) και σταματά')
 ap.add_argument('--ena-dxf',action='store_true',help='όλα τα κομμάτια σε ένα DXF (για έλεγχο)')
 ap.add_argument('--version',default='v1'); ap.add_argument('--cdr2xhtml',default=shutil.which('cdr2xhtml') or 'cdr2xhtml')
 A=ap.parse_args()
@@ -145,6 +147,21 @@ for f in sorted(glob.glob(os.path.join(A.cdr_dir,'**','*.cdr'),recursive=True)):
         if n[:5] in M: print('ΠΡΟΣΟΧΗ: 2 CDR για %s, κρατάω %s'%(n[:5],M[n[:5]]))
         else: M[n[:5]]=f
 print('machines:',{k:os.path.basename(v) for k,v in M.items()})
+if A.diag:
+    import collections
+    for code in [c.strip().zfill(5) for c in A.diag.split(',')]:
+        if code not in M: print(code,'δεν υπάρχει CDR'); continue
+        cts,_=load(M[code]); B=[(c,bb(sample(c))) for c in cts]
+        print('==',code,os.path.basename(M[code]),'contours',len(cts))
+        for c,b in B:
+            w,h=b[2]-b[0],b[3]-b[1]
+            if w<100 or h<100: continue
+            ins=[(o,ob) for o,ob in B if o is not c and ob[0]>=b[0]-.6 and ob[1]>=b[1]-.6 and ob[2]<=b[2]+.6 and ob[3]<=b[3]+.6]
+            ci=collections.Counter(round(2*as_circle(o)[1],1) for o,_ in ins if as_circle(o))
+            sm=collections.Counter('%s%.1fx%.1f'%('κλειστό ' if o[1] else 'ανοιχτό ',ob[2]-ob[0],ob[3]-ob[1]) for o,ob in ins if not as_circle(o) and max(ob[2]-ob[0],ob[3]-ob[1])<60)
+            print(' part at (%.1f,%.1f) %.1fx%.1f closed=%s inside=%d circles Ø:%s'%(b[0],b[1],w,h,c[1],len(ins),dict(ci)))
+            print('   small:',dict(sm.most_common(8)))
+    sys.exit()
 base=[p for p in parts((glob.glob(os.path.join(A.cdr_dir,'**','02536.cdr'),recursive=True) or [os.path.join(A.cdr_dir,'02536.cdr')])[0]) if p['kind']=='base'][0]
 
 # ---- custom machines «100-25x25x185» = pieces (n×n) - piece a×b - skewer length ----
@@ -160,6 +177,7 @@ def base_for(Px,Py):  # every base: 02536 (Π=200) stretched to grid Π, margins
     dx,dy=Px-200,Py-200; m0=base['w']/2; out=[]
     for c in base['cts']:
         cr=as_circle(c)
+        if cr and not EXOLK: continue  # no extractor: no centre circles
         out.append(circle(cr[0][0]+dx/2,cr[0][1]+dy/2,cr[1]) if cr else tf(c,lambda x,y:(pw(x,m0,dx),pw(y,m0,dy))))
     return dict(kind='base',w=base['w']+dx,h=base['h']+dy,cts=out,texts=[])
 def custom_parts(spec):
@@ -217,6 +235,11 @@ for it in (A.order.split(',') if A.order else [c+':1' for c in M]):
     if code not in M and not CUSTOM.match(code): sys.exit('no CDR template for %s (have: %s)'%(code,', '.join(M)))
     if set(want)-set(PARTS): sys.exit('άγνωστο κομμάτι στο %r, γράψε: κιβώτιο / άνω / κάτω / βάση'%it)
     order.append((code,q,want))
+EXOLK=None
+if any('vasi' in w for _,_,w in order):
+    v=norm(A.exolkeas or '')
+    if v not in ('ναι','οχι','nai','oxi','yes','no'): sys.exit('Υπάρχουν βάσεις: είναι για εξωλκέα; Γράψε --exolkeas ναι (με τρύπα στη μέση) ή --exolkeas όχι (χωρίς).')
+    EXOLK=v in ('ναι','nai','yes')
 print('order:',[(c,q,'+'.join(w)) for c,q,w in order])
 sheets={15:[],20:[],25:[]}; cache={}; skipped=[]
 for code,q,want in order:
@@ -241,6 +264,7 @@ def pack(items,gap):  # shelf packing; opens a new sheet when full
         out[-1].append((p,x,y)); x+=p['w']+gap; rowh=max(rowh,p['h'])
     return out
 tag='_'.join('%sx%d%s'%(c,q,'' if len(w)==len(PARTS) else '-'+'+'.join(w)) for c,q,w in order) if A.order else '%dmixanes'%(len(M)-len(skipped))
+if EXOLK is not None: tag+='_exolkeas' if EXOLK else '_xoris-exolkea'
 if A.ena_dxf: sheets={'ola':[p for v in sheets.values() for p in v]}; GAP['ola']=max(GAP.values())
 for th,items in sheets.items():
   if not items: continue
