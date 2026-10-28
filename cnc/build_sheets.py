@@ -139,11 +139,13 @@ def fix200(p):  # 00033 bottom plate drawn 200.0 -> 199.7 (corrected by user)
     return p
 os.makedirs(A.out_dir,exist_ok=True)
 M={}
-for f in sorted(glob.glob(os.path.join(A.cdr_dir,'*.cdr'))):
+for f in sorted(glob.glob(os.path.join(A.cdr_dir,'**','*.cdr'),recursive=True)):  # also in sub-folders
     n=os.path.basename(f)
-    if re.match(r'\d{5}',n) and 'ΑΝΩ' in n and 'ΚΑΤΩ' in n: M[n[:5]]=f
+    if re.match(r'\d{5}',n) and 'ΑΝΩ' in n.upper() and 'ΚΑΤΩ' in n.upper():
+        if n[:5] in M: print('ΠΡΟΣΟΧΗ: 2 CDR για %s, κρατάω %s'%(n[:5],M[n[:5]]))
+        else: M[n[:5]]=f
 print('machines:',{k:os.path.basename(v) for k,v in M.items()})
-base=[p for p in parts(os.path.join(A.cdr_dir,'02536.cdr')) if p['kind']=='base'][0]
+base=[p for p in parts((glob.glob(os.path.join(A.cdr_dir,'**','02536.cdr'),recursive=True) or [os.path.join(A.cdr_dir,'02536.cdr')])[0]) if p['kind']=='base'][0]
 
 # ---- custom machines «100-25x25x185» = pieces (n×n) - piece a×b - skewer length ----
 # box length = skewer+55 (≤155) / +60 (>155); panels from 00657 (box ≤210) or 00034 (box >210);
