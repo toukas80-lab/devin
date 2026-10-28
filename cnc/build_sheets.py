@@ -48,7 +48,7 @@ def as_circle(ct):
     (c,r)=cr
     if all(abs(math.hypot(p[0]-c[0],p[1]-c[1])-r)<1e-3 for s in segs for p in s[1:]) and abs(abs(sum(sweep(s) for s in segs))-2*math.pi)<1e-3: return c,r
 def write(m,ct,layer):
-    a={'layer':layer}; c=as_circle(ct)
+    a={'layer':layer,'color':250}; c=as_circle(ct)  # same entity colour as CorelDRAW's DXF export
     if c: m.add_circle(c[0],c[1],dxfattribs=a); return
     segs,closed=ct; run=[]
     def flush(close=False):
