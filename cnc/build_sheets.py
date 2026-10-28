@@ -300,6 +300,7 @@ for it in (A.fill.split(',') if A.fill else []):
     fs=[f for f in glob.glob(os.path.join(A.cdr_dir,'**','*.cdr'),recursive=True) if os.path.basename(f).startswith(c)]
     if not fs: sys.exit('--fill: δεν βρέθηκε CDR που να αρχίζει με %s'%c)
     fp=[dict(p,code=c) for p in parts(fs[0],5,1000,join=True)]
+    seen=set(); fp=[q for q in fp if not ((k:=(tuple(sorted((round(q['w'],1),round(q['h'],1)))),len(q['cts']))) in seen or seen.add(k))]  # many copies of the same piece in one CDR -> one
     print('fill',c,os.path.basename(fs[0]),th,'mm, κομμάτια:',', '.join('%.1fx%.1f'%(p['w'],p['h']) for p in fp))
     if not fp: sys.exit('--fill: το %s δεν έχει κλειστά κομμάτια'%fs[0])
     FILL[th]=FILL.get(th,[])+fp
@@ -310,6 +311,53 @@ def rot(p):
     return dict(p,w=p['h'],h=p['w'],cts=[tf(c,f) for c in p['cts']],texts=[tf(c,f) for c in p['texts']])
 def fill_sheet(pl,fps,gap):  # try preferring 0° and 90°, keep the one that fits more
     best=max((fill_try(list(pl),fps,gap,fl) for fl in (False,True)),key=len); n=len(best)-len(pl); pl[:]=best; return n
+def outer(p):  # outline polygon of a part (largest closed contour)
+    from shapely.geometry import Polygon
+    return max((Polygon(sample(c)) for c in p['cts'] if c[1] and len(sample(c))>2),key=lambda g:g.area).buffer(.1,join_style=2)  # +0.1: sampled chords lie inside curves
+LAT={}; AREA={}
+def lattice(q,gap):  # densest repeat pattern of q by real shape: rows with offset, or 0°/90° checkerboard; None if no better than its box
+    key=(id(q),gap)
+    if key in LAT: return LAT[key]
+    from shapely.affinity import translate
+    vs=[q,rot(q)]; P=[translate(outer(v),-v['w']/2,-v['h']/2) for v in vs]; R=max(q['w'],q['h'])
+    def ok(var,px,py,ox):  # var(i,j)->variant index; check cells (0..1,0..1) against neighbours
+        for i0,j0 in ((0,0),(1,0),(0,1),(1,1)):
+            a=translate(P[var(i0,j0)],i0*px+j0*ox,j0*py)
+            for i in range(i0-3,i0+4):
+                for j in range(j0-2,j0+3):
+                    if (i,j)==(i0,j0): continue
+                    cx,cy=i*px+j*ox,j*py
+                    if abs(cx-(i0*px+j0*ox))>R+gap or abs(cy-j0*py)>R+gap: continue
+                    if a.distance(translate(P[var(i,j)],cx,cy))<gap-1e-6: return False
+        return True
+    def least(f,lo,hi):
+        if not f(hi): return None
+        for _ in range(22):
+            m=(lo+hi)/2; lo,hi=(lo,m) if f(m) else (m,hi)
+        return hi+1e-3
+    best=None; base=(q['w']+gap)*(q['h']+gap)
+    one=lambda i,j:0; chk=lambda i,j:(i+j)%2
+    px1=least(lambda px:ok(one,px,1e4,0),0,q['w']+gap+.5)
+    if not px1: LAT[key]=None; return None
+    for k in range(16):  # single orientation, row offset ox
+        ox=px1*k/16; py=least(lambda py:ok(one,px1,py,ox),0,q['h']+gap+.5)
+        if py and (not best or px1*py<best[0]): best=(px1*py,one,px1,py,ox)
+    for k in range(25):  # checkerboard 0°/90°
+        px=R*(.5+k/24)+gap; py=least(lambda py:ok(chk,px,py,0),0,R+gap+.5)
+        if py and ok(chk,px,py,0) and (not best or 2*px*py/2<best[0]): best=(px*py,chk,px,py,0)
+    LAT[key]=best+(q,) if best and best[0]<base*.97 else None
+    return LAT[key]
+def lat_place(q,gap,f,lat):  # lattice points of q inside free rect f (same rule as boxes: x>=a0, x+w+gap<=a1)
+    _,var,px,py,ox=lat; vs=[q,rot(q)]; a0,b0,a1,b1=f; out=[]
+    for sx in range(4):
+      for sy in range(4):
+        cand=[]; x0=a0+max(v['w'] for v in vs)/2+sx*px/4; y0=b0+max(v['h'] for v in vs)/2+sy*py/4
+        for j in range(-2,int((b1-b0)/py)+3):
+            for i in range(-3,int((a1-a0)/px)+4):
+                v=vs[var(i,j)]; cx=x0+i*px+(j*ox)%px; cy=y0+j*py; x,y=cx-v['w']/2,cy-v['h']/2
+                if x>=a0-1e-6 and y>=b0-1e-6 and x+v['w']+gap<=a1+1e-6 and y+v['h']+gap<=b1+1e-6: cand.append((v,x,y))
+        if len(cand)>len(out): out=cand
+    return out
 def fill_try(pl,fps,gap,flip):  # maxrects: drop fill parts (both orientations) into every free gap, keeping S mm at the edges
     mind=min(min(p['w'],p['h']) for p in fps)+gap; free=[(S,S,SW-S+gap,SH-S+gap)]; n=0
     def occupy(x0,y0,x1,y1):
@@ -326,6 +374,11 @@ def fill_try(pl,fps,gap,flip):  # maxrects: drop fill parts (both orientations) 
     for p,x,y in pl:  # real extents: some library lines stick out of the outline by a few 0.1 mm
         e=[bb(sample(c)) for c in p['cts']]; occupy(x+min(min(b[0] for b in e),0),y+min(min(b[1] for b in e),0),x+max(max(b[2] for b in e),p['w'])+gap,y+max(max(b[3] for b in e),p['h'])+gap)
     for q in sorted(fps,key=lambda p:-p['w']*p['h']):
+        lat=lattice(rot(q) if flip and abs(q['w']-q['h'])>.01 else q,gap) if len(q['cts'])<40 else None
+        while lat:  # shaped piece that nests tighter than its box: fill the biggest gap with a lattice block, repeat
+            best=max(((lat_place(lat[5],gap,f,lat[:5]),f) for f in free),key=lambda t:len(t[0]),default=([],None))[0]
+            if not best: break
+            pl+=best; occupy(min(x for _,x,_ in best),min(y for *_,y in best),max(x+v['w'] for v,x,_ in best)+gap,max(y+v['h'] for v,_,y in best)+gap)
         vs=[q]+([rot(q)] if abs(q['w']-q['h'])>.01 else []); vs=vs[::-1] if flip else vs
         while True:
             c=min(((f[1],f[0],i) for f in free for i,v in enumerate(vs) if f[2]-f[0]>=v['w']+gap-1e-6 and f[3]-f[1]>=v['h']+gap-1e-6),default=None)
@@ -344,7 +397,7 @@ for th,packs in packs_by.items():
       fig,ax=plt.subplots(figsize=(6,12)); ax.plot([0,SW,SW,0,0],[0,0,SH,SH,0],'k-',lw=.6)
       used=0; maxy=0
       for p,x,y in pl:
-          used+=p['w']*p['h']; maxy=max(maxy,y+p['h']); mv=lambda a,b:(x+a,y+b)
+          used+=AREA.get(id(p)) or AREA.setdefault(id(p),outer(p).area); maxy=max(maxy,y+p['h']); mv=lambda a,b:(x+a,y+b)
           for lay,col,cs in (('LAYER_1','k',p['cts']),('XARAXI','b',p['texts'])):
               for c in cs:
                   c=tf(c,mv); write(m,c,lay); xs,ys=zip(*sample(c)); ax.plot(xs,ys,col+'-',lw=.25)
@@ -352,4 +405,4 @@ for th,packs in packs_by.items():
       fn=os.path.join(A.out_dir,f'fyllo_{th}'+('' if th=='ola' else 'mm')+f'_{tag}'+(f'_f{si}of{len(packs)}' if len(packs)>1 else '')+f'_{A.version}')
       doc.saveas(fn+'.dxf'); ax.set_aspect('equal'); ax.set_title(f'{th} 1015x2020 - {len(pl)} kommatia',fontsize=8)
       fig.savefig(fn+'.png',dpi=200,bbox_inches='tight'); plt.close(fig)
-      print(os.path.basename(fn)+'.dxf',th,'mm:',len(pl),'parts, gap',GAP[th],'used height to',round(maxy,1),'fill %.0f%%'%(100*used/(SW*SH)))
+      print(os.path.basename(fn)+'.dxf',th,'mm:',len(pl),'parts, gap',GAP[th],'used height to',round(maxy,1),'material used %.0f%%'%(100*used/(SW*SH)))
