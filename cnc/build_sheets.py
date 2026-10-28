@@ -82,7 +82,7 @@ def text_contours(t,size):
     if cur: out.append((cur,False))
     return out
 def load(path):
-    s=svg_of(path); H=float(re.search(r'height="([\d.]+)"',s)[1]); P=lambda z:(z.real/K,(H-z.imag)/K)
+    s=svg_of(path); H=float(re.search(r'viewBox="[^"]*?([\d.]+)"',s)[1]); P=lambda z:(z.real/K,(H-z.imag)/K)
     cts=[]
     for d in re.findall(r'<path d="([^"]*)"',s):
         for sp in parse_path(d.replace('\n',' ')).continuous_subpaths():
