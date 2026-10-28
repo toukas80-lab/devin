@@ -120,17 +120,19 @@ def load(path):
     return cts,texts
 def parts(fn):
     cts,texts=load(fn); out=[]; B=[(c,bb(sample(c))) for c in cts]; TB=[(c,bb(sample(c))) for c in texts]
-    big=[(c,b) for c,b in B if 100<b[2]-b[0]<320 and 100<b[3]-b[1]<320]
+    big=[(c,b) for c,b in B if 50<b[2]-b[0]<320 and 50<b[3]-b[1]<320]
     big=[(c,b) for c,b in big if not any(o is not c and ob[0]<=b[0]+.01 and ob[1]<=b[1]+.01 and ob[2]>=b[2]-.01 and ob[3]>=b[3]-.01 and (ob[2]-ob[0])>(b[2]-b[0])+.01 for o,ob in big)]
     inside=lambda c,b,t:c[0]>=b[0]-t and c[1]>=b[1]-t and c[2]<=b[2]+t and c[3]<=b[3]+t
     for _,b in big:
         ins=[(c,cb) for c,cb in B if inside(cb,b,.6)]; tx=[c for c,cb in TB if inside(cb,b,0)]
         w,h=b[2]-b[0],b[3]-b[1]
-        tri=sum(1 for c,cb in ins if 6.5<cb[2]-cb[0]<7.5 and cb[3]-cb[1]<7.5 and not as_circle(c))  # 7 mm edge triangles (not Ø7 holes)
+        marks=sum(1 for c,cb in ins if max(cb[2]-cb[0],cb[3]-cb[1])<10 and not as_circle(c))  # small edge marks (triangles/squares) of the top plate
         nc=sum(1 for c,_ in ins if as_circle(c))
-        kind=('top' if tri>8 else 'bottom') if abs(w-h)<1 and nc>=16 else 'base' if abs(w-h)<1 else 'panel'
+        kind='plate' if nc>=16 else 'base' if abs(w-h)<1 else 'panel'
         mv=lambda x,y:(x-b[0],y-b[1])
-        out.append(dict(kind=kind,w=w,h=h,cts=[tf(c,mv) for c,_ in ins],texts=[tf(c,mv) for c in tx]))
+        out.append(dict(kind=kind,marks=marks,w=w,h=h,cts=[tf(c,mv) for c,_ in ins],texts=[tf(c,mv) for c in tx]))
+    pl=sorted([p for p in out if p['kind']=='plate'],key=lambda p:p['marks'])  # top plate = the one with the edge marks
+    if len(pl)==2 and pl[1]['marks']>pl[0]['marks']: pl[0]['kind'],pl[1]['kind']='bottom','top'
     return out
 def rot_ccw(p):  # 90 CCW, keep bottom-left at 0 (same orientation as his Untitled-1.dxf)
     H=p['h']; f=lambda x,y:(H-y,x)
@@ -155,7 +157,7 @@ if A.diag:
         print('==',code,os.path.basename(M[code]),'contours',len(cts))
         for c,b in B:
             w,h=b[2]-b[0],b[3]-b[1]
-            if w<100 or h<100: continue
+            if w<50 or h<50: continue
             ins=[(o,ob) for o,ob in B if o is not c and ob[0]>=b[0]-.6 and ob[1]>=b[1]-.6 and ob[2]<=b[2]+.6 and ob[3]<=b[3]+.6]
             ci=collections.Counter(round(2*as_circle(o)[1],1) for o,_ in ins if as_circle(o))
             sm=collections.Counter('%s%.1fx%.1f'%('κλειστό ' if o[1] else 'ανοιχτό ',ob[2]-ob[0],ob[3]-ob[1]) for o,ob in ins if not as_circle(o) and max(ob[2]-ob[0],ob[3]-ob[1])<60)
@@ -245,7 +247,7 @@ sheets={15:[],20:[],25:[]}; cache={}; skipped=[]
 for code,q,want in order:
     if code not in cache and CUSTOM.match(code): cache[code]=custom_parts(code)
     if code not in cache:
-        ps=parts(M[code]); pan=[p for p in ps if p['kind']=='panel']; one=lambda k:[p for p in ps if p['kind']==k]
+        ps=parts(M[code]); pan=[p for p in ps if p['kind'] in ('panel','base')]; one=lambda k:[p for p in ps if p['kind']==k]
         print(code,'κομμάτια CDR:',', '.join('%s %.1fx%.1f'%(p['kind'],p['w'],p['h']) for p in ps))
         if not (len(one('top'))==1 and len(one('bottom'))==1 and len(pan) in (1,2)):
             print('ΠΡΟΣΟΧΗ: %s παραλείπεται, το CDR δεν έχει 1 άνω + 1 κάτω + 1-2 πλαϊνά: %s'%(code,[p['kind'] for p in ps])); skipped.append(code); continue
