@@ -1,6 +1,6 @@
 """CDR (CorelDRAW) machine templates -> nested DXF sheets 15/20/25 mm.
 Geometry is kept as true CIRCLE / LWPOLYLINE(+bulge arcs) / SPLINE entities, like CorelDRAW's own DXF export."""
-import re, os, sys, glob, math, shutil, subprocess, argparse, ezdxf
+import re, os, sys, unicodedata, glob, math, shutil, subprocess, argparse, ezdxf
 from svgpathtools import parse_path, Line, Arc, QuadraticBezier
 import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -11,7 +11,7 @@ FONT=FontProperties(family=['Arial','Liberation Sans','DejaVu Sans'])
 K=2.83465
 ap=argparse.ArgumentParser(description=__doc__)
 ap.add_argument('--cdr-dir',required=True); ap.add_argument('--out-dir',required=True)
-ap.add_argument('--order',help='CODE:QTY[:parts] comma-separated, parts = kivotio+ano+kato+vasi (default all), e.g. "00034:3,00030:2:kivotio". Default: 1 whole machine of every template')
+ap.add_argument('--order',help='ΚΩΔΙΚΟΣ:ΤΕΜ[:κομμάτια], με κόμμα. Κομμάτια: κιβώτιο (4 πλαϊνά), άνω, κάτω, βάση, με + (χωρίς = ολόκληρη μηχανή). Π.χ. "00034:12:κιβώτιο,00030:3,00033:2:άνω+κάτω"')
 ap.add_argument('--version',default='v1'); ap.add_argument('--cdr2xhtml',default=shutil.which('cdr2xhtml') or 'cdr2xhtml')
 A=ap.parse_args()
 
@@ -132,12 +132,14 @@ for f in sorted(glob.glob(os.path.join(A.cdr_dir,'*.cdr'))):
 print('machines:',{k:os.path.basename(v) for k,v in M.items()})
 base=[p for p in parts(os.path.join(A.cdr_dir,'02536.cdr')) if p['kind']=='base'][0]
 PARTS={'kivotio':15,'kato':20,'vasi':20,'ano':25}  # kivotio = the 4 side panels
+ALIAS={'κιβωτιο':'kivotio','κατω':'kato','βαση':'vasi','ανω':'ano'}
+norm=lambda w:''.join(c for c in unicodedata.normalize('NFD',w.strip().lower()) if not unicodedata.combining(c))
 order=[]
 for it in (A.order.split(',') if A.order else [c+':1' for c in M]):
     f=it.strip().split(':'); code=f[0].zfill(5); q=int(f[1]) if len(f)>1 else 1
-    want=f[2].lower().split('+') if len(f)>2 else list(PARTS)
+    want=[ALIAS.get(norm(w),norm(w)) for w in f[2].split('+')] if len(f)>2 else list(PARTS)
     if code not in M: sys.exit('no CDR template for %s (have: %s)'%(code,', '.join(M)))
-    if set(want)-set(PARTS): sys.exit('unknown part in %r, use: %s'%(it,'+'.join(PARTS)))
+    if set(want)-set(PARTS): sys.exit('άγνωστο κομμάτι στο %r, γράψε: κιβώτιο / άνω / κάτω / βάση'%it)
     order.append((code,q,want))
 print('order:',[(c,q,'+'.join(w)) for c,q,w in order])
 sheets={15:[],20:[],25:[]}; cache={}
