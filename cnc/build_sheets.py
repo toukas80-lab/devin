@@ -97,7 +97,21 @@ def text_contours(t,size):
             out.append((cur,True)); cur=[]
     if cur: out.append((cur,False))
     return out
-def load(path):
+def rev(ct): return [(g[0],*g[:0:-1]) for g in ct[::-1]]
+def join_open(cts,tol=.05):  # open pieces whose ends chain into a loop -> one closed contour (e.g. 03923 outline drawn as 4 open paths)
+    eq=lambda a,b:abs(a[0]-b[0])<tol and abs(a[1]-b[1])<tol
+    op=[i for i,(c,cl) in enumerate(cts) if not cl and c]; used=set(); out=[c for c in cts if c[1] or not c[0]]
+    for i in op:
+        if i in used: continue
+        ch=list(cts[i][0]); mem=[i]
+        while not eq(ch[-1][-1],ch[0][1]):
+            nx=next(((j,False) for j in op if j not in used and j not in mem and eq(cts[j][0][0][1],ch[-1][-1])),None) or \
+               next(((j,True) for j in op if j not in used and j not in mem and eq(cts[j][0][-1][-1],ch[-1][-1])),None)
+            if not nx: break
+            j,r=nx; ch+=rev(cts[j][0]) if r else cts[j][0]; mem.append(j)
+        if len(mem)>1 and eq(ch[-1][-1],ch[0][1]): used.update(mem); out.append((ch,True))
+    return out+[cts[i] for i in op if i not in used]
+def load(path,join=False):
   cts=[]; texts=[]
   for pg,s in enumerate(svg_of(path)):  # pages placed 5 m apart in x so parts of different pages never overlap
     H=float((re.search(r'viewBox="[\d.\s-]*?([\d.]+)"',s) or re.search(r'height="([\d.]+)',s))[1]); X0=pg*5000; P=lambda z,H=H,X0=X0:(z.real/K+X0,(H-z.imag)/K)  # libcdr 0.1.9: viewBox in pt, height in "in"; older: height in pt
@@ -118,9 +132,9 @@ def load(path):
         tc=[tf(c,lambda px,py:(-py,px)) for c in text_contours(t,float(fs)/K)]
         b=bb([p for c in tc for p in sample(c)])
         texts+=[tf(c,lambda px,py:(px-b[0]+bx,py-b[1]+by)) for c in tc]
-  return cts,texts
-def parts(fn,lo=50,hi=320):
-    cts,texts=load(fn); out=[]; B=[(c,bb(sample(c))) for c in cts]; TB=[(c,bb(sample(c))) for c in texts]
+  return (join_open(cts) if join else cts),texts
+def parts(fn,lo=50,hi=320,join=False):
+    cts,texts=load(fn,join); out=[]; B=[(c,bb(sample(c))) for c in cts]; TB=[(c,bb(sample(c))) for c in texts]
     big=[(c,b) for c,b in B if lo<b[2]-b[0]<hi and lo<b[3]-b[1]<hi]
     big=[(c,b) for c,b in big if not any(o is not c and ob[0]<=b[0]+.01 and ob[1]<=b[1]+.01 and ob[2]>=b[2]-.01 and ob[3]>=b[3]-.01 and (ob[2]-ob[0])>(b[2]-b[0])+.01 for o,ob in big)]
     inside=lambda c,b,t:c[0]>=b[0]-t and c[1]>=b[1]-t and c[2]<=b[2]+t and c[3]<=b[3]+t
@@ -282,7 +296,7 @@ for it in (A.fill.split(',') if A.fill else []):
     c,th=it.strip().split(':'); c=c.zfill(5); th=int(th)
     fs=[f for f in glob.glob(os.path.join(A.cdr_dir,'**','*.cdr'),recursive=True) if os.path.basename(f).startswith(c)]
     if not fs: sys.exit('--fill: δεν βρέθηκε CDR που να αρχίζει με %s'%c)
-    fp=[dict(p,code=c) for p in parts(fs[0],5,1000)]
+    fp=[dict(p,code=c) for p in parts(fs[0],5,1000,join=True)]
     print('fill',c,os.path.basename(fs[0]),th,'mm, κομμάτια:',', '.join('%.1fx%.1f'%(p['w'],p['h']) for p in fp))
     if not fp: sys.exit('--fill: το %s δεν έχει κλειστά κομμάτια'%fs[0])
     FILL[th]=FILL.get(th,[])+fp
