@@ -4,6 +4,7 @@ import argparse,math,os,ezdxf
 from ezdxf import path as epath
 from shapely.geometry import Polygon,LineString,Point
 from shapely.geometry.polygon import orient
+from shapely.strtree import STRtree
 ap=argparse.ArgumentParser(description=__doc__)
 ap.add_argument('--dxf',required=True); ap.add_argument('--home-z',type=float,required=True); ap.add_argument('--out')
 A=ap.parse_args()
@@ -136,15 +137,52 @@ def nn(items,key):
     return out
 c0=lambda p:(p.bounds[0],p.bounds[1])
 # ---------- program in his order ----------
-for s in nn(slits,lambda s:s.coords[0]): slit(s,levels(0,-15.1,4),6000.0)
-for w in nn(wedges,c0): helix_ring(ring(w,0,False),levels(0,-15.1,11),6000.0)
-for c in nn(cb,lambda c:c[:2]): helix(c[0],c[1],3.5-TR,levels(0,-7.5,2),1800.0)
-for c in nn(holes,lambda c:c[:2]): helix(c[0],c[1],c[2]-TR,levels(0,-15.1,4),1800.0)
-for c in nn(cb,lambda c:c[:2]): helix(c[0],c[1],1.5-TR,[-11.3,-15.1],800.0,z0=-6.5)
-for p in nn(slots,c0): helix_ring(ring(p,-TR,False),levels(0,-15.1,11),6000.0)
-for p in nn(pockets,c0): pocket(p,levels(0,-7.0,5),6000.0)
-for c in nn(pkc,lambda c:c[:2]): helix(c[0],c[1],c[2]-TR,[-9.7,-12.4,-15.1],1800.0,z0=-6.0)
-for o in nn(outers,c0): ring_cut(ring(o,TR,True),levels(0,-14.1,10),6000.0)
+# stages (his rule): finish 3 boxes (12 side panels) completely, then the next 3...; other parts (fill) after; taps last
+OT=STRtree(outers)
+def own(g):
+    pt=g if isinstance(g,Point) else (g.interpolate(.5,normalized=True) if isinstance(g,LineString) else g.representative_point())
+    return next((int(k) for k in OT.query(pt) if outers[k].contains(pt)),None)
+F={}
+for kind,items,geo in (('slits',slits,lambda s:s),('wedges',wedges,lambda w:w),('cb',cb,lambda c:Point(c[:2])),('holes',holes,lambda c:Point(c[:2])),
+                       ('slots',slots,lambda p:p),('pockets',pockets,lambda p:p),('pkc',pkc,lambda c:Point(c[:2]))):
+    for it in items: F.setdefault((kind,own(geo(it))),[]).append(it)
+BOX_PER_STAGE=3
+pan={}
+for s_ in slits:
+    k=own(s_)
+    if k is not None: pan[k]=s_
+groups={}
+for k,s_ in pan.items():
+    (ax,ay),(bx,by)=s_.coords[0],s_.coords[-1]; x0,y0,x1,y1=outers[k].bounds
+    Lk,Wk=((y1-y0),(x1-x0)) if abs(by-ay)>abs(bx-ax) else ((x1-x0),(y1-y0))
+    groups.setdefault(round(Lk*2)/2,{}).setdefault(round(Wk*2)/2,[]).append(k)
+cen=lambda k:outers[k].centroid.coords[0]
+boxes=[]
+for Lk,byw in groups.items():
+    ws={w:nn(v,cen) for w,v in byw.items()}
+    if len(ws)==2 and len(set(len(v) for v in ws.values()))==1:  # custom: 2+2 different sides
+        a_,b_=ws.values(); boxes+=[a_[i:i+2]+b_[i:i+2] for i in range(0,len(a_),2)]
+    else:
+        flat_=[k for w in sorted(ws) for k in ws[w]]; boxes+=[flat_[i:i+4] for i in range(0,len(flat_),4)]
+boxes=nn(boxes,lambda b:(sum(cen(k)[0] for k in b)/len(b),sum(cen(k)[1] for k in b)/len(b)))
+stages=[set(k for b in boxes[i:i+BOX_PER_STAGE] for k in b) for i in range(0,len(boxes),BOX_PER_STAGE)]
+rest=set(range(len(outers)))-set().union(*stages) if stages else set(range(len(outers)))
+stages.append(rest|{None})
+def g(kind,stg): return [it for k in stg for it in F.get((kind,k),[])]
+for kind,items in (('slits',slits),('wedges',wedges),('cb',cb),('holes',holes),('slots',slots),('pockets',pockets),('pkc',pkc)):
+    assert sum(len(g(kind,stg)) for stg in stages)==len(items),kind
+assert sum(len([k for k in stg if k is not None]) for stg in stages)==len(outers)
+for stg in stages:
+    for s in nn(g('slits',stg),lambda s:s.coords[0]): slit(s,levels(0,-15.1,4),6000.0)
+    for w in nn(g('wedges',stg),c0): helix_ring(ring(w,0,False),levels(0,-15.1,11),6000.0)
+    for c in nn(g('cb',stg),lambda c:c[:2]): helix(c[0],c[1],3.5-TR,levels(0,-7.5,2),1800.0)
+    for c in nn(g('holes',stg),lambda c:c[:2]): helix(c[0],c[1],c[2]-TR,levels(0,-15.1,4),1800.0)
+    for c in nn(g('cb',stg),lambda c:c[:2]): helix(c[0],c[1],1.5-TR,[-11.3,-15.1],800.0,z0=-6.5)
+    for p in nn(g('slots',stg),c0): helix_ring(ring(p,-TR,False),levels(0,-15.1,11),6000.0)
+    for p in nn(g('pockets',stg),c0): pocket(p,levels(0,-7.0,5),6000.0)
+    for c in nn(g('pkc',stg),lambda c:c[:2]): helix(c[0],c[1],c[2]-TR,[-9.7,-12.4,-15.1],1800.0,z0=-6.0)
+    for o in nn([outers[k] for k in stg if k is not None],c0): ring_cut(ring(o,TR,True),levels(0,-14.1,10),6000.0)
+print('stages:',' | '.join('%d parts'%len([k for k in stg if k is not None]) for stg in stages),'(boxes %d, %d per stage)'%(len(boxes),BOX_PER_STAGE))
 for c in nn(TAPS,lambda c:c[:2]): helix(c[0],c[1],c[2]+TR,levels(0,-15.1,4),1800.0,outside=True)
 hz=f3(A.home_z)
 out=['N0G00 G21 G17 G90','N10G00 G40 G49 G80','N20G71','N30T1M6','N40G43Z%sH1M8'%hz,'S15000M03','X0.000Y0.000']
