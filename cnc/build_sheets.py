@@ -280,7 +280,7 @@ if any('vasi' in w for _,_,w,_,_ in order):
     if v not in ('ναι','οχι','nai','oxi','yes','no'): sys.exit('--exolkeas: γράψε ναι (με τρύπα στη μέση) ή όχι (χωρίς).')
     EXOLK=v in ('ναι','nai','yes')
 print('order:',[(c,q,'+'.join(w))+(() if e is None else ('εξωλκέας' if e else 'χωρίς εξωλκέα',)) for c,q,w,e,_ in order])
-sheets={15:[],20:[],25:[]}; cache={}; skipped=[]
+sheets={15:[],20:[],25:[]}; cache={}; skipped=[]; PIECES={}
 for code,q,want,exo,mm in order:
     if mm:  # κομμάτι-συσκευασίας: q αντίτυπα κάθε μοναδικού κομματιού του CDR σε φύλλο mm (φύλλο: γέμισμα ολόκληρου)
         if code not in cache:
@@ -289,7 +289,7 @@ for code,q,want,exo,mm in order:
             if not fp: sys.exit('το %s δεν έχει κομμάτια'%cdr_of(code)[0])
             print(code,'κομμάτια CDR:',', '.join('%.1fx%.1f'%(p['w'],p['h']) for p in fp))
             cache[code]=fp
-        if q: sheets[mm]+=cache[code]*q
+        if q: PIECES.setdefault(mm,[]).extend((u,q) for u in cache[code])  # nested like the fill (his rule: 00064 one inside the other), q copies
         else: FULL[mm]=FULL.get(mm,[])+cache[code]
         continue
     if code not in cache and CUSTOM.match(code): cache[code]=custom_parts(code)
@@ -368,8 +368,11 @@ if A.ena_dxf: sheets={'ola':[p for v in sheets.values() for p in v]}; GAP['ola']
 def rot(p):
     f=lambda x,y,h=p['h']:(h-y,x)
     return dict(p,w=p['h'],h=p['w'],cts=[tf(c,f) for c in p['cts']],texts=[tf(c,f) for c in p['texts']])
-def fill_sheet(pl,fps,gap):  # try preferring 0° and 90°, keep the one that fits more
-    best=max((fill_try(list(pl),fps,gap,fl) for fl in (False,True)),key=len); n=len(best)-len(pl); pl[:]=best; return n
+def fill_sheet(pl,fps,gap,lim=None):  # try preferring 0° and 90°, keep the one that fits more; lim: id(part)->copies still wanted
+    tries=[(fill_try(list(pl),fps,gap,fl,dict(lim) if lim is not None else None)) for fl in (False,True)]
+    best=max(tries,key=lambda t:len(t[0])); n=len(best[0])-len(pl); pl[:]=best[0]
+    if lim is not None: lim.update(best[1])
+    return n
 def outer(p):  # outline polygon of a part (largest closed contour)
     from shapely.geometry import Polygon
     return max((Polygon(sample(c)) for c in p['cts'] if c[1] and len(sample(c))>2),key=lambda g:g.area).buffer(.1,join_style=2)  # +0.1: sampled chords lie inside curves
@@ -417,7 +420,7 @@ def lat_place(q,gap,f,lat):  # lattice points of q inside free rect f (same rule
                 if x>=a0-1e-6 and y>=b0-1e-6 and x+v['w']+gap<=a1+1e-6 and y+v['h']+gap<=b1+1e-6: cand.append((v,x,y))
         if len(cand)>len(out): out=cand
     return out
-def fill_try(pl,fps,gap,flip):  # maxrects: drop fill parts (both orientations) into every free gap, keeping S mm at the edges
+def fill_try(pl,fps,gap,flip,lim=None):  # maxrects: drop fill parts (both orientations) into every free gap, keeping S mm at the edges
     mind=min(min(p['w'],p['h']) for p in fps)+gap; free=[(S,S,SW-S+gap,SH-S+gap)]; n=0
     def occupy(x0,y0,x1,y1):
         nf=[]
@@ -435,17 +438,29 @@ def fill_try(pl,fps,gap,flip):  # maxrects: drop fill parts (both orientations) 
     for q in sorted(fps,key=lambda p:-p['w']*p['h']):
         g=TAP_PITCH-q['w'] if q.get('tap') else gap
         lat=None if q.get('tap') else lattice(rot(q) if flip and abs(q['w']-q['h'])>.01 else q,gap) if len(q['cts'])<40 else None
-        while lat:  # shaped piece that nests tighter than its box: fill the biggest gap with a lattice block, repeat
+        left=lambda:1e9 if lim is None else lim[id(q)]
+        while lat and left()>0:  # shaped piece that nests tighter than its box: fill the biggest gap with a lattice block, repeat
             best=max(((lat_place(lat[5],gap,f,lat[:5]),f) for f in free),key=lambda t:len(t[0]),default=([],None))[0]
             if not best: break
+            best=best[:int(min(len(best),left()))]  # lattice order = bottom row first, rows interlocked -> lowest used height
+            if lim is not None: lim[id(q)]-=len(best)
             pl+=best; occupy(min(x for _,x,_ in best),min(y for *_,y in best),max(x+v['w'] for v,x,_ in best)+gap,max(y+v['h'] for v,_,y in best)+gap)
         vs=[q]+([rot(q)] if abs(q['w']-q['h'])>.01 else []); vs=vs[::-1] if flip else vs
-        while True:
+        while left()>0:
             c=min(((f[1],f[0],i) for f in free for i,v in enumerate(vs) if f[2]-f[0]>=v['w']+g-1e-6 and f[3]-f[1]>=v['h']+g-1e-6),default=None)
             if not c: break
             y,x,i=c; v=vs[i]; pl.append((v,x,y)); occupy(x,y,x+v['w']+g,y+v['h']+g)
-    return pl
+            if lim is not None: lim[id(q)]-=1
+    return pl,lim
 packs_by={th:pack(items,GAP[th]) for th,items in sheets.items() if items}
+for th,pq in PIECES.items():  # ordered pieces: nested into the free space, new sheets only when needed
+    key='ola' if A.ena_dxf else th; pk=packs_by.setdefault(key,[[]]); lim={id(u):q for u,q in pq}; fps=[u for u,_ in pq]
+    for pl in pk:
+        if sum(lim.values()): fill_sheet(pl,fps,GAP[key],lim)
+    while sum(lim.values()):
+        pk.append([]); n=fill_sheet(pk[-1],fps,GAP[key],lim)
+        if not n: sys.exit('κομμάτι μεγαλύτερο από το φύλλο: %s'%[u['code'] for u in fps if lim[id(u)]])
+    print('pieces',th,'mm:',sum(q for _,q in pq),'κομμάτια φωλιασμένα σε',len(pk),'φύλλα')
 for th,fp in FILL.items():
     key='ola' if A.ena_dxf else th; pk=packs_by.setdefault(key,[[]])
     print('fill',th,'mm:',sum(fill_sheet(pl,fp,GAP[key]) for pl in pk),'κομμάτια σε',len(pk),'φύλλα')
