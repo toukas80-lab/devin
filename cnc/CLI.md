@@ -12,7 +12,7 @@
 
 ## 1. Προετοιμασία (κάθε φορά)
 Στο `C:\Users\User\Documents\devin`: `git fetch origin` (ΜΗΝ αλλάξεις το τρέχον checkout).
-Στο `..\devin-cnc`: `git checkout --detach origin/cnc/fylla-01`. Ξαναδιάβασε αυτό το αρχείο από εκεί (`..\devin-cnc\cnc\CLI.md`) — μπορεί να άλλαξε.
+Στο `..\devin-cnc`: `git checkout --detach origin/cnc/fylla-01`. **ΚΑΘΕ φορά, σε ΚΑΘΕ εντολή cnc, και ΞΑΝΑΤΡΕΧΕΙΣ τα προγράμματα — ΠΟΤΕ αντίγραφο προηγούμενου run.** Τα προγράμματα γράφουν πρώτη γραμμή `version <hash>`· αν γράψει «ΠΡΟΣΟΧΗ: ΠΑΛΙΑ ΕΚΔΟΣΗ», κάνε checkout και ξανατρέξε. Στο report γράψε τη γραμμή `version`. Ξαναδιάβασε αυτό το αρχείο από εκεί (`..\devin-cnc\cnc\CLI.md`) — μπορεί να άλλαξε.
 
 ## 2. Εντολή
 ```

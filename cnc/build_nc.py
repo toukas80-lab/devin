@@ -11,6 +11,13 @@ A=ap.parse_args()
 TR=1.25; SAFE=5.0; Z1=1.0; ZIG=8.0
 def levels(z0,depth,n): return [z0+(depth-z0)*(k+1)/n for k in range(n)] if z0<0 else [depth*(k+1)/n for k in range(n)]
 # ---------- read DXF (LAYER_1 only: XARAXI text not cut for now) ----------
+def _ver():  # which cnc commit runs; warns if the checkout is behind origin/cnc/fylla-01 (CLI forgot fetch/checkout)
+    import subprocess as sp; d=os.path.dirname(os.path.abspath(__file__)); g=lambda *a:sp.run(['git','-C',d,*a],capture_output=True,text=True).stdout.strip()
+    try:
+        g('fetch','-q','origin','cnc/fylla-01'); h,o=g('rev-parse','--short','HEAD'),g('rev-parse','--short','FETCH_HEAD')
+        print('version',h,'' if not o or h==o else '| ΠΡΟΣΟΧΗ: ΠΑΛΙΑ ΕΚΔΟΣΗ, η τελευταία είναι %s — κάνε git checkout --detach origin/cnc/fylla-01 και ξανατρέξε'%o)
+    except Exception as e: print('version ?',e)
+_ver()
 doc=ezdxf.readfile(A.dxf); C=[]; CL=[]; OP=[]; TAPS=[]
 def flat(e): return [(v.x,v.y) for v in epath.make_path(e).flattening(.01)]
 sh=[flat(e) for e in doc.modelspace() if e.dxf.layer=='SHEET' and e.dxftype()!='CIRCLE']  # his Corel DXFs: sheet centred on 0,0 -> move to bottom-left

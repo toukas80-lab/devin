@@ -8,6 +8,13 @@ from matplotlib.textpath import TextPath
 from matplotlib.font_manager import FontProperties
 from matplotlib.path import Path as MPath
 FONT=FontProperties(family=['Arial','Liberation Sans','DejaVu Sans'])
+def _ver():  # which cnc commit runs; warns if the checkout is behind origin/cnc/fylla-01 (CLI forgot fetch/checkout)
+    import subprocess as sp; d=os.path.dirname(os.path.abspath(__file__)); g=lambda *a:sp.run(['git','-C',d,*a],capture_output=True,text=True).stdout.strip()
+    try:
+        g('fetch','-q','origin','cnc/fylla-01'); h,o=g('rev-parse','--short','HEAD'),g('rev-parse','--short','FETCH_HEAD')
+        print('version',h,'' if not o or h==o else '| ΠΡΟΣΟΧΗ: ΠΑΛΙΑ ΕΚΔΟΣΗ, η τελευταία είναι %s — κάνε git checkout --detach origin/cnc/fylla-01 και ξανατρέξε'%o)
+    except Exception as e: print('version ?',e)
+_ver()
 K=2.83465
 ap=argparse.ArgumentParser(description=__doc__)
 ap.add_argument('--cdr-dir',required=True); ap.add_argument('--out-dir',required=True)
