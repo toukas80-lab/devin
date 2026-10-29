@@ -344,7 +344,7 @@ def pack(items,gap):  # maxrects (0°/90°), several orders/rules; keep fewest s
 tag='_'.join('%sx%s%s%s'%(c,q or 'fyllo','' if set(ALL)<=set(w) else '-'+'+'.join(w),'' if e is None else ('-exo' if e else '-xoris')) for c,q,w,e,_ in order) if A.order else '%dmixanes'%(len(M)-len(skipped))
 if EXOLK is not None and all(e is None for *_,e,_ in order): tag+='_exolkeas' if EXOLK else '_xoris-exolkea'
 if len(tag)>80: tag='%dkodikoi_%s'%(len(order),'-'.join(c for c,*_ in order))[:80]
-FILL={}
+FILL={}; TAP_PITCH=15.0
 for it in (A.fill.split(',') if A.fill else []):
     c,th=it.strip().split(':'); c=c.zfill(5); th=int(th)
     fs=[f for f in glob.glob(os.path.join(A.cdr_dir,'**','*.cdr'),recursive=True) if os.path.basename(f).startswith(c)]
@@ -353,6 +353,8 @@ for it in (A.fill.split(',') if A.fill else []):
     seen=set(); fp=[q for q in fp if not ((k:=(tuple(sorted((round(q['w'],1),round(q['h'],1)))),len(q['cts']))) in seen or seen.add(k))]  # many copies of the same piece in one CDR -> one
     print('fill',c,os.path.basename(fs[0]),th,'mm, κομμάτια:',', '.join('%.1fx%.1f'%(p['w'],p['h']) for p in fp))
     if not fp: sys.exit('--fill: το %s δεν έχει κλειστά κομμάτια'%fs[0])
+    for q in fp:  # τάπα = lone circle ~Ø7.65 -> LAYER_10, always TAP_PITCH apart (his rule)
+        if len(q['cts'])==1 and q['cts'][0][1] and 7<q['w']<8.5 and abs(q['w']-q['h'])<.1: q['tap']=True
     FILL[th]=FILL.get(th,[])+fp
 for th,v in FULL.items(): FILL[th]=v+FILL.get(th,[])
 if A.ena_dxf: sheets={'ola':[p for v in sheets.values() for p in v]}; GAP['ola']=max(GAP.values())
@@ -424,16 +426,17 @@ def fill_try(pl,fps,gap,flip):  # maxrects: drop fill parts (both orientations) 
     for p,x,y in pl:  # real extents: some library lines stick out of the outline by a few 0.1 mm
         e=[bb(sample(c)) for c in p['cts']]; occupy(x+min(min(b[0] for b in e),0),y+min(min(b[1] for b in e),0),x+max(max(b[2] for b in e),p['w'])+gap,y+max(max(b[3] for b in e),p['h'])+gap)
     for q in sorted(fps,key=lambda p:-p['w']*p['h']):
-        lat=lattice(rot(q) if flip and abs(q['w']-q['h'])>.01 else q,gap) if len(q['cts'])<40 else None
+        g=TAP_PITCH-q['w'] if q.get('tap') else gap
+        lat=None if q.get('tap') else lattice(rot(q) if flip and abs(q['w']-q['h'])>.01 else q,gap) if len(q['cts'])<40 else None
         while lat:  # shaped piece that nests tighter than its box: fill the biggest gap with a lattice block, repeat
             best=max(((lat_place(lat[5],gap,f,lat[:5]),f) for f in free),key=lambda t:len(t[0]),default=([],None))[0]
             if not best: break
             pl+=best; occupy(min(x for _,x,_ in best),min(y for *_,y in best),max(x+v['w'] for v,x,_ in best)+gap,max(y+v['h'] for v,_,y in best)+gap)
         vs=[q]+([rot(q)] if abs(q['w']-q['h'])>.01 else []); vs=vs[::-1] if flip else vs
         while True:
-            c=min(((f[1],f[0],i) for f in free for i,v in enumerate(vs) if f[2]-f[0]>=v['w']+gap-1e-6 and f[3]-f[1]>=v['h']+gap-1e-6),default=None)
+            c=min(((f[1],f[0],i) for f in free for i,v in enumerate(vs) if f[2]-f[0]>=v['w']+g-1e-6 and f[3]-f[1]>=v['h']+g-1e-6),default=None)
             if not c: break
-            y,x,i=c; v=vs[i]; pl.append((v,x,y)); occupy(x,y,x+v['w']+gap,y+v['h']+gap)
+            y,x,i=c; v=vs[i]; pl.append((v,x,y)); occupy(x,y,x+v['w']+g,y+v['h']+g)
     return pl
 packs_by={th:pack(items,GAP[th]) for th,items in sheets.items() if items}
 for th,fp in FILL.items():
@@ -442,13 +445,13 @@ for th,fp in FILL.items():
 for th,packs in packs_by.items():
   for si,pl in enumerate(packs,1):
       doc=ezdxf.new('R2000'); doc.units=ezdxf.units.MM; m=doc.modelspace()
-      for L in ('SHEET','LAYER_1','XARAXI'): doc.layers.add(L)
+      for L in ('SHEET','LAYER_1','LAYER_10','XARAXI'): doc.layers.add(L)
       m.add_lwpolyline([(0,0),(SW,0),(SW,SH),(0,SH)],close=True,dxfattribs={'layer':'SHEET'})
       fig,ax=plt.subplots(figsize=(6,12)); ax.plot([0,SW,SW,0,0],[0,0,SH,SH,0],'k-',lw=.6)
       used=0; maxy=0
       for p,x,y in pl:
           used+=AREA.get(id(p)) or AREA.setdefault(id(p),outer(p).area); maxy=max(maxy,y+p['h']); mv=lambda a,b:(x+a,y+b)
-          for lay,col,cs in (('LAYER_1','k',p['cts']),('XARAXI','b',p['texts'])):
+          for lay,col,cs in (('LAYER_10' if p.get('tap') else 'LAYER_1','g' if p.get('tap') else 'k',p['cts']),('XARAXI','b',p['texts'])):
               for c in cs:
                   c=tf(c,mv); write(m,c,lay); xs,ys=zip(*sample(c)); ax.plot(xs,ys,col+'-',lw=.25)
           ax.text(x+p['w']/2,y+3,p['code'],fontsize=4,color='r',ha='center')

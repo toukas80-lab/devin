@@ -39,6 +39,8 @@ for e in doc.modelspace():
 outers=[p for p in CL if not any(q is not p and q.area>p.area and q.contains(p) for q in CL)]
 inner=[p for p in CL if not any(p is o for o in outers)]
 def owner(g): return next((o for o in outers if o.contains(g)),None)
+loose=[c for c in C if 3.7<c[2]<3.95 and owner(Point(c[:2])) is None]  # τάπες written on LAYER_1 (older sheets) -> taps
+TAPS+=loose; C=[c for c in C if c not in loose]
 # ---------- classify ----------
 slits=list(OP); wedges=[]; slots=[]; pockets=[]; cb=[]; holes=[]; pkc=[]
 for p in inner:
