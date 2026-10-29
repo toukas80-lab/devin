@@ -1,6 +1,6 @@
 """CDR (CorelDRAW) machine templates -> nested DXF sheets 15/20/25 mm.
 Geometry is kept as true CIRCLE / LWPOLYLINE(+bulge arcs) / SPLINE entities, like CorelDRAW's own DXF export."""
-import re, os, sys, unicodedata, glob, math, shutil, subprocess, argparse, ezdxf
+import random,time,re, os, sys, unicodedata, glob, math, shutil, subprocess, argparse, ezdxf
 from svgpathtools import parse_path, Line, Arc, QuadraticBezier
 import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -217,7 +217,8 @@ def custom_parts(spec):
                 out.append(circle(cx,cy,r))
             elif b_[2]-b_[0]>W0-1: out.append(tf(c,lambda x,y:(pw(x,W0/2,P-P0),pw(y,L0/2,L-L0))))
         for k in range(1,n):
-            dx=15+k*d-x0; out+=[tf(sl[0],lambda x,y,dx=dx:(x+dx,y))]+[tf(c,lambda x,y,dx=dx:(x+dx,y-WEDGE_DOWN)) for c in wd]
+            dx=15+k*d-x0; dL=L-L0  # slit top end + wedge follow the top edge (wedge distance from the top as in the template)
+            out+=[tf(sl[0],lambda x,y,dx=dx:(x+dx,pw(y,L0/2,dL)))]+[tf(c,lambda x,y,dx=dx:(x+dx,pw(y,L0/2,dL)-WEDGE_DOWN)) for c in wd]
         return dict(kind='panel',w=P+15,h=L,cts=out,texts=[])
     pl={q['kind']:q for q in parts(M['00657'])}
     def plate(top):
@@ -302,14 +303,45 @@ for code,q,want,exo,mm in order:
         if q: sheets[PARTS[k]]+=ps_*q
         else: FULL[PARTS[k]]=FULL.get(PARTS[k],[])+ps_  # ΤΕΜ=φύλλο: as many as fit on a whole sheet
 GAP={15:2.6,20:3.275,25:3.275}; SW,SH,S=1015,2020,11
-def pack(items,gap):  # shelf packing; opens a new sheet when full
-    items=sorted(items,key=lambda p:(-p['h'],p['code'])); out=[[]]; x=y=S; rowh=0
-    for p in items:
-        assert p['w']<=SW-2*S and p['h']<=SH-2*S,'part bigger than sheet'
-        if x+p['w']>SW-S+1e-6: x=S; y+=rowh+gap; rowh=0
-        if y+p['h']>SH-S+1e-6: out.append([]); x=y=S; rowh=0
-        out[-1].append((p,x,y)); x+=p['w']+gap; rowh=max(rowh,p['h'])
-    return out
+def pack(items,gap):  # maxrects (0°/90°), several orders/rules; keep fewest sheets, then lowest used height (biggest leftover)
+    for p in items: assert min(p['w'],p['h'])<=SW-2*S and max(p['w'],p['h'])<=SH-2*S,'part bigger than sheet'
+    W,H=SW-2*S+gap,SH-2*S+gap  # each part takes w+gap x h+gap
+    def cut(fr,x,y,w,h):
+        nf=[]
+        for (fx,fy,fw,fh) in fr:
+            if x>=fx+fw-1e-9 or x+w<=fx+1e-9 or y>=fy+fh-1e-9 or y+h<=fy+1e-9: nf.append((fx,fy,fw,fh)); continue
+            if x>fx: nf.append((fx,fy,x-fx,fh))
+            if x+w<fx+fw: nf.append((x+w,fy,fx+fw-x-w,fh))
+            if y>fy: nf.append((fx,fy,fw,y-fy))
+            if y+h<fy+fh: nf.append((fx,y+h,fw,fy+fh-y-h))
+        return [a for k,a in enumerate(nf) if not any(k!=m and b[0]<=a[0]+1e-9 and b[1]<=a[1]+1e-9 and b[0]+b[2]>=a[0]+a[2]-1e-9
+                and b[1]+b[3]>=a[1]+a[3]-1e-9 and (b!=a or m<k) for m,b in enumerate(nf))]
+    def run(order,rule):
+        shs=[]
+        for p in order:
+            vs=(p,rot(p)) if abs(p['w']-p['h'])>.01 else (p,)
+            for si in list(range(len(shs)))+[len(shs)]:
+                if si==len(shs): shs.append([[(0,0,W,H)],[]])
+                fr,pl=shs[si]; best=None
+                for q in vs:
+                    w,h=q['w']+gap,q['h']+gap
+                    for (fx,fy,fw,fh) in fr:
+                        if w<=fw+1e-6 and h<=fh+1e-6:
+                            sc=(fy+h,fx) if rule==0 else (min(fw-w,fh-h),fy+h,fx)
+                            if best is None or sc<best[0]: best=(sc,q,fx,fy,w,h)
+                if best: break
+            _,q,x,y,w,h=best; pl.append((q,x+S,y+S)); shs[si][0]=cut(fr,x,y,w,h)
+        return [pl for _,pl in shs]
+    keys=[lambda p:(-p['h'],p['code']),lambda p:(-p['w']*p['h'],p['code']),lambda p:(-max(p['w'],p['h']),p['code']),lambda p:(-p['w'],p['code'])]
+    score=lambda r:(len(r),max(y+q['h'] for q,x,y in r[-1]),sum(max(y+q['h'] for q,x,y in s_) for s_ in r))
+    best=min((run(sorted(items,key=k),rule) for k in keys for rule in (0,1)),key=score)
+    rnd=random.Random(1); t0=time.time(); base=sorted(items,key=keys[1])
+    while time.time()-t0<min(20,1+.4*len(items)):  # random swaps of the area order: keep any better layout (deterministic seed)
+        o=base[:]
+        for _ in range(rnd.randint(1,max(1,len(o)//3))): a,b=rnd.randrange(len(o)),rnd.randrange(len(o)); o[a],o[b]=o[b],o[a]
+        r=run(o,rnd.randint(0,1))
+        if score(r)<score(best): best=r; base=o
+    return best
 tag='_'.join('%sx%s%s%s'%(c,q or 'fyllo','' if set(ALL)<=set(w) else '-'+'+'.join(w),'' if e is None else ('-exo' if e else '-xoris')) for c,q,w,e,_ in order) if A.order else '%dmixanes'%(len(M)-len(skipped))
 if EXOLK is not None and all(e is None for *_,e,_ in order): tag+='_exolkeas' if EXOLK else '_xoris-exolkea'
 if len(tag)>80: tag='%dkodikoi_%s'%(len(order),'-'.join(c for c,*_ in order))[:80]
