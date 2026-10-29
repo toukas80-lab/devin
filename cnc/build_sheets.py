@@ -11,7 +11,7 @@ FONT=FontProperties(family=['Arial','Liberation Sans','DejaVu Sans'])
 K=2.83465
 ap=argparse.ArgumentParser(description=__doc__)
 ap.add_argument('--cdr-dir',required=True); ap.add_argument('--out-dir',required=True)
-ap.add_argument('--order',help='ΚΩΔΙΚΟΣ:ΤΕΜ[:κομμάτια], με κόμμα. ΤΕΜ=φύλλο: όσα χωράνε σε ολόκληρο φύλλο (π.χ. 00019:φύλλο:άνω). Custom: ΤΕΜΑΧΙΑ-ΑxΒxΜΗΚΟΣ αντί για κωδικό, π.χ. 100-25x25x185:1. Κομμάτια: κιβώτιο (4 πλαϊνά), πλαϊνό (το/τα διαφορετικά πλαϊνά μία φορά), άνω, κάτω, βάση, με + (κενό = ολόκληρη μηχανή). 4ο πεδίο ναι/όχι = εξωλκέας για τη βάση αυτής της μηχανής (αλλιώς --exolkeas). Π.χ. "00034:12:κιβώτιο,00030:3,00033:2:άνω+κάτω,00019:1::όχι"')
+ap.add_argument('--order',help='ΚΩΔΙΚΟΣ:ΤΕΜ[:κομμάτια], με κόμμα. ΤΕΜ=φύλλο: όσα χωράνε σε ολόκληρο φύλλο (π.χ. 00019:φύλλο:άνω). Custom: ΤΕΜΑΧΙΑ-ΑxΒxΜΗΚΟΣ αντί για κωδικό, π.χ. 100-25x25x185:1. Κομμάτια: κιβώτιο (4 πλαϊνά), πλαϊνό (το/τα διαφορετικά πλαϊνά μία φορά), άνω, κάτω, βάση, με + (κενό = ολόκληρη μηχανή). 4ο πεδίο ναι/όχι = εξωλκέας για τη βάση αυτής της μηχανής (αλλιώς --exolkeas). Π.χ. "00034:12:κιβώτιο,00030:3,00033:2:άνω+κάτω,00019:1::όχι". Κομμάτι-συσκευασίας (CDR χωρίς ΑΝΩ ΚΑΤΩ): ΚΩΔΙΚΟΣ:ΠΛΗΘΟΣ:ΠΑΧΟΣ π.χ. "03839:4:20" (ΤΕΜ=φύλλο: όσα χωράνε)')
 ap.add_argument('--exolkeas',default='όχι',help='βάσεις για εξωλκέα: ναι (με τους κύκλους Ø90/Ø66 στη μέση) / όχι (χωρίς, προεπιλογή).')
 ap.add_argument('--fill',help='ΚΩΔΙΚΟΣ:ΠΑΧΟΣ, με κόμμα: γεμίζει ΟΛΑ τα κενά σε κάθε φύλλο αυτού του πάχους (με 11 mm περιμετρικά) με όσα κομμάτια του CDR χωράνε, και στραμμένα 90° (π.χ. "03839:20,03923:15")')
 ap.add_argument('--diag',help='κωδικοί με κόμμα: τυπώνει τα κομμάτια του CDR (διαστάσεις, κύκλοι ανά Ø, μικρά σχήματα) και σταματά')
@@ -250,26 +250,41 @@ PARTS={'kivotio':15,'plai':15,'kato':20,'vasi':20,'ano':25}  # kivotio = the 4 s
 ALL=[k for k in PARTS if k!='plai']  # κομπλέ (κενό πεδίο κομματιών) = χωρίς πλαϊνό
 ALIAS={'κιβωτιο':'kivotio','πλαινο':'plai','κατω':'kato','βαση':'vasi','ανω':'ano'}
 norm=lambda w:''.join(c for c in unicodedata.normalize('NFD',w.strip().lower()) if not unicodedata.combining(c))
+def cdr_of(code): return [g for g in glob.glob(os.path.join(A.cdr_dir,'**','*.cdr'),recursive=True) if os.path.basename(g).startswith(code)]
 order=[]; FULL={}
 for it in (A.order.split(',') if A.order else [c+':1' for c in M]):
     f=it.strip().split(':'); code=cnorm(f[0]); code=code if CUSTOM.match(code) else code.zfill(5); q=(0 if norm(f[1]) in ('φυλλο','fyllo','fullo') else int(f[1])) if len(f)>1 else 1
+    if code not in M and not CUSTOM.match(code):  # κομμάτι-συσκευασίας (piece-CDR): ΚΩΔΙΚΟΣ:ΠΛΗΘΟΣ:ΠΑΧΟΣ
+        if not cdr_of(code): sys.exit('no CDR template for %s (have: %s)'%(code,', '.join(M)))
+        mm=int(f[2]) if len(f)>2 and f[2].strip() else 0
+        if mm not in (15,20,25): sys.exit('πάχος στο %r: γράψε ΚΩΔΙΚΟΣ:ΠΛΗΘΟΣ:ΠΑΧΟΣ (15/20/25)'%it)
+        order.append((code,q,['%dmm'%mm],None,mm)); continue
     want=[ALIAS.get(norm(w),norm(w)) for w in f[2].split('+')] if len(f)>2 and f[2].strip() else list(ALL)
     exo=None
     if len(f)>3:
         v=norm(f[3])
         if v not in ('ναι','οχι','nai','oxi','yes','no'): sys.exit('εξωλκέας στο %r: γράψε ναι ή όχι'%it)
         exo=v in ('ναι','nai','yes')
-    if code not in M and not CUSTOM.match(code): sys.exit('no CDR template for %s (have: %s)'%(code,', '.join(M)))
     if set(want)-set(PARTS): sys.exit('άγνωστο κομμάτι στο %r, γράψε: κιβώτιο / πλαϊνό / άνω / κάτω / βάση'%it)
-    order.append((code,q,want,exo))
+    order.append((code,q,want,exo,None))
 EXOLK=None
-if any('vasi' in w for _,_,w,_ in order):
+if any('vasi' in w for _,_,w,_,_ in order):
     v=norm(A.exolkeas)
     if v not in ('ναι','οχι','nai','oxi','yes','no'): sys.exit('--exolkeas: γράψε ναι (με τρύπα στη μέση) ή όχι (χωρίς).')
     EXOLK=v in ('ναι','nai','yes')
-print('order:',[(c,q,'+'.join(w))+(() if e is None else ('εξωλκέας' if e else 'χωρίς εξωλκέα',)) for c,q,w,e in order])
+print('order:',[(c,q,'+'.join(w))+(() if e is None else ('εξωλκέας' if e else 'χωρίς εξωλκέα',)) for c,q,w,e,_ in order])
 sheets={15:[],20:[],25:[]}; cache={}; skipped=[]
-for code,q,want,exo in order:
+for code,q,want,exo,mm in order:
+    if mm:  # κομμάτι-συσκευασίας: q αντίτυπα κάθε μοναδικού κομματιού του CDR σε φύλλο mm (φύλλο: γέμισμα ολόκληρου)
+        if code not in cache:
+            fp=[dict(p,code=code) for p in parts(cdr_of(code)[0],5,1000,join=True)]
+            seen=set(); fp=[u for u in fp if not ((k:=(tuple(sorted((round(u['w'],1),round(u['h'],1)))),len(u['cts']))) in seen or seen.add(k))]
+            if not fp: sys.exit('το %s δεν έχει κομμάτια'%cdr_of(code)[0])
+            print(code,'κομμάτια CDR:',', '.join('%.1fx%.1f'%(p['w'],p['h']) for p in fp))
+            cache[code]=fp
+        if q: sheets[mm]+=cache[code]*q
+        else: FULL[mm]=FULL.get(mm,[])+cache[code]
+        continue
     if code not in cache and CUSTOM.match(code): cache[code]=custom_parts(code)
     if code not in cache:
         ps=parts(M[code]); pan=[p for p in ps if p['kind'] in ('panel','base')]; one=lambda k:[p for p in ps if p['kind']==k]
@@ -295,8 +310,8 @@ def pack(items,gap):  # shelf packing; opens a new sheet when full
         if y+p['h']>SH-S+1e-6: out.append([]); x=y=S; rowh=0
         out[-1].append((p,x,y)); x+=p['w']+gap; rowh=max(rowh,p['h'])
     return out
-tag='_'.join('%sx%s%s%s'%(c,q or 'fyllo','' if set(ALL)<=set(w) else '-'+'+'.join(w),'' if e is None else ('-exo' if e else '-xoris')) for c,q,w,e in order) if A.order else '%dmixanes'%(len(M)-len(skipped))
-if EXOLK is not None and all(e is None for *_,e in order): tag+='_exolkeas' if EXOLK else '_xoris-exolkea'
+tag='_'.join('%sx%s%s%s'%(c,q or 'fyllo','' if set(ALL)<=set(w) else '-'+'+'.join(w),'' if e is None else ('-exo' if e else '-xoris')) for c,q,w,e,_ in order) if A.order else '%dmixanes'%(len(M)-len(skipped))
+if EXOLK is not None and all(e is None for *_,e,_ in order): tag+='_exolkeas' if EXOLK else '_xoris-exolkea'
 if len(tag)>80: tag='%dkodikoi_%s'%(len(order),'-'.join(c for c,*_ in order))[:80]
 FILL={}
 for it in (A.fill.split(',') if A.fill else []):
