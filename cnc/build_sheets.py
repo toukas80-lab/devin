@@ -200,12 +200,12 @@ def base_for(Px,Py,exo=None):  # every base: 02536 (Π=200) stretched to grid Π
         out.append(circle(cr[0][0]+dx/2,cr[0][1]+dy/2,cr[1]) if cr else tf(c,lambda x,y:(pw(x,m0,dx),pw(y,m0,dy))))
     return dict(kind='base',w=base['w']+dx,h=base['h']+dy,cts=out,texts=[])
 def custom_parts(spec):
-    N,a,b,sk=CUSTOM.match(spec).groups(); N=int(N); a,b,sk=float(a),float(b),float(sk); n=math.isqrt(N)
-    if n*n!=N: sys.exit('custom %s: τα τεμάχια πρέπει να είναι n×n (π.χ. 100=10×10)'%spec)
+    N,a,b,sk=CUSTOM.match(spec).groups(); N=int(N); a,b,sk=float(a),float(b),float(sk)
+    na,nb=min(((i,N//i) for i in range(1,N+1) if N%i==0),key=lambda t:abs(t[0]*a-t[1]*b))  # grid na×nb: the most square frame (48-16.6x50 -> 12×4 = 199.2×200)
     L=sk+(55 if sk<=155 else 60); ref='00657' if L<=210 else '00034'
     if ref not in M or '00657' not in M: sys.exit('custom χρειάζεται τα CDR 00657 και 00034')
     rp=[q for q in parts(M[ref]) if q['kind']=='panel'][0]; W0,L0=rp['w'],rp['h']; P0=200
-    def panel(d):
+    def panel(d,n):
         P=n*d; out=[]; sl=sorted([c for c in rp['cts'] if not c[1] and cbb(c)[2]-cbb(c)[0]<.01],key=lambda c:cbb(c)[0])
         x0=cbb(sl[0])[0]; wd=[c for c in rp['cts'] if c[1] and abs(cbb(c)[2]-cbb(c)[0]-5)<.2 and cbb(c)[0]<x0<cbb(c)[2]]
         for c in rp['cts']:
@@ -222,14 +222,13 @@ def custom_parts(spec):
         return dict(kind='panel',w=P+15,h=L,cts=out,texts=[])
     pl={q['kind']:q for q in parts(M['00657'])}
     def plate(top):
-        t=pl['top']; Px,Py=n*a,n*b; e=-0.15; out=[]
+        t=pl['top']; Px,Py=na*a,nb*b; e=-0.15; out=[]
         for c in t['cts']:
             b_=cbb(c)
             if c[1] and not as_circle(c) and b_[2]-b_[0]>190: out.append(tf(c,lambda x,y:(pw(x,100,Px-P0),pw(y,100,Py-P0))))
-        for k in range(1,n):
-            out.append(([('L',(e+k*a,e),(e+k*a,e+Py))],False)); out.append(([('L',(e,e+k*b),(e+Px,e+k*b))],False))
-        for i in range(n):
-            for j in range(n): out.append(circle(e+(i+.5)*a,e+(j+.5)*b,5.5))
+        out+=[([('L',(e+k*a,e),(e+k*a,e+Py))],False) for k in range(1,na)]+[([('L',(e,e+k*b),(e+Px,e+k*b))],False) for k in range(1,nb)]
+        for i in range(na):
+            for j in range(nb): out.append(circle(e+(i+.5)*a,e+(j+.5)*b,5.5))
         if top:  # 00657 triangles of its first grid line (at 20) on each edge, centred on every new grid line
             for c in t['cts']:
                 b_=cbb(c)
@@ -237,16 +236,16 @@ def custom_parts(spec):
                 cx,cy=(b_[0]+b_[2])/2,(b_[1]+b_[3])/2
                 if cx<10 or cx>190:   # left/right edge: along y
                     if abs(cy-(e+20))>4: continue
-                    out+=[tf(c,lambda x,y,k=k:(pw(x,100,Px-P0),y+k*b-20)) for k in range(1,n)]
+                    out+=[tf(c,lambda x,y,k=k:(pw(x,100,Px-P0),y+k*b-20)) for k in range(1,nb)]
                 else:
                     if abs(cx-(e+20))>4: continue
-                    out+=[tf(c,lambda x,y,k=k:(x+k*a-20,pw(y,100,Py-P0))) for k in range(1,n)]
+                    out+=[tf(c,lambda x,y,k=k:(x+k*a-20,pw(y,100,Py-P0))) for k in range(1,na)]
         return dict(kind='top' if top else 'bottom',w=Px-0.3,h=Py-0.3,cts=out,texts=[])
-    pa,pb=panel(a),panel(b)
+    pa,pb=panel(a,na),panel(b,nb)
     return dict(kivotio=[dict(rot_ccw(q),code=spec) for q in (pa,pa,pb,pb)],
                 plai=[dict(rot_ccw(q),code=spec) for q in [pa]+([pb] if (pa['w'],pa['h'])!=(pb['w'],pb['h']) else [])],
                 kato=[dict(plate(False),code=spec)],
-                vasi=[dict(base_for(n*a,n*b),code=spec+' base')],ano=[dict(plate(True),code=spec)])
+                vasi=[dict(base_for(na*a,nb*b),code=spec+' base')],ano=[dict(plate(True),code=spec)],Px=na*a,Py=nb*b)
 PARTS={'kivotio':15,'plai':15,'kato':20,'vasi':20,'ano':25}  # kivotio = the 4 side panels; plai = each distinct side once
 ALL=[k for k in PARTS if k!='plai']  # κομπλέ (κενό πεδίο κομματιών) = χωρίς πλαϊνό
 ALIAS={'κιβωτιο':'kivotio','πλαινο':'plai','κατω':'kato','βαση':'vasi','ανω':'ano'}
