@@ -166,14 +166,23 @@ for k,s_ in pan.items():
     Lk,Wk=((y1-y0),(x1-x0)) if abs(by-ay)>abs(bx-ax) else ((x1-x0),(y1-y0))
     groups.setdefault(round(Lk*2)/2,{}).setdefault(round(Wk*2)/2,[]).append(k)
 cen=lambda k:outers[k].centroid.coords[0]
+def rows(ks):  # his rule: horizontal priority -> (row from the bottom, x) per part; rows = centroid-y bands
+    ks=sorted(ks,key=lambda k:cen(k)[1]); out={}
+    if not ks: return out
+    hs=sorted(outers[k].bounds[3]-outers[k].bounds[1] for k in ks); tol=hs[len(hs)//2]/2; r=0; y0=cen(ks[0])[1]
+    for k in ks:
+        if cen(k)[1]-y0>tol: r+=1; y0=cen(k)[1]
+        out[k]=(r,outers[k].bounds[0]*(1 if r%2==0 else -1))  # serpentine: even rows left->right, odd right->left
+    return out
+PR=rows(pan)
 boxes=[]
 for Lk,byw in groups.items():
-    ws={w:nn(v,cen) for w,v in byw.items()}
+    ws={w:sorted(v,key=PR.get) for w,v in byw.items()}
     if len(ws)==2 and len(set(len(v) for v in ws.values()))==1:  # custom: 2+2 different sides
         a_,b_=ws.values(); boxes+=[a_[i:i+2]+b_[i:i+2] for i in range(0,len(a_),2)]
     else:
-        flat_=[k for w in sorted(ws) for k in ws[w]]; boxes+=[flat_[i:i+4] for i in range(0,len(flat_),4)]
-boxes=nn(boxes,lambda b:(sum(cen(k)[0] for k in b)/len(b),sum(cen(k)[1] for k in b)/len(b)))
+        flat_=sorted((k for w in ws for k in ws[w]),key=PR.get); boxes+=[flat_[i:i+4] for i in range(0,len(flat_),4)]
+boxes.sort(key=lambda b:min(PR[k] for k in b))
 stages=[set(k for b in boxes[i:i+BOX_PER_STAGE] for k in b) for i in range(0,len(boxes),BOX_PER_STAGE)]
 rest=set(range(len(outers)))-set().union(*stages) if stages else set(range(len(outers)))
 stages.append(rest|{None})
@@ -181,21 +190,29 @@ def g(kind,stg): return [it for k in stg for it in F.get((kind,k),[])]
 for kind,items in (('slits',slits),('wedges',wedges),('cb',cb),('holes',holes),('slots',slots),('pockets',pockets),('pkc',pkc)):
     assert sum(len(g(kind,stg)) for stg in stages)==len(items),kind
 assert sum(len([k for k in stg if k is not None]) for stg in stages)==len(outers)
+def hz(kind,stg,key,R):  # row by row, left to right (part order R); inside a part nearest-next
+    out=[]
+    for k in sorted(stg,key=lambda k:R.get(k,(1e9,0))):
+        its=F.get((kind,k),[])
+        if k is None: its=sorted(its,key=lambda it:(round(key(it)[1]/20),key(it)[0]))
+        out+=its if k is None else nn(its,key)
+    return out
 for stg in stages:
-    for s in nn(g('slits',stg),lambda s:s.coords[0]): slit(s,levels(0,-15.1,4),6000.0)
-    for w in nn(g('wedges',stg),c0): helix_ring(ring(w,0,False),levels(0,-15.1,11),6000.0)
-    for c in nn(g('cb',stg),lambda c:c[:2]): helix(c[0],c[1],3.5-TR,levels(0,-7.5,2),1800.0)
-    for c in nn(g('holes',stg),lambda c:c[:2]): helix(c[0],c[1],c[2]-TR,levels(0,-15.1,4),1800.0)
-    for c in nn(g('cb',stg),lambda c:c[:2]): helix(c[0],c[1],1.5-TR,[-11.3,-15.1],800.0,z0=-6.5)
-    for p in nn(g('slots',stg),c0): helix_ring(ring(p,-TR,False),levels(0,-15.1,11),6000.0)
-    for p in nn(g('pockets',stg),c0): pocket(p,levels(0,-7.0,5),6000.0)
-    for c in nn(g('pkc',stg),lambda c:c[:2]): helix(c[0],c[1],c[2]-TR,[-9.7,-12.4,-15.1],1800.0,z0=-6.0)
-    for o in nn([outers[k] for k in stg if k is not None],c0): ring_cut(ring(o,TR,True),levels(0,-14.1,10),6000.0)
+    R=rows([k for k in stg if k is not None]); pt=lambda c:c[:2]
+    for s in hz('slits',stg,lambda s:s.coords[0],R): slit(s,levels(0,-15.1,4),6000.0)
+    for w in hz('wedges',stg,c0,R): helix_ring(ring(w,0,False),levels(0,-15.1,11),6000.0)
+    for c in hz('cb',stg,pt,R): helix(c[0],c[1],3.5-TR,levels(0,-7.5,2),1800.0)
+    for c in hz('holes',stg,pt,R): helix(c[0],c[1],c[2]-TR,levels(0,-15.1,4),1800.0)
+    for c in hz('cb',stg,pt,R): helix(c[0],c[1],1.5-TR,[-11.3,-15.1],800.0,z0=-6.5)
+    for p in hz('slots',stg,c0,R): helix_ring(ring(p,-TR,False),levels(0,-15.1,11),6000.0)
+    for p in hz('pockets',stg,c0,R): pocket(p,levels(0,-7.0,5),6000.0)
+    for c in hz('pkc',stg,pt,R): helix(c[0],c[1],c[2]-TR,[-9.7,-12.4,-15.1],1800.0,z0=-6.0)
+    for k in sorted((k for k in stg if k is not None),key=R.get): ring_cut(ring(outers[k],TR,True),levels(0,-14.1,10),6000.0)
 print('stages:',' | '.join('%d parts'%len([k for k in stg if k is not None]) for stg in stages),'(boxes %d, %d per stage)'%(len(boxes),BOX_PER_STAGE))
 TAP_PITCH=15.0  # his rule: taps always 15 mm apart (centre to centre, as in his DXF)
 close=[(a,b) for i,a in enumerate(TAPS) for b in TAPS[i+1:] if math.dist(a[:2],b[:2])<TAP_PITCH-.05]
 if close: print('ΠΡΟΣΟΧΗ τάπες πιο κοντά από 15 mm:',len(close),'ζεύγη, π.χ. %.2f,%.2f - %.2f,%.2f'%(close[0][0][:2]+close[0][1][:2]))
-for c in nn(TAPS,lambda c:c[:2]): helix(c[0],c[1],c[2]+TR,levels(0,-15.1,4),1800.0,outside=True)
+for c in sorted(TAPS,key=lambda c:(round(c[1]/TAP_PITCH),c[0]*(1 if round(c[1]/TAP_PITCH)%2==0 else -1))): helix(c[0],c[1],c[2]+TR,levels(0,-15.1,4),1800.0,outside=True)
 hz=f3(A.home_z)
 out=['N0G00 G21 G17 G90','N10G00 G40 G49 G80','N20G71','N30T1M6','N40G43Z%sH1M8'%hz,'S15000M03','X0.000Y0.000']
 L[1]=L[1]+'Z5.000' if L[1].startswith('G00X') else L[1]
