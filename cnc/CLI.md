@@ -11,13 +11,14 @@
 - Home Z: το λέει μέσα στην εντολή («home 20», «Z 20», «χομε 20»). Αν ΔΕΝ το πει, βγάλε DXF/PNG κανονικά αλλά ΟΧΙ NC, και γράψε στο τέλος «NC δεν βγήκε — πες home Z». ΠΟΤΕ μην το μαντέψεις ή κρατήσεις το προηγούμενο.
 
 ## 1. Προετοιμασία (κάθε φορά)
-Στο `C:\Users\User\Documents\devin`: `git fetch origin` (ΜΗΝ αλλάξεις το τρέχον checkout).
+Ισχύει ίδιο σε **σπίτι** (repo `$HOME\Documents\devin`) και **μαγαζί** (repo `$HOME\Documents\devin-magazi`). Παρακάτω «repo» = αυτό από όπου τρέχεις, `..\devin-cnc` = δίπλα του.
+Στο repo: `git fetch origin` (ΜΗΝ αλλάξεις το τρέχον checkout). Αν δεν υπάρχει `..\devin-cnc` (πρώτη φορά σε PC): `git worktree add --detach ..\devin-cnc origin/cnc/fylla-01`. Αν λείπει `uv` → `winget install --id astral-sh.uv -e`. Αν λείπει `C:\msys64\ucrt64\bin\cdr2xhtml.exe` → `winget install --id MSYS2.MSYS2 -e` και μετά `C:\msys64\usr\bin\bash.exe -lc "pacman -S --noconfirm mingw-w64-ucrt-x86_64-libcdr"`. Αν δεν υπάρχει `$HOME\Dropbox\devin\ΠΡΟΤΥΠΑ`, γράψε «λείπει το Dropbox\devin σε αυτό το PC» και σταμάτα.
 Στο `..\devin-cnc`: `git checkout --detach origin/cnc/fylla-01`. **ΚΑΘΕ φορά, σε ΚΑΘΕ εντολή cnc, και ΞΑΝΑΤΡΕΧΕΙΣ τα προγράμματα — ΠΟΤΕ αντίγραφο προηγούμενου run.** Τα προγράμματα γράφουν πρώτη γραμμή `version <hash>`· αν γράψει «ΠΡΟΣΟΧΗ: ΠΑΛΙΑ ΕΚΔΟΣΗ», κάνε checkout και ξανατρέξε. Στο report γράψε τη γραμμή `version`. Ξαναδιάβασε αυτό το αρχείο από εκεί (`..\devin-cnc\cnc\CLI.md`) — μπορεί να άλλαξε.
 
 ## 2. Εντολή
 ```
 $env:PYTHONIOENCODING="utf-8"
-uv run --no-project --with ezdxf --with svgpathtools --with matplotlib --with shapely python ..\devin-cnc\cnc\build_sheets.py --cdr-dir "C:\Users\User\Dropbox\devin\ΠΡΟΤΥΠΑ" --out-dir "C:\Users\User\Dropbox\devin" --order "..." [--fill "..."] [--exolkeas ναι] --version <ΩΩΛΛ> --cdr2xhtml "C:\msys64\ucrt64\bin\cdr2xhtml.exe"
+uv run --no-project --with ezdxf --with svgpathtools --with matplotlib --with shapely python ..\devin-cnc\cnc\build_sheets.py --cdr-dir "$HOME\Dropbox\devin\ΠΡΟΤΥΠΑ" --out-dir "$HOME\Dropbox\devin" --order "..." [--fill "..."] [--exolkeas ναι] --version <ΩΩΛΛ> --cdr2xhtml "C:\msys64\ucrt64\bin\cdr2xhtml.exe"
 ```
 - Πρότυπα (CDR): `Dropbox\devin\ΠΡΟΤΥΠΑ`. Αποτελέσματα: το πρόγραμμα τα βάζει μόνο του στο `Dropbox\devin\YYYY-MM-DD\`.
 - `--version` = τρέχουσα ώρα ΩΩΛΛ (π.χ. `1435`), ώστε κάθε τρέξιμο να έχει νέα ονόματα αρχείων. Ποτέ μην γράφεις πάνω σε υπάρχον αρχείο.
