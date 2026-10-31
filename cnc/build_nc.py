@@ -64,7 +64,7 @@ for cx,cy,r in C:
             x0,y0,x1,y1=o.bounds; d={'L':cx-x0,'R':x1-cx,'B':cy-y0,'T':y1-cy}; side=min(d,key=d.get)
             same=sum(1 for c2 in C if abs(c2[2]-2)<.05 and o.contains(Point(c2[0],c2[1])) and
                      min({'L':c2[0]-x0,'R':x1-c2[0],'B':c2[1]-y0,'T':y1-c2[1]}.items(),key=lambda t:t[1])[0]==side)
-            if same>=2: cb.append((cx,cy,r)); continue   # 3 holes of the long side -> Ø7 counterbore + Ø3 (his 01.nc)
+            if same>=2: cb.append((cx,cy,r)); continue   # 3 holes of the long side -> Ø7 area clearance + Ø3 (his 2nd 01.nc: cb7, drill3)
     holes.append((cx,cy,r))
 # ---------- G-code writer ----------
 L=[]; st=dict(x=None,y=None,z=None,f=None)
@@ -112,6 +112,24 @@ def helix(cx,cy,rp,lv,f,z0=Z1,cw=True,outside=False):
         z=d
     g='G02' if cw else 'G03'
     emit(g,x=cx-rp,y=cy,extra='I%+.3fJ%+.3f'%(-rp,0)); emit(g,x=sx,y=cy,extra='I%+.3fJ%+.3f'%(rp,0))
+def circ(cx,cy,r,n,cw,a0=math.pi):
+    sg=-1 if cw else 1; return [(cx+r*math.cos(a0+sg*2*math.pi*k/n),cy+r*math.sin(a0+sg*2*math.pi*k/n)) for k in range(n+1)]
+def zig(P,z,d):  # ramp z->d along P (G01, z by length), as in his 01.nc
+    per=sum(math.dist(a,b) for a,b in zip(P,P[1:])); acc=0
+    for a,b in zip(P,P[1:]): acc+=math.dist(a,b); emit('G01',x=b[0],y=b[1],z=z+(d-z)*acc/per)
+def lap(cx,cy,r,cw,a0=math.pi):  # flat full circle, 4 quarter arcs
+    g='G02' if cw else 'G03'; sg=-1 if cw else 1
+    for k in range(1,5):
+        a=a0+sg*k*math.pi/2; x0,y0=st['x'],st['y']; emit(g,x=cx+r*math.cos(a),y=cy+r*math.sin(a),extra='I%+.3fJ%+.3f'%(cx-x0,cy-y0))
+def cb7(cx,cy,lv,f):  # his 01.nc "n": area clearance Ø7, per level: own entry, zig ramp outer CW+inner CW then back, flat outer+inner
+    ro=3.5-TR; ri=ro-TR; O=circ(cx,cy,ro,36,True); I=circ(cx,cy,ri,24,True); P=O+I; z=Z1
+    for d in lv:
+        rapid_to(*O[0]); enter(z,f); zig(P+P[::-1][1:],z,d)
+        lap(cx,cy,ro,True); emit('G01',x=I[0][0],y=I[0][1]); lap(cx,cy,ri,True); z=d
+def drill3(cx,cy,f,d=-15.1,ramp=1.0):  # his 01.nc "tr": Ø3 profile inside, plunge to d+1, zig-zag 4 laps CCW/CW to d, flat CCW lap
+    r=1.5-TR; P=circ(cx,cy,r,12,False); rapid_to(*P[0]); enter(d+ramp,f); z=d+ramp
+    for k in range(4): zig(P if k%2==0 else P[::-1],z,z-ramp/4); z-=ramp/4
+    lap(cx,cy,r,False)
 def slit(ls,lv,f):  # on the line: ramp there, ramp back, flat pass, up, return (his 01.nc)
     P=list(ls.coords); A_,B_=P[0],P[-1]; rapid_to(*A_); enter(Z1,f); z=Z1
     for d in lv:
@@ -201,9 +219,9 @@ for stg in stages:
     R=rows([k for k in stg if k is not None]); pt=lambda c:c[:2]
     for s in hz('slits',stg,lambda s:s.coords[0],R): slit(s,levels(0,-15.1,4),6000.0)
     for w in hz('wedges',stg,c0,R): helix_ring(ring(w,0,False),levels(0,-15.1,11),6000.0)
-    for c in hz('cb',stg,pt,R): helix(c[0],c[1],3.5-TR,levels(0,-7.5,2),1800.0)
+    for c in hz('cb',stg,pt,R): cb7(c[0],c[1],levels(0,-7.5,2),1800.0)
     for c in hz('holes',stg,pt,R): helix(c[0],c[1],c[2]-TR,levels(0,-15.1,4),1800.0)
-    for c in hz('cb',stg,pt,R): helix(c[0],c[1],1.5-TR,[-11.3,-15.1],800.0,z0=-6.5)
+    for c in hz('cb',stg,pt,R): drill3(c[0],c[1],800.0)
     for p in hz('slots',stg,c0,R): helix_ring(ring(p,-TR,False),levels(0,-15.1,11),6000.0)
     for p in hz('pockets',stg,c0,R): pocket(p,levels(0,-7.0,5),6000.0)
     for c in hz('pkc',stg,pt,R): helix(c[0],c[1],c[2]-TR,[-9.7,-12.4,-15.1],1800.0,z0=-6.0)
