@@ -5,12 +5,15 @@ from ezdxf import path as epath
 from shapely.geometry import Polygon,LineString,Point
 from shapely.geometry.polygon import orient
 from shapely.strtree import STRtree
+from shapely.ops import unary_union
+from shapely.ops import voronoi_diagram
+from shapely.geometry import MultiPoint
 ap=argparse.ArgumentParser(description=__doc__)
 ap.add_argument('--dxf',required=True); ap.add_argument('--home-z',type=float,required=True); ap.add_argument('--out')
 A=ap.parse_args()
 TR=1.25; SAFE=5.0; Z1=1.0; ZIG=8.0
 def levels(z0,depth,n): return [z0+(depth-z0)*(k+1)/n for k in range(n)] if z0<0 else [depth*(k+1)/n for k in range(n)]
-# ---------- read DXF (LAYER_1 only: XARAXI text not cut for now) ----------
+# ---------- read DXF (LAYER_1 cut, LAYER_10 taps, XARAXI text engraved like his 02.nc) ----------
 def _ver():  # which cnc commit runs; warns if the checkout is behind origin/cnc/fylla-01 (CLI forgot fetch/checkout)
     import subprocess as sp; d=os.path.dirname(os.path.abspath(__file__)); g=lambda *a:sp.run(['git','-C',d,*a],capture_output=True,text=True).stdout.strip()
     try:
@@ -18,7 +21,7 @@ def _ver():  # which cnc commit runs; warns if the checkout is behind origin/cnc
         print('version',h,'' if not o or h==o else '| ΠΡΟΣΟΧΗ: ΠΑΛΙΑ ΕΚΔΟΣΗ, η τελευταία είναι %s — κάνε git checkout --detach origin/cnc/fylla-01 και ξανατρέξε'%o)
     except Exception as e: print('version ?',e)
 _ver()
-doc=ezdxf.readfile(A.dxf); C=[]; CL=[]; OP=[]; TAPS=[]
+doc=ezdxf.readfile(A.dxf); C=[]; CL=[]; OP=[]; TAPS=[]; TR_=[]
 def flat(e): return [(v.x,v.y) for v in epath.make_path(e).flattening(.01)]
 sh=[flat(e) for e in doc.modelspace() if e.dxf.layer=='SHEET' and e.dxftype()!='CIRCLE']  # his Corel DXFs: sheet centred on 0,0 -> move to bottom-left
 OX,OY=(min(p[0] for p in sh[0]),min(p[1] for p in sh[0])) if sh else (0,0)
@@ -32,6 +35,10 @@ for e in doc.modelspace():
         c=circ_of(e,[(x-OX,y-OY) for x,y in flat(e)] if e.dxftype()!='CIRCLE' else [])
         if c: TAPS.append(c)
         continue
+    if e.dxf.layer=='XARAXI':
+        q=[(x-OX,y-OY) for x,y in flat(e)]
+        if len(q)>3: TR_.append(Polygon(q).buffer(0))
+        continue
     if e.dxf.layer!='LAYER_1': continue
     if e.dxftype()=='CIRCLE': C.append((e.dxf.center.x-OX,e.dxf.center.y-OY,e.dxf.radius)); continue
     pts=[(x-OX,y-OY) for x,y in flat(e)]
@@ -43,6 +50,14 @@ for e in doc.modelspace():
     pts=list(LineString(pts).simplify(.02).coords)
     if closed and len(pts)>3: CL.append(Polygon(pts).buffer(0))
     else: OP.append(LineString(pts))
+def letters(R):  # outline rings -> glyph polygons (even nesting = outside, odd = counter/hole)
+    R=[r for r in R if r.area>.01]; D=[sum(1 for q in R if q is not r and q.area>r.area and q.contains(r)) for r in R]; out=[]
+    for i,r in enumerate(R):
+        if D[i]%2: continue
+        H=[R[j] for j in range(len(R)) if D[j]==D[i]+1 and r.contains(R[j])]
+        out.append(r.difference(unary_union(H)) if H else r)
+    return out
+TXT=letters(TR_)
 outers=[p for p in CL if not any(q is not p and q.area>p.area and q.contains(p) for q in CL)]
 inner=[p for p in CL if not any(p is o for o in outers)]
 def owner(g): return next((o for o in outers if o.contains(g)),None)
@@ -132,6 +147,59 @@ def drill3(cx,cy,f,top=-7.5,d=-15.1,n=2,zs=1.0,ang=10):  # his 01.nc "tr": Ø3 p
         k=math.ceil((z-lv)/(per*math.tan(math.radians(ang)))-1e-9); s=(z-lv)/k
         for i in range(k): zig(P if i%2==0 else P[::-1],z,z-s); z-=s
         z=lv; lap(cx,cy,r,False)
+K_TXT=0.0146  # his 02.nc: letters on the centre line, depth = 0.0146 x local half stroke width (≈0.013 on a 1.8 mm stroke), F2000
+def skeleton(g,step=.15):  # medial axis of a glyph: Voronoi of the densified outline, inside edges, short hairs pruned
+    pts=[]
+    for ring in [g.exterior,*g.interiors]:
+        n=max(8,int(ring.length/step)); pts+=[ring.interpolate(i*ring.length/n).coords[0] for i in range(n)]
+    E={}; key=lambda q:(round(q[0],4),round(q[1],4)); inn=g.buffer(-1e-3)
+    V=voronoi_diagram(MultiPoint(pts),edges=True)
+    for e in [l for m in V.geoms for l in getattr(m,'geoms',[m])]:
+        a,b=e.coords[0],e.coords[-1]
+        if inn.contains(e) and math.dist(a,b)>1e-6: E.setdefault(key(a),set()).add(key(b)); E.setdefault(key(b),set()).add(key(a))
+    bd=g.boundary; d=lambda q:bd.distance(Point(q))
+    while True:  # prune leaf chains shorter than 0.8 x clearance at their junction
+        cut=False
+        for v in [v for v in E if len(E[v])==1]:
+            if v not in E or len(E[v])!=1: continue
+            ch=[v]; u=v
+            while len(E[u])<=2 and len(ch)<5000:
+                nx=[w for w in E[u] if len(ch)<2 or w!=ch[-2]]
+                if not nx: break
+                u=nx[0]; ch.append(u)
+                if len(E[u])!=2: break
+            if len(E[u])>=3 and sum(math.dist(a,b) for a,b in zip(ch,ch[1:]))<.8*d(u):
+                for a,b in zip(ch,ch[1:]): E[a].discard(b); E[b].discard(a)
+                for q in ch[:-1]: E.pop(q,None)
+                cut=True
+        if not cut: break
+    return E,d
+def engrave(g,f=2000.0):
+    if g.geom_type=='MultiPolygon':
+        for h in g.geoms: engrave(h,f)
+        return
+    if g.geom_type!='Polygon' or g.is_empty: return
+    E,d=skeleton(g)
+    if not E: return
+    seen=set(); st0=min(E,key=lambda q:(q[0],q[1]))
+    for start in sorted(E,key=lambda q:(q!=st0,q)):
+        if all((start,w) in seen for w in E[start]): continue
+        seq=[start]; stk=[start]
+        while stk:
+            u=stk[-1]; nx=next((w for w in E[u] if (u,w) not in seen),None)
+            if nx is None:
+                stk.pop()
+                if stk: seq.append(stk[-1])
+                continue
+            seen.add((u,nx)); seen.add((nx,u)); seq.append(nx)
+            if nx in stk or any((nx,w) in seen for w in E[nx] if w!=u): continue_back=True
+            else: continue_back=False
+            if continue_back: seq.append(u)
+            else: stk.append(nx)
+        P=[(x,y,-K_TXT*d((x,y))) for x,y in seq]
+        P=list(LineString(P).simplify(.005,preserve_topology=False).coords) if len(P)>2 else P
+        rapid_to(P[0][0],P[0][1]); enter(P[0][2],f)
+        for x,y,z in P[1:]: emit('G01',x=x,y=y,z=z)
 def slit(ls,lv,f):  # on the line: ramp there, ramp back, flat pass, up, return (his 01.nc)
     P=list(ls.coords); A_,B_=P[0],P[-1]; rapid_to(*A_); enter(Z1,f); z=Z1
     for d in lv:
@@ -173,7 +241,7 @@ def own(g):
     return next((int(k) for k in OT.query(pt) if outers[k].contains(pt)),None)
 F={}
 for kind,items,geo in (('slits',slits,lambda s:s),('wedges',wedges,lambda w:w),('cb',cb,lambda c:Point(c[:2])),('holes',holes,lambda c:Point(c[:2])),
-                       ('slots',slots,lambda p:p),('pockets',pockets,lambda p:p),('pkc',pkc,lambda c:Point(c[:2]))):
+                       ('slots',slots,lambda p:p),('pockets',pockets,lambda p:p),('pkc',pkc,lambda c:Point(c[:2])),('text',TXT,lambda p:p.representative_point())):
     for it in items: F.setdefault((kind,own(geo(it))),[]).append(it)
 BOX_PER_STAGE=3
 pan={}
@@ -219,6 +287,7 @@ def hz(kind,stg,key,R):  # row by row, left to right (part order R); inside a pa
     return out
 for stg in stages:
     R=rows([k for k in stg if k is not None]); pt=lambda c:c[:2]
+    for g in hz('text',stg,c0,R): engrave(g)
     for s in hz('slits',stg,lambda s:s.coords[0],R): slit(s,levels(0,-15.1,4),6000.0)
     for w in hz('wedges',stg,c0,R): helix_ring(ring(w,0,False),levels(0,-15.1,11),6000.0)
     for c in hz('cb',stg,pt,R): cb7(c[0],c[1],levels(0,-7.5,2),1800.0)
@@ -241,4 +310,4 @@ out+=['N%d%s'%(70+10*i,s) for i,s in enumerate(body)]
 fn=A.out or os.path.splitext(A.dxf)[0]+'.nc'
 open(fn,'w',newline='\r\n').write('\n'.join(out)+'\n')
 print('NC',fn,'lines',len(out),'| slits',len(slits),'wedges',len(wedges),'cb Ø7+Ø3',len(cb),'holes',len(holes),
-      'slots',len(slots),'pockets',len(pockets),'pocket-circles',len(pkc),'outlines',len(outers),'taps',len(TAPS),'| home Z',hz)
+      'slots',len(slots),'pockets',len(pockets),'pocket-circles',len(pkc),'outlines',len(outers),'taps',len(TAPS),'letters',len(TXT),'| home Z',hz)
