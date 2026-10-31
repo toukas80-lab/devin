@@ -20,9 +20,10 @@ ap=argparse.ArgumentParser(description=__doc__)
 ap.add_argument('--cdr-dir',required=True); ap.add_argument('--out-dir',required=True)
 ap.add_argument('--order',help='ΚΩΔΙΚΟΣ:ΤΕΜ[:κομμάτια], με κόμμα. ΤΕΜ=φύλλο: όσα χωράνε σε ολόκληρο φύλλο (π.χ. 00019:φύλλο:άνω). Custom: ΤΕΜΑΧΙΑ-ΑxΒxΜΗΚΟΣ αντί για κωδικό, π.χ. 100-25x25x185:1. Κομμάτια: κιβώτιο (4 πλαϊνά), πλαϊνό (το/τα διαφορετικά πλαϊνά μία φορά), άνω, κάτω, βάση, με + (κενό = ολόκληρη μηχανή). 4ο πεδίο ναι/όχι = εξωλκέας για τη βάση αυτής της μηχανής (αλλιώς --exolkeas). Π.χ. "00034:12:κιβώτιο,00030:3,00033:2:άνω+κάτω,00019:1::όχι". Κομμάτι-συσκευασίας (CDR χωρίς ΑΝΩ ΚΑΤΩ): ΚΩΔΙΚΟΣ:ΠΛΗΘΟΣ:ΠΑΧΟΣ π.χ. "03839:4:20" (ΤΕΜ=φύλλο: όσα χωράνε)')
 ap.add_argument('--exolkeas',default='όχι',help='βάσεις για εξωλκέα: ναι (με τους κύκλους Ø90/Ø66 στη μέση) / όχι (χωρίς, προεπιλογή).')
-ap.add_argument('--fill',help='ΚΩΔΙΚΟΣ:ΠΑΧΟΣ, με κόμμα: γεμίζει ΟΛΑ τα κενά σε κάθε φύλλο αυτού του πάχους (με 11 mm περιμετρικά) με όσα κομμάτια του CDR χωράνε, και στραμμένα 90° (π.χ. "03839:20,03923:15")')
+ap.add_argument('--fill',help='ΚΩΔΙΚΟΣ:ΠΑΧΟΣ, με κόμμα: γεμίζει ΟΛΑ τα κενά σε κάθε φύλλο αυτού του πάχους (με τα --asfaleia mm περιμετρικά) με όσα κομμάτια του CDR χωράνε, και στραμμένα 90° (π.χ. "03839:20,03923:15")')
 ap.add_argument('--diag',help='κωδικοί με κόμμα: τυπώνει τα κομμάτια του CDR (διαστάσεις, κύκλοι ανά Ø, μικρά σχήματα) και σταματά')
 ap.add_argument('--ena-dxf',action='store_true',help='όλα τα κομμάτια σε ένα DXF (για έλεγχο)')
+ap.add_argument('--asfaleia',type=float,required=True,help='mm ασφάλειας περιμετρικά (τα λέει ο Θεόδωρος σε κάθε εντολή· ΠΟΤΕ μην το μαντέψεις)')
 ap.add_argument('--version',default='v1'); ap.add_argument('--cdr2xhtml',default=shutil.which('cdr2xhtml') or 'cdr2xhtml')
 A=ap.parse_args()
 
@@ -308,7 +309,7 @@ for code,q,want,exo,mm in order:
         if k=='vasi' and exo is not None and 'Px' in cache[code]: ps_=[dict(base_for(cache[code]['Px'],cache[code]['Py'],exo),code=code+' base')]
         if q: sheets[PARTS[k]]+=ps_*q
         else: FULL[PARTS[k]]=FULL.get(PARTS[k],[])+ps_  # ΤΕΜ=φύλλο: as many as fit on a whole sheet
-GAP={15:2.6,20:3.275,25:3.275}; SW,SH,S=1015,2020,11
+GAP={15:2.6,20:3.275,25:3.275}; SW,SH,S=1015,2020,A.asfaleia
 def pack(items,gap):  # maxrects (0°/90°), several orders/rules; keep fewest sheets, then lowest used height (biggest leftover)
     for p in items: assert min(p['w'],p['h'])<=SW-2*S and max(p['w'],p['h'])<=SH-2*S,'part bigger than sheet'
     W,H=SW-2*S+gap,SH-2*S+gap  # each part takes w+gap x h+gap

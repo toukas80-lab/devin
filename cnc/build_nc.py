@@ -10,6 +10,7 @@ from shapely.ops import voronoi_diagram
 from shapely.geometry import MultiPoint
 ap=argparse.ArgumentParser(description=__doc__)
 ap.add_argument('--dxf',required=True); ap.add_argument('--home-z',type=float,required=True); ap.add_argument('--out')
+ap.add_argument('--clamp-y',default='60,850,1550',help='κέντρα των κλαμπ στο Y (και στις 2 μακριές πλευρές)')
 A=ap.parse_args()
 TR=1.25; SAFE=5.0; Z1=1.0; ZIG=8.0
 def levels(z0,depth,n): return [z0+(depth-z0)*(k+1)/n for k in range(n)] if z0<0 else [depth*(k+1)/n for k in range(n)]
@@ -274,6 +275,13 @@ boxes.sort(key=lambda b:min(PR[k] for k in b))
 stages=[set(k for b in boxes[i:i+BOX_PER_STAGE] for k in b) for i in range(0,len(boxes),BOX_PER_STAGE)]
 rest=set(range(len(outers)))-set().union(*stages) if stages else set(range(len(outers)))
 stages.append(rest|{None})
+# his rule: clamps on both long sides (X0 / X1015) at Y clamp-y; each covers 5 mm of the sheet, ~21 mm long, +10 mm safety.
+# Parts touching a clamp zone are cut whole at the very end, after M00 (he moves the clamps).
+CLAMP_X,CLAMP_HY=5+10,21/2+10
+ZONES=[Polygon([(x0,y-CLAMP_HY),(x0+CLAMP_X,y-CLAMP_HY),(x0+CLAMP_X,y+CLAMP_HY),(x0,y+CLAMP_HY)]) for y in map(float,A.clamp_y.split(',')) for x0 in (0,1015-CLAMP_X)]
+inz=lambda g:any(z_.intersects(g) for z_ in ZONES)
+CLAMPED={k for k in range(len(outers)) if inz(outers[k])}
+stages=[stg-CLAMPED for stg in stages]+([CLAMPED] if CLAMPED else [])
 def g(kind,stg): return [it for k in stg for it in F.get((kind,k),[])]
 for kind,items in (('slits',slits),('wedges',wedges),('cb',cb),('holes',holes),('slots',slots),('pockets',pockets),('pkc',pkc)):
     assert sum(len(g(kind,stg)) for stg in stages)==len(items),kind
@@ -285,7 +293,14 @@ def hz(kind,stg,key,R):  # row by row, left to right (part order R); inside a pa
         if k is None: its=sorted(its,key=lambda it:(round(key(it)[1]/20),key(it)[0]))
         out+=its if k is None else nn(its,key)
     return out
-for stg in stages:
+def cut_taps(T): 
+    for c in sorted(T,key=lambda c:(round(c[1]/TAP_PITCH),c[0]*(1 if round(c[1]/TAP_PITCH)%2==0 else -1))): helix(c[0],c[1],c[2]+TR,levels(0,-15.1,4),1800.0,outside=True)
+TAP_PITCH=15.0  # his rule: taps always 15 mm apart (centre to centre, as in his DXF)
+TZ=[c for c in TAPS if inz(Point(c[:2]).buffer(c[2]))]
+for i_,stg in enumerate(stages):
+    if CLAMPED and i_==len(stages)-1:
+        cut_taps([c for c in TAPS if c not in TZ])
+        emit('G00',z=SAFE); L.extend(['G00Z'+f3(A.home_z),'M05','M00','S15000M03']); st['z']=A.home_z  # stop: move the clamps, then Cycle Start
     R=rows([k for k in stg if k is not None]); pt=lambda c:c[:2]
     for g in hz('text',stg,c0,R): engrave(g)
     for s in hz('slits',stg,lambda s:s.coords[0],R): slit(s,levels(0,-15.1,4),6000.0)
@@ -298,10 +313,10 @@ for stg in stages:
     for c in hz('pkc',stg,pt,R): helix(c[0],c[1],c[2]-TR,[-9.7,-12.4,-15.1],1800.0,z0=-6.0)
     for k in sorted((k for k in stg if k is not None),key=R.get): ring_cut(ring(outers[k],TR,True),levels(0,-14.1,10),6000.0)
 print('stages:',' | '.join('%d parts'%len([k for k in stg if k is not None]) for stg in stages),'(boxes %d, %d per stage)'%(len(boxes),BOX_PER_STAGE))
-TAP_PITCH=15.0  # his rule: taps always 15 mm apart (centre to centre, as in his DXF)
 close=[(a,b) for i,a in enumerate(TAPS) for b in TAPS[i+1:] if math.dist(a[:2],b[:2])<TAP_PITCH-.05]
 if close: print('ΠΡΟΣΟΧΗ τάπες πιο κοντά από 15 mm:',len(close),'ζεύγη, π.χ. %.2f,%.2f - %.2f,%.2f'%(close[0][0][:2]+close[0][1][:2]))
-for c in sorted(TAPS,key=lambda c:(round(c[1]/TAP_PITCH),c[0]*(1 if round(c[1]/TAP_PITCH)%2==0 else -1))): helix(c[0],c[1],c[2]+TR,levels(0,-15.1,4),1800.0,outside=True)
+cut_taps(TZ if CLAMPED else TAPS)
+print('κλαμπ: %d κομμάτια (+%d τάπες) στο τέλος μετά από M00'%(len(CLAMPED),len(TZ)) if CLAMPED else 'κλαμπ: κανένα κομμάτι στις ζώνες, χωρίς M00')
 hz=f3(A.home_z)
 out=['N0G00 G21 G17 G90','N10G00 G40 G49 G80','N20G71','N30T1M6','N40G43Z%sH1M8'%hz,'S15000M03','X0.000Y0.000']
 L[1]=L[1]+'Z5.000' if L[1].startswith('G00X') else L[1]
