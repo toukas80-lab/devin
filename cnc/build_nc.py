@@ -126,10 +126,12 @@ def cb7(cx,cy,lv,f):  # his 01.nc "n": area clearance Ø7, per level: own entry,
     for d in lv:
         rapid_to(*O[0]); enter(z,f); zig(P+P[::-1][1:],z,d)
         lap(cx,cy,ro,True); emit('G01',x=I[0][0],y=I[0][1]); lap(cx,cy,ri,True); z=d
-def drill3(cx,cy,f,d=-15.1,ramp=1.0):  # his 01.nc "tr": Ø3 profile inside, plunge to d+1, zig-zag 4 laps CCW/CW to d, flat CCW lap
-    r=1.5-TR; P=circ(cx,cy,r,12,False); rapid_to(*P[0]); enter(d+ramp,f); z=d+ramp
-    for k in range(4): zig(P if k%2==0 else P[::-1],z,z-ramp/4); z-=ramp/4
-    lap(cx,cy,r,False)
+def drill3(cx,cy,f,top=-7.5,d=-15.1,n=2,zs=1.0,ang=10):  # his 01.nc "tr": Ø3 profile inside 7.5->15.1 in 2 levels; entry top+1, per level zig-zag laps CCW/CW (max ramp 10°), flat CCW lap
+    r=1.5-TR; P=circ(cx,cy,r,12,False); per=2*math.pi*r; rapid_to(*P[0]); z=top+zs; enter(z,f)
+    for lv in levels(top,d,n):
+        k=math.ceil((z-lv)/(per*math.tan(math.radians(ang)))-1e-9); s=(z-lv)/k
+        for i in range(k): zig(P if i%2==0 else P[::-1],z,z-s); z-=s
+        z=lv; lap(cx,cy,r,False)
 def slit(ls,lv,f):  # on the line: ramp there, ramp back, flat pass, up, return (his 01.nc)
     P=list(ls.coords); A_,B_=P[0],P[-1]; rapid_to(*A_); enter(Z1,f); z=Z1
     for d in lv:
