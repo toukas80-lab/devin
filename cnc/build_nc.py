@@ -284,9 +284,9 @@ boxes.sort(key=lambda b:min(PR[k] for k in b))
 stages=[set(k for b in boxes[i:i+BOX_PER_STAGE] for k in b) for i in range(0,len(boxes),BOX_PER_STAGE)]
 rest=set(range(len(outers)))-set().union(*stages) if stages else set(range(len(outers)))
 stages.append(rest|{None})
-# his rule: clamps on both long sides (X0 / X1015) at Y clamp-y; each covers 5 mm of the sheet, ~21 mm long, +10 mm safety.
+# his rule: clamps on both long sides (X0 / X1015) at Y clamp-y; each covers 5 mm of the sheet (zone 10 mm from the edge), ~21 mm long, +10 mm in Y.
 # Parts touching a clamp zone are cut whole at the very end, after M00 (he moves the clamps).
-CLAMP_X,CLAMP_HY=5+10,21/2+10
+CLAMP_X,CLAMP_HY=10,21/2+10  # X: 10 mm from the sheet edge in total (clamp covers 5) — with ασφάλεια ≥10 nothing is deferred
 ZONES=[Polygon([(x0,y-CLAMP_HY),(x0+CLAMP_X,y-CLAMP_HY),(x0+CLAMP_X,y+CLAMP_HY),(x0,y+CLAMP_HY)]) for y in map(float,A.clamp_y.split(',')) if y<SH for x0 in (0,SW-CLAMP_X)]
 inz=lambda g:any(z_.intersects(g) for z_ in ZONES)
 CLAMPED={k for k in range(len(outers)) if inz(outers[k])}
