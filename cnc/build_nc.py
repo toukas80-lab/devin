@@ -1,6 +1,6 @@
 """15 mm sheet DXF (from build_sheets.py) -> NC for his 1325 router, rules in cnc/NC15.md (learned from his 01.nc).
 Only --home-z changes per job: used ONLY at start (N40 G43Z..) and final park. Retracts between cuts stay Z5."""
-import argparse,math,os,ezdxf
+import argparse,math,os,re,sys,ezdxf
 from ezdxf import path as epath
 from shapely.geometry import Polygon,LineString,Point
 from shapely.geometry.polygon import orient
@@ -10,8 +10,13 @@ from shapely.ops import voronoi_diagram
 from shapely.geometry import MultiPoint
 ap=argparse.ArgumentParser(description=__doc__)
 ap.add_argument('--dxf',required=True); ap.add_argument('--home-z',type=float,required=True); ap.add_argument('--out')
+ap.add_argument('--fyllo',required=True,help='διάσταση φύλλου ΠΛΑΤΟΣxΜΗΚΟΣ, π.χ. 1015x2020 (από την εντολή· ΠΟΤΕ μην τη μαντέψεις)')
 ap.add_argument('--clamp-y',default='60,850,1550',help='κέντρα των κλαμπ στο Y (και στις 2 μακριές πλευρές)')
 A=ap.parse_args()
+_m=re.fullmatch(r'\s*(\d+(?:[.,]\d+)?)\s*[xXχΧ×*]\s*(\d+(?:[.,]\d+)?)\s*',A.fyllo)
+if not _m: sys.exit('φύλλο %r: γράψε ΠΛΑΤΟΣxΜΗΚΟΣ, π.χ. 1015x2020'%A.fyllo)
+SW,SH=(float(v.replace(',','.')) for v in _m.groups())
+if SW>SH: sys.exit('φύλλο %r: πρώτα το ΠΛΑΤΟΣ (X) μετά το ΜΗΚΟΣ (Y)'%A.fyllo)
 TR=1.25; SAFE=5.0; Z1=1.0; ZIG=8.0
 def levels(z0,depth,n): return [z0+(depth-z0)*(k+1)/n for k in range(n)] if z0<0 else [depth*(k+1)/n for k in range(n)]
 # ---------- read DXF (LAYER_1 cut, LAYER_10 taps, XARAXI text engraved like his 02.nc) ----------
@@ -26,6 +31,10 @@ doc=ezdxf.readfile(A.dxf); C=[]; CL=[]; OP=[]; TAPS=[]; TR_=[]
 def flat(e): return [(v.x,v.y) for v in epath.make_path(e).flattening(.01)]
 sh=[flat(e) for e in doc.modelspace() if e.dxf.layer=='SHEET' and e.dxftype()!='CIRCLE']  # his Corel DXFs: sheet centred on 0,0 -> move to bottom-left
 OX,OY=(min(p[0] for p in sh[0]),min(p[1] for p in sh[0])) if sh else (0,0)
+if sh:
+    _w,_h=max(p[0] for p in sh[0])-OX,max(p[1] for p in sh[0])-OY
+    if abs(_w-SW)>1 or abs(_h-SH)>1: print('ΠΡΟΣΟΧΗ φύλλο: το DXF έχει %gx%g, η εντολή λέει %gx%g'%(round(_w,1),round(_h,1),SW,SH))
+print('φύλλο %gx%g'%(SW,SH))
 def circ_of(e,pts):
     if e.dxftype()=='CIRCLE': return (e.dxf.center.x-OX,e.dxf.center.y-OY,e.dxf.radius)
     if len(pts)>=13 and math.dist(pts[0],pts[-1])<.01:
@@ -278,7 +287,7 @@ stages.append(rest|{None})
 # his rule: clamps on both long sides (X0 / X1015) at Y clamp-y; each covers 5 mm of the sheet, ~21 mm long, +10 mm safety.
 # Parts touching a clamp zone are cut whole at the very end, after M00 (he moves the clamps).
 CLAMP_X,CLAMP_HY=5+10,21/2+10
-ZONES=[Polygon([(x0,y-CLAMP_HY),(x0+CLAMP_X,y-CLAMP_HY),(x0+CLAMP_X,y+CLAMP_HY),(x0,y+CLAMP_HY)]) for y in map(float,A.clamp_y.split(',')) for x0 in (0,1015-CLAMP_X)]
+ZONES=[Polygon([(x0,y-CLAMP_HY),(x0+CLAMP_X,y-CLAMP_HY),(x0+CLAMP_X,y+CLAMP_HY),(x0,y+CLAMP_HY)]) for y in map(float,A.clamp_y.split(',')) if y<SH for x0 in (0,SW-CLAMP_X)]
 inz=lambda g:any(z_.intersects(g) for z_ in ZONES)
 CLAMPED={k for k in range(len(outers)) if inz(outers[k])}
 stages=[stg-CLAMPED for stg in stages]+([CLAMPED] if CLAMPED else [])

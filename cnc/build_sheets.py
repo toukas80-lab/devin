@@ -24,6 +24,7 @@ ap.add_argument('--fill',help='ΚΩΔΙΚΟΣ:ΠΑΧΟΣ, με κόμμα: γε�
 ap.add_argument('--diag',help='κωδικοί με κόμμα: τυπώνει τα κομμάτια του CDR (διαστάσεις, κύκλοι ανά Ø, μικρά σχήματα) και σταματά')
 ap.add_argument('--ena-dxf',action='store_true',help='όλα τα κομμάτια σε ένα DXF (για έλεγχο)')
 ap.add_argument('--asfaleia',type=float,required=True,help='mm ασφάλειας περιμετρικά (τα λέει ο Θεόδωρος σε κάθε εντολή· ΠΟΤΕ μην το μαντέψεις)')
+ap.add_argument('--fyllo',required=True,help='διάσταση φύλλου ΠΛΑΤΟΣxΜΗΚΟΣ σε mm, π.χ. 1015x2020 (τη λέει ο Θεόδωρος σε κάθε εντολή· ΠΟΤΕ μην τη μαντέψεις)')
 ap.add_argument('--version',default='v1'); ap.add_argument('--cdr2xhtml',default=shutil.which('cdr2xhtml') or 'cdr2xhtml')
 A=ap.parse_args()
 
@@ -309,7 +310,12 @@ for code,q,want,exo,mm in order:
         if k=='vasi' and exo is not None and 'Px' in cache[code]: ps_=[dict(base_for(cache[code]['Px'],cache[code]['Py'],exo),code=code+' base')]
         if q: sheets[PARTS[k]]+=ps_*q
         else: FULL[PARTS[k]]=FULL.get(PARTS[k],[])+ps_  # ΤΕΜ=φύλλο: as many as fit on a whole sheet
-GAP={15:2.6,20:3.275,25:3.275}; SW,SH,S=1015,2020,A.asfaleia
+GAP={15:2.6,20:3.275,25:3.275}; S=A.asfaleia
+_m=re.fullmatch(r'\s*(\d+(?:[.,]\d+)?)\s*[xXχΧ×*]\s*(\d+(?:[.,]\d+)?)\s*',A.fyllo)
+if not _m: sys.exit('φύλλο %r: γράψε ΠΛΑΤΟΣxΜΗΚΟΣ, π.χ. 1015x2020'%A.fyllo)
+SW,SH=(float(v.replace(',','.')) for v in _m.groups())
+if SW>SH: sys.exit('φύλλο %r: πρώτα το ΠΛΑΤΟΣ (X, μικρή πλευρά) μετά το ΜΗΚΟΣ (Y), π.χ. 1015x2020'%A.fyllo)
+print('φύλλο %gx%g, ασφάλεια %g mm'%(SW,SH,S))
 def pack(items,gap):  # maxrects (0°/90°), several orders/rules; keep fewest sheets, then lowest used height (biggest leftover)
     for p in items: assert min(p['w'],p['h'])<=SW-2*S and max(p['w'],p['h'])<=SH-2*S,'part bigger than sheet'
     W,H=SW-2*S+gap,SH-2*S+gap  # each part takes w+gap x h+gap
@@ -479,6 +485,6 @@ for th,packs in packs_by.items():
                   c=tf(c,mv); write(m,c,lay); xs,ys=zip(*sample(c)); ax.plot(xs,ys,col+'-',lw=.25)
           ax.text(x+p['w']/2,y+3,p['code'],fontsize=4,color='r',ha='center')
       fn=os.path.join(A.out_dir,f'fyllo_{th}'+('' if th=='ola' else 'mm')+f'_{tag}'+(f'_f{si}of{len(packs)}' if len(packs)>1 else '')+f'_{A.version}')
-      doc.saveas(fn+'.dxf'); ax.set_aspect('equal'); ax.set_title(f'{th} 1015x2020 - {len(pl)} kommatia',fontsize=8)
+      doc.saveas(fn+'.dxf'); ax.set_aspect('equal'); ax.set_title(f'{th} {SW:g}x{SH:g} - {len(pl)} kommatia',fontsize=8)
       fig.savefig(fn+'.png',dpi=200,bbox_inches='tight'); plt.close(fig)
       print(os.path.basename(fn)+'.dxf',th,'mm:',len(pl),'parts, gap',GAP[th],'used height to',round(maxy,1),'material used %.0f%%'%(100*used/(SW*SH)))
