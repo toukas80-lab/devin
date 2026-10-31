@@ -244,7 +244,7 @@ def nn(items,key):
     return out
 c0=lambda p:(p.bounds[0],p.bounds[1])
 # ---------- program in his order ----------
-# stages (his rule): finish 3 boxes (12 side panels) completely, then the next 3...; other parts (fill) after; taps last
+# stages (his rule): finish 3 rows of side panels completely (bottom up), then the next 3...; other parts (fill) after; taps last
 OT=STRtree(outers)
 def own(g):
     pt=g if isinstance(g,Point) else (g.interpolate(.5,normalized=True) if isinstance(g,LineString) else g.representative_point())
@@ -253,16 +253,11 @@ F={}
 for kind,items,geo in (('slits',slits,lambda s:s),('wedges',wedges,lambda w:w),('cb',cb,lambda c:Point(c[:2])),('holes',holes,lambda c:Point(c[:2])),
                        ('slots',slots,lambda p:p),('pockets',pockets,lambda p:p),('pkc',pkc,lambda c:Point(c[:2])),('text',TXT,lambda p:p.representative_point())):
     for it in items: F.setdefault((kind,own(geo(it))),[]).append(it)
-BOX_PER_STAGE=3
+ROWS_PER_STAGE=3  # his rule (A): stage = 3 rows from the bottom, horizontal, whatever box the panel belongs to
 pan={}
 for s_ in slits:
     k=own(s_)
     if k is not None: pan[k]=s_
-groups={}
-for k,s_ in pan.items():
-    (ax,ay),(bx,by)=s_.coords[0],s_.coords[-1]; x0,y0,x1,y1=outers[k].bounds
-    Lk,Wk=((y1-y0),(x1-x0)) if abs(by-ay)>abs(bx-ax) else ((x1-x0),(y1-y0))
-    groups.setdefault(round(Lk*2)/2,{}).setdefault(round(Wk*2)/2,[]).append(k)
 cen=lambda k:outers[k].centroid.coords[0]
 def rows(ks):  # his rule: horizontal priority -> (row from the bottom, x) per part; rows = centroid-y bands
     ks=sorted(ks,key=lambda k:cen(k)[1]); out={}
@@ -273,15 +268,8 @@ def rows(ks):  # his rule: horizontal priority -> (row from the bottom, x) per p
         out[k]=(r,outers[k].bounds[0]*(1 if r%2==0 else -1))  # serpentine: even rows left->right, odd right->left
     return out
 PR=rows(pan)
-boxes=[]
-for Lk,byw in groups.items():
-    ws={w:sorted(v,key=PR.get) for w,v in byw.items()}
-    if len(ws)==2 and len(set(len(v) for v in ws.values()))==1:  # custom: 2+2 different sides
-        a_,b_=ws.values(); boxes+=[a_[i:i+2]+b_[i:i+2] for i in range(0,len(a_),2)]
-    else:
-        flat_=sorted((k for w in ws for k in ws[w]),key=PR.get); boxes+=[flat_[i:i+4] for i in range(0,len(flat_),4)]
-boxes.sort(key=lambda b:min(PR[k] for k in b))
-stages=[set(k for b in boxes[i:i+BOX_PER_STAGE] for k in b) for i in range(0,len(boxes),BOX_PER_STAGE)]
+NR=max((r for r,_ in PR.values()),default=-1)+1
+stages=[{k for k in pan if PR[k][0]//ROWS_PER_STAGE==i} for i in range(-(-NR//ROWS_PER_STAGE))]
 rest=set(range(len(outers)))-set().union(*stages) if stages else set(range(len(outers)))
 stages.append(rest|{None})
 # his rule: clamps on both long sides (X0 / X1015) at Y clamp-y; each covers 5 mm of the sheet; zone 6 mm (X) x 35 mm (Y).
@@ -321,7 +309,7 @@ for i_,stg in enumerate(stages):
     for p in hz('pockets',stg,c0,R): pocket(p,levels(0,-7.0,5),6000.0)
     for c in hz('pkc',stg,pt,R): helix(c[0],c[1],c[2]-TR,[-9.7,-12.4,-15.1],1800.0,z0=-6.0)
     for k in sorted((k for k in stg if k is not None),key=R.get): ring_cut(ring(outers[k],TR,True),levels(0,-14.1,10),6000.0)
-print('stages:',' | '.join('%d parts'%len([k for k in stg if k is not None]) for stg in stages),'(boxes %d, %d per stage)'%(len(boxes),BOX_PER_STAGE))
+print('stages:',' | '.join('%d parts'%len([k for k in stg if k is not None]) for stg in stages),'(rows %d, %d per stage)'%(NR,ROWS_PER_STAGE))
 close=[(a,b) for i,a in enumerate(TAPS) for b in TAPS[i+1:] if math.dist(a[:2],b[:2])<TAP_PITCH-.05]
 if close: print('ΠΡΟΣΟΧΗ τάπες πιο κοντά από 15 mm:',len(close),'ζεύγη, π.χ. %.2f,%.2f - %.2f,%.2f'%(close[0][0][:2]+close[0][1][:2]))
 cut_taps(TZ if CLAMPED else TAPS)
